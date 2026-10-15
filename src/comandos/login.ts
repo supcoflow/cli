@@ -30,9 +30,13 @@ const fallo = (codigo: Resultado["codigo"], error: string, message: string, extr
 const motivo = (e: unknown): string =>
   e instanceof FalloDeLaTerminal ? e.message : taparSecretos(e instanceof Error ? e.message : String(e));
 
+// Lo único que el reintento usa: así `logout`, que no pide códigos ni sondea, lo llama sin armar
+// las dependencias enteras del login.
+export type DepsDelReintento = Pick<DepsDeLogin, "api" | "guardado" | "ahora" | "revocarPropia" | "avisar">;
+
 // Las claves que un login o logout anterior no pudo revocar (Review Focus 14). Nunca lanza: es
 // limpieza de lo de antes y no puede trabar un login nuevo.
-export async function reintentarPorRevocar(d: DepsDeLogin, limite: number): Promise<{ revocadas: number; quedan: number | null }> {
+export async function reintentarPorRevocar(d: DepsDelReintento, limite: number): Promise<{ revocadas: number; quedan: number | null }> {
   const origen = d.api.origin;
   const noSe = () => {
     d.avisar("No pude leer entera la lista de claves por revocar (el llavero no respondió); la reintento la próxima vez.");
@@ -164,6 +168,30 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
       await d.guardado.borrarPendiente(origen, techo());
       return fallo(SALIDA.faltaLogin, "codigo_invalido", `El código ya no vale. ${VOLVER_A_EMPEZAR}`);
   }
+}
+
+// El login de una persona frente a la terminal: los mismos dos pasos, encadenados. Sin TTY (o con
+// `--json`) no pide código: nadie iba a ver la URL, y un pedido que nadie aprueba sólo gasta el tope
+// de pedidos por IP del motor. A un asistente le corresponde el camino partido.
+export async function loginInteractivo(
+  d: DepsDeLogin & { esTty: boolean; mostrar: (s: string) => void }, flags: { json: boolean; dryRun: boolean },
+): Promise<Resultado> {
+  if (!d.esTty || flags.json) {
+    return fallo(SALIDA.entradaInvalida, "hace_falta_tty",
+      "Sin terminal interactiva usá `supcoflow login --start --json` y después `supcoflow login --wait --json`.");
+  }
+  const inicio = await loginStart(d, flags);
+  if (inicio.codigo !== SALIDA.esperandoAUnaPersona) return inicio;
+  // El texto de `--start` le dice a la persona que corra `--wait`; acá eso lo hace el comando solo.
+  const { verification_uri_complete: url, user_code: codigo } = inicio.json;
+  d.mostrar(`Abrí ${String(url)} y confirmá el código ${String(codigo)}. Espero acá…`);
+  // Cada tramo termina por su cuenta (≤ 90 s) y el código vence a los pocos minutos, así que el
+  // bucle tiene fin aunque la persona nunca conteste: termina en `codigo_vencido`.
+  let r: Resultado;
+  do {
+    r = await loginWait(d);
+  } while (r.codigo === SALIDA.esperandoAUnaPersona);
+  return r;
 }
 
 // Por qué este orden (guardar → revocar → anotar → borrar el pendiente), Review Focus 13 y 14:
