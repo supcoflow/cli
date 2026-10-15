@@ -10,7 +10,7 @@ export const TECHO_DEL_LLAVERO_MS = 5_000;
 
 export type Correr = (
   bin: string, args: string[], stdin: string | null, techoMs: number,
-) => Promise<{ codigo: number | null; stdout: string; vencido: boolean; ausente?: boolean }>;
+) => Promise<{ codigo: number | null; stdout: string; stderr?: string; vencido: boolean; ausente?: boolean }>;
 
 // AUSENTE no es FALLIDO (Review Focus 12): un binario que no existe no guarda nada, así que no hay
 // nada que borrar en él; uno que está y falla puede tener datos adentro.
@@ -50,7 +50,7 @@ type Comandos = {
   escribir(cuenta: string, secreto: string): { args: string[]; stdin: string };
   leer(cuenta: string): string[];
   borrar(cuenta: string): string[];
-  noEncontrado(codigo: number | null, stdout: string): boolean;
+  noEncontrado(codigo: number | null, stdout: string, stderr: string): boolean;
 };
 
 // La ruta ABSOLUTA: un `security` del PATH podría ser otro programa (un `node_modules/.bin`, un
@@ -80,7 +80,9 @@ const LINUX: Comandos = {
   }),
   leer: (cuenta) => ["lookup", "servicio", SERVICIO, "cuenta", cuenta],
   borrar: (cuenta) => ["clear", "servicio", SERVICIO, "cuenta", cuenta],
-  noEncontrado: (codigo, stdout) => codigo === 1 && stdout.trim() === "",
+  // `secret-tool` sale 1 sin salida también sin D-Bus o con el anillo bloqueado: lo único que
+  // distingue «no está» de «no pude mirar» es que, cuando no está, no dice nada por stderr.
+  noEncontrado: (codigo, stdout, stderr) => codigo === 1 && stdout.trim() === "" && stderr.trim() === "",
 };
 
 export function almacenDeLlavero(
@@ -89,7 +91,7 @@ export function almacenDeLlavero(
   const c = plataforma === "darwin" ? MACOS : plataforma === "linux" ? LINUX : null;
   if (c === null) return null;
 
-  // Ni el stdout ni el stdin van al mensaje: los dos pueden llevar el secreto.
+  // Ni el stdout, ni el stdin, ni el stderr van al mensaje: pueden llevar el secreto.
   async function ejecutar(args: string[], stdin: string | null, techoMs: number) {
     const bin = c!.bins.find((b) => existe(b));
     if (bin === undefined) throw new LlaveroAusente(c!.bins[0]!);
@@ -104,7 +106,7 @@ export function almacenDeLlavero(
     nombre: "llavero",
     async leer(cuenta, techoMs = TECHO_DEL_LLAVERO_MS) {
       const r = await ejecutar(c.leer(cuentaSegura(cuenta)), null, techoMs);
-      if (c.noEncontrado(r.codigo, r.stdout)) return null;
+      if (c.noEncontrado(r.codigo, r.stdout, r.stderr ?? "")) return null;
       if (r.codigo !== 0) throw fallo(r.codigo);
       return decodificar(r.stdout);
     },
@@ -115,7 +117,7 @@ export function almacenDeLlavero(
     },
     async borrar(cuenta, techoMs = TECHO_DEL_LLAVERO_MS) {
       const r = await ejecutar(c.borrar(cuentaSegura(cuenta)), null, techoMs);
-      if (c.noEncontrado(r.codigo, r.stdout)) return;
+      if (c.noEncontrado(r.codigo, r.stdout, r.stderr ?? "")) return;
       if (r.codigo !== 0) throw fallo(r.codigo);
     },
   };

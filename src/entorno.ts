@@ -58,8 +58,9 @@ export const fsReal: FsMinimo = {
   },
 };
 
-// Para hablar con `security`/`secret-tool`. stderr se descarta: no hace falta y podría traer algo
-// del secreto. Al techo el hijo se mata con SIGKILL (un llavero bloqueado no atiende un SIGTERM) y se
+// Para hablar con `security`/`secret-tool`. stderr se captura sólo como señal (¿dijo algo?: es lo
+// que separa «no encontrado» de «sin D-Bus» en `secret-tool`), recortado, y nunca se muestra ni se
+// registra: podría traer algo del secreto. Al techo el hijo se mata con SIGKILL (un llavero bloqueado no atiende un SIGTERM) y se
 // resuelve sin esperar a que muera: un `close` que no llega no puede colgar el comando (Review Focus 2).
 // Un entorno mínimo para el hijo: con `process.env` entero, SUPCOFLOW_TOKEN (y cualquier otro
 // secreto del shell) llegaría a `security`/`secret-tool`, que no lo necesitan. Las variables de D-Bus
@@ -74,17 +75,20 @@ function entornoDelHijo(): Record<string, string> {
   return r;
 }
 
+const MAXIMO_DE_STDERR = 2_048;
+
 export const correrReal: Correr = (bin, args, stdin, techoMs) =>
   new Promise((resolve) => {
     let listo = false;
     let stdout = "";
+    let stderr = "";
     const terminar = (r: { codigo: number | null; vencido: boolean; ausente?: boolean }) => {
       if (listo) return;
       listo = true;
       clearTimeout(reloj);
-      resolve({ ...r, stdout });
+      resolve({ ...r, stdout, stderr });
     };
-    const hijo = spawn(bin, args, { stdio: ["pipe", "pipe", "ignore"], env: entornoDelHijo() });
+    const hijo = spawn(bin, args, { stdio: ["pipe", "pipe", "pipe"], env: entornoDelHijo() });
     const reloj = setTimeout(() => {
       hijo.kill("SIGKILL");
       terminar({ codigo: null, vencido: true });
@@ -93,6 +97,10 @@ export const correrReal: Correr = (bin, args, stdin, techoMs) =>
       terminar({ codigo: null, vencido: false, ausente: e.code === "ENOENT" ? true : undefined });
     });
     hijo.stdout.on("data", (b: Buffer) => (stdout += b.toString("utf8")));
+    // Se lee siempre (un pipe lleno que nadie vacía colgaría al hijo) pero se guarda poco.
+    hijo.stderr.on("data", (b: Buffer) => {
+      if (stderr.length < MAXIMO_DE_STDERR) stderr = (stderr + b.toString("utf8")).slice(0, MAXIMO_DE_STDERR);
+    });
     hijo.on("close", (codigo) => terminar({ codigo, vencido: false }));
     // Un hijo que muere antes de leer deja un EPIPE en stdin; sin este handler tumbaría el proceso.
     hijo.stdin.on("error", () => {});

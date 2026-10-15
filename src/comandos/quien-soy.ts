@@ -11,10 +11,21 @@ export async function comandoQuienSoy(d: {
   avisar: (s: string) => void;
 }): Promise<Resultado> {
   const origen = d.api.origin;
-  const vigente = await d.guardado.leerClave(origen);
+  const lectura = await d.guardado.leerClaveCompleta(origen);
+  const vigente = lectura.valor;
+  // «Iniciá sesión» con la clave guardada en un llavero que no contestó invita a un login que la
+  // pisaría: no es «sin sesión», es «no pude mirar» (Review Focus 12).
+  if (vigente === null && !lectura.completa) {
+    const message = "No pude leer la clave guardada (el llavero no respondió). Desbloquealo y probá de nuevo.";
+    return { codigo: SALIDA.inesperado, json: { ok: false, error: "llavero_no_responde", message }, texto: message };
+  }
   if (vigente === null) {
     const message = "Iniciá sesión con `supcoflow login`.";
     return { codigo: SALIDA.faltaLogin, json: { ok: false, error: "sin_sesion", message }, texto: message };
+  }
+  if (!lectura.completa) {
+    const otro = vigente.fuente === "archivo" ? "el llavero del sistema" : "el archivo de credenciales";
+    d.avisar(`Uso la clave de ${vigente.fuente}, pero no pude leer ${otro}: puede haber guardada otra más nueva.`);
   }
 
   // Leer no cuesta nada y avisa de algo que la persona no vería de otro modo: claves viejas vivas.

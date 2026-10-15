@@ -297,3 +297,68 @@ describe("comandoLogout", () => {
     expect(r.json).toEqual({ ok: true, dry_run: true, haria: `revocar la clave de env en ${ORIGEN}` });
   });
 });
+
+// Ausente no es fallido (Review Focus 12): un llavero que no contesta no es «no hay sesión».
+describe("con el llavero sin responder al leer la clave", () => {
+  const ilegible = (llavero: ReturnType<typeof memoria>) => {
+    llavero.roto = (op, c) => op === "leer" && c === ORIGEN;
+  };
+  it("quien-soy: sin nada legible → 1 llavero_no_responde (no 2 sin_sesion)", async () => {
+    const { base, quienSoy, guardado, llavero, llamadas } = armar();
+    await guardado.guardarClave(ORIGEN, A);
+    ilegible(llavero);
+    const r = await comandoQuienSoy({ ...base, quienSoy });
+    expect(r.codigo).toBe(1);
+    expect(r.json).toMatchObject({ ok: false, error: "llavero_no_responde" });
+    expect(llamadas).toEqual([]);
+    sinSecretos(r);
+  });
+  it("quien-soy: con una copia en el archivo → contesta, pero avisa", async () => {
+    const { base, quienSoy, archivo, llavero, avisos } = armar();
+    archivo.datos.set(ORIGEN, { valor: B, escritoEn: 1 });
+    ilegible(llavero);
+    const r = await comandoQuienSoy({ ...base, quienSoy });
+    expect(r.codigo).toBe(0);
+    expect(r.json).toMatchObject({ ok: true, fuente: "archivo" });
+    expect(avisos.join("\n")).toContain("llavero");
+  });
+  it("logout: sin nada legible → 1 no_pude_leer_la_clave, no revoca ni borra nada", async () => {
+    const { base, revocarPropia, guardado, llavero, llamadas } = armar();
+    await guardado.guardarClave(ORIGEN, A);
+    await guardado.guardarPendiente(ORIGEN, {
+      deviceCode: DEVICE, userCode: "BCDF-GHJK", verificationUriComplete: pedido.verificationUriComplete,
+      venceEn: T0 + 600_000, intervaloS: 5, ultimoSondeoEn: null,
+    });
+    ilegible(llavero);
+    const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: false });
+    expect(r.codigo).toBe(1);
+    expect(r.json).toMatchObject({ ok: false, error: "no_pude_leer_la_clave" });
+    expect(r.json.habia_sesion).toBeUndefined();
+    expect(llamadas).toEqual([]);
+    expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
+    sinSecretos(r);
+  });
+  it("logout --dry-run: tampoco dice «no hay sesión»", async () => {
+    const { base, revocarPropia, guardado, llavero } = armar();
+    await guardado.guardarClave(ORIGEN, A);
+    ilegible(llavero);
+    const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: true });
+    expect(r.codigo).toBe(1);
+    expect(r.json.error).toBe("no_pude_leer_la_clave");
+  });
+  it("logout: B legible en el archivo y el llavero mudo → revoca y borra B, deja el llavero sin tocar, avisa y lectura_completa false", async () => {
+    const { base, revocarPropia, archivo, llavero, llamadas, avisos } = armar();
+    llavero.datos.set(ORIGEN, { valor: A, escritoEn: 1 });
+    archivo.datos.set(ORIGEN, { valor: B, escritoEn: 2 });
+    ilegible(llavero);
+    const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: false });
+    expect(r.codigo).toBe(0);
+    expect(r.json).toMatchObject({ ok: true, revocada: true, lectura_completa: false });
+    expect(llamadas).toEqual([`revocarPropia ${B}`]);
+    expect(archivo.datos.has(ORIGEN)).toBe(false);
+    // A no se pudo ver, así que no se revocó: borrarla la dejaría viva y olvidada.
+    expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
+    expect(avisos.join("\n")).toContain("otra copia");
+    sinSecretos(r);
+  });
+});

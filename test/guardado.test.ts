@@ -381,3 +381,95 @@ describe("almacenDeArchivo: ida y vuelta", () => {
     await expect(almacenDeArchivo("/h/c.json", fs).leer(PROD)).rejects.toThrow();
   });
 });
+
+// Una lectura que no respondió no es «no hay clave» (Review Focus 12): con la clave A en un llavero
+// bloqueado, decir «no hay» deja que un login la pise sin revocarla, viva y olvidada en el motor.
+describe("leerClaveGuardadaCompleta: ausente no es fallido", () => {
+  it("llavero caído y archivo vacío → sin valor e INCOMPLETA", async () => {
+    const { g, llavero } = armar();
+    await g.guardarClave(PROD, A);
+    llavero!.roto = true;
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: null, completa: false });
+    // La de siempre no cambia: sigue diciendo null.
+    expect(await g.leerClaveGuardada(PROD)).toBeNull();
+  });
+  it("llavero caído y B en el archivo → B, pero incompleta (no se sabe si hay una más nueva)", async () => {
+    const { g, llavero, archivo } = armar();
+    archivo.datos.set(PROD, { valor: B, escritoEn: 5 });
+    llavero!.roto = true;
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: { clave: B, fuente: "archivo" }, completa: false });
+  });
+  it("sin llavero (null) o con el binario AUSENTE es completa", async () => {
+    const sinLl = armar({ llavero: null });
+    expect(await sinLl.g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: null, completa: true });
+    let t = 0;
+    const g = crearGuardado({
+      env: {}, llavero: almacenDeLinux(async () => ({ codigo: null, stdout: "", vencido: false, ausente: true })),
+      archivo: memoria("archivo"), rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {},
+    });
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: null, completa: true });
+  });
+  it("los dos responden → completa, y gana el escritoEn más alto", async () => {
+    const { g, llavero, archivo } = armar();
+    llavero!.datos.set(PROD, { valor: A, escritoEn: 1 });
+    archivo.datos.set(PROD, { valor: B, escritoEn: 2 });
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: { clave: B, fuente: "archivo" }, completa: true });
+  });
+  it("un archivo que no se entiende también deja la lectura incompleta", async () => {
+    const { g, archivo } = armar();
+    archivo.leer = async () => { throw new Error("No entiendo el archivo"); };
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: null, completa: false });
+  });
+  it("leerClaveCompleta: SUPCOFLOW_TOKEN manda, completa y sin tocar los almacenes", async () => {
+    const { g, llavero } = armar({ env: { SUPCOFLOW_TOKEN: A } });
+    llavero!.roto = true;
+    expect(await g.leerClaveCompleta(PROD)).toEqual({ valor: { clave: A, fuente: "env" }, completa: true });
+    const sin = armar();
+    sin.llavero!.roto = true;
+    expect(await sin.g.leerClaveCompleta(PROD)).toEqual({ valor: null, completa: false });
+  });
+  it("borrarClaveDe borra SÓLO del almacén pedido", async () => {
+    const { g, llavero, archivo } = armar();
+    llavero!.datos.set(PROD, { valor: A, escritoEn: 1 });
+    archivo.datos.set(PROD, { valor: B, escritoEn: 2 });
+    await g.borrarClaveDe(PROD, "archivo");
+    expect(archivo.datos.has(PROD)).toBe(false);
+    expect(llavero!.datos.get(PROD)?.valor).toBe(A);
+    llavero!.roto = true;
+    await expect(g.borrarClaveDe(PROD, "llavero")).rejects.toMatchObject({ error: "no_se_pudo_borrar" });
+  });
+});
+
+// `secret-tool` sale 1 sin salida tanto si no encuentra nada como si no hay D-Bus o el anillo está
+// bloqueado; lo que los separa es stderr. Tomar la segunda por la primera es Review Focus 12 al revés.
+describe("Linux: «no encontrado» exige stderr vacío", () => {
+  const sinBus = "Cannot autolaunch D-Bus without X11 $DISPLAY";
+  it("código 1 con stderr vacío o ausente → no encontrado", async () => {
+    for (const stderr of [undefined, "", "  \n"]) {
+      const ll = almacenDeLinux(async () => ({ codigo: 1, stdout: "", stderr, vencido: false }))!;
+      expect(await ll.leer(PROD)).toBeNull();
+      await expect(ll.borrar(PROD)).resolves.toBeUndefined();
+    }
+  });
+  it("código 1 con stderr de D-Bus → falla al leer y al borrar, sin el stderr en el mensaje", async () => {
+    const ll = almacenDeLinux(async () => ({ codigo: 1, stdout: "", stderr: sinBus, vencido: false }))!;
+    await expect(ll.leer(PROD)).rejects.toThrow();
+    await expect(ll.borrar(PROD)).rejects.toThrow();
+    await ll.leer(PROD).catch((e: Error) => {
+      expect(e).not.toBeInstanceOf(LlaveroAusente);
+      expect(e.message).not.toContain("D-Bus");
+    });
+  });
+  it("en el guardado: la lista por revocar queda incompleta y borrar la clave lanza no_se_pudo_borrar", async () => {
+    let t = 0; const archivo = memoria("archivo");
+    const llavero = almacenDeLinux(async () => ({ codigo: 1, stdout: "", stderr: sinBus, vencido: false }));
+    const g = crearGuardado({ env: {}, llavero, archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {} });
+    expect(await g.leerPorRevocar(PROD)).toEqual({ claves: [], completa: false });
+    expect(await g.leerClaveGuardadaCompleta(PROD)).toEqual({ valor: null, completa: false });
+    await expect(g.borrarClave(PROD)).rejects.toMatchObject({ error: "no_se_pudo_borrar" });
+  });
+  it("macOS no cambia: 44 es no encontrado aunque haya stderr", async () => {
+    const ll = almacenDeLlavero("darwin", async () => ({ codigo: 44, stdout: "", stderr: "could not be found", vencido: false }))!;
+    expect(await ll.leer(PROD)).toBeNull();
+  });
+});

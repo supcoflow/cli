@@ -369,3 +369,46 @@ describe("el comando entero en ≤ 90 s con TODO lento (Review Focus 10)", () =>
     expect(r.json).toMatchObject({ queda_por_revocar: true });
   });
 });
+
+// La clave A vive en un llavero bloqueado (nada en el archivo). Si la lectura que vence se tomara
+// por «no hay clave», el token nuevo pisaría A en el llavero sin revocarla: viva y olvidada.
+describe("loginWait con la clave anterior ilegible (Review Focus 12 y 14)", () => {
+  async function conAIlegible(env?: Record<string, string>) {
+    const h = armar({ env, canjear: () => ({ tipo: "token", clave: B, equipo: "tnt_1" }) });
+    await h.g.guardarClave(ORIGEN, A);
+    await loginStart(h.d, { dryRun: false });
+    h.llamadas.length = 0;
+    // Un llavero que se cuelga: consume su techo entero y recién ahí falla, sólo al leer la clave.
+    h.llavero.lento = true;
+    h.llavero.roto = (op, c) => op === "leer" && c === ORIGEN;
+    const r = await loginWait(h.d);
+    h.llavero.lento = false;
+    h.llavero.roto = () => false;
+    return { ...h, r };
+  }
+  it("sale 1 no_pude_leer_la_clave ANTES de sondear, conserva el pendiente y no pisa ni revoca nada", async () => {
+    const { r, g, llavero, llamadas } = await conAIlegible();
+    expect(r.codigo).toBe(1);
+    expect(r.json).toMatchObject({ ok: false, error: "no_pude_leer_la_clave" });
+    expect(String(r.json.message)).toContain("supcoflow login --wait");
+    expect(llamadas).toEqual([]); // ni canjear ni revocarPropia
+    expect(await g.leerPendiente(ORIGEN)).toMatchObject({ deviceCode: DEVICE });
+    expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
+    sinSecretos(r);
+  });
+  it("con SUPCOFLOW_TOKEN definida también: la anterior guardada es la que se pisaría", async () => {
+    const { r, g, llavero, llamadas } = await conAIlegible({ SUPCOFLOW_TOKEN: X });
+    expect(r.codigo).toBe(1);
+    expect(r.json.error).toBe("no_pude_leer_la_clave");
+    expect(llamadas).toEqual([]);
+    expect(await g.leerPendiente(ORIGEN)).not.toBeNull();
+    expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
+    sinSecretos(r);
+  });
+  it("cuando el llavero vuelve, el reintento sí termina: guarda B y revoca A", async () => {
+    const { d, llamadas } = await conAIlegible();
+    const r = await loginWait(d);
+    expect(r.codigo).toBe(0);
+    expect(llamadas).toContain(`revocarPropia ${A}`);
+  });
+});

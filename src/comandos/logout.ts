@@ -19,9 +19,17 @@ export async function comandoLogout(
   flags: { dryRun: boolean },
 ): Promise<Resultado> {
   const origen = d.api.origin;
+  // Sin nada legible y un almacén que no contestó, no se sabe si hay sesión: decir «no había»
+  // dejaría creer que no queda ninguna clave viva (Review Focus 12).
+  const noPudeLeer = (extra: Record<string, unknown> = {}): Resultado => {
+    const message = "No pude leer la clave guardada (el llavero no respondió); no cerré nada. Probá de nuevo.";
+    return { codigo: SALIDA.inesperado, json: { ok: false, error: "no_pude_leer_la_clave", message, ...extra }, texto: message };
+  };
 
   if (flags.dryRun) {
-    const vigente = await d.guardado.leerClave(origen);
+    const lectura = await d.guardado.leerClaveCompleta(origen);
+    const vigente = lectura.valor;
+    if (vigente === null && !lectura.completa) return noPudeLeer({ dry_run: true });
     if (vigente === null) {
       return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, habia_sesion: false }, texto: "No hay sesión iniciada: no haría nada." };
     }
@@ -38,9 +46,11 @@ export async function comandoLogout(
   } else if (quedan > 0) {
     d.avisar(`Quedan ${quedan} clave(s) anterior(es) sin revocar; siguen anotadas y las reintento en el próximo login o logout.`);
   }
-  const conPendientes = (json: Record<string, unknown>) => ({ ...json, quedan_por_revocar: quedan });
-
-  const vigente = await d.guardado.leerClave(origen);
+  const lectura = await d.guardado.leerClaveCompleta(origen);
+  const vigente = lectura.valor;
+  if (vigente === null && !lectura.completa) return noPudeLeer({ quedan_por_revocar: quedan });
+  const conPendientes = (json: Record<string, unknown>) =>
+    ({ ...json, quedan_por_revocar: quedan, ...(lectura.completa ? {} : { lectura_completa: false }) });
   if (vigente === null) {
     await d.guardado.borrarPendiente(origen);
     return { codigo: SALIDA.ok, json: conPendientes({ ok: true, habia_sesion: false }), texto: "No había sesión iniciada." };
@@ -63,7 +73,8 @@ export async function comandoLogout(
     // `undefined` = no se pudo leer: no se afirma que no haya, el json lleva `null` en vez de mentir.
     let guardada: { fuente: "llavero" | "archivo" } | null | undefined;
     try {
-      guardada = await d.guardado.leerClaveGuardada(origen);
+      const l = await d.guardado.leerClaveGuardadaCompleta(origen);
+      guardada = l.valor ?? (l.completa ? null : undefined);
     } catch {
       guardada = undefined;
     }
@@ -77,8 +88,15 @@ export async function comandoLogout(
     };
   }
 
+  // Con la lectura incompleta se borra sólo la copia que se leyó y se acaba de revocar: la del
+  // almacén que no contestó puede ser otra clave, viva, y borrarla sin revocarla la olvidaría.
+  if (!lectura.completa) {
+    const otro = vigente.fuente === "archivo" ? "el llavero del sistema" : "el archivo de credenciales";
+    d.avisar(`Cierro la clave de ${vigente.fuente}, pero no pude leer ${otro}: puede quedar otra copia guardada ahí; cuando responda, volvé a correr \`supcoflow logout\`.`);
+  }
   try {
-    await d.guardado.borrarClave(origen);
+    if (lectura.completa) await d.guardado.borrarClave(origen);
+    else await d.guardado.borrarClaveDe(origen, vigente.fuente);
   } catch (e) {
     // La clave ya no sirve en el motor, pero quedó escrita: el comando no puede decir que terminó bien.
     const message = `La clave quedó revocada pero no pude borrarla: ${motivo(e)}`;

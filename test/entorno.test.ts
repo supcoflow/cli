@@ -35,6 +35,19 @@ describe("el Correr real", () => {
     }
   });
 
+  it("captura el stderr del hijo (para saber si dijo algo), recortado, y no lo pone en el stdout", async () => {
+    const r = await correrReal(process.execPath, ["-e", "process.stderr.write('Cannot autolaunch D-Bus ' + 'x'.repeat(10000)); process.exitCode = 1"], null, 5_000);
+    expect(r).toMatchObject({ codigo: 1, stdout: "", vencido: false });
+    expect(r.stderr).toContain("Cannot autolaunch D-Bus");
+    expect(r.stderr!.length).toBeLessThanOrEqual(2_048);
+    // Y el llavero que lo recibe no lo repite en su error.
+    const { almacenDeLlavero } = await import("../src/guardado/llavero.ts");
+    const ll = almacenDeLlavero("linux", (_b, _a, s, t) => correrReal(process.execPath, ["-e", "process.stderr.write('Cannot autolaunch D-Bus'); process.exitCode = 1"], s, t), (x) => x === "/usr/bin/secret-tool")!;
+    const e = await ll.leer("https://app.supcoflow.dev").then(() => null, (x: Error) => x);
+    expect(e).toBeInstanceOf(Error);
+    expect(e!.message).not.toContain("D-Bus");
+  });
+
   it("sin stdin, el hijo ve el fin enseguida y no se cuelga esperándolo", async () => {
     const r = await correrReal(process.execPath, ["-e", "process.stdin.resume(); process.stdin.on('end', () => console.log('fin'))"], null, 5_000);
     expect(r).toMatchObject({ codigo: 0, stdout: "fin\n", vencido: false });

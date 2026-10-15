@@ -18,12 +18,18 @@ export interface Almacen {
 }
 
 export type Fuente = "env" | "llavero" | "archivo";
+// `completa = false`: un almacén PRESENTE no contestó (o no se entendió). Lo leído, si hay, puede no
+// ser lo más nuevo; y sin nada leído, no es «no hay clave»: es «no sé».
+export type Lectura<F> = { valor: { clave: string; fuente: F } | null; completa: boolean };
 
 export type Guardado = {
   leerClave(origen: string): Promise<{ clave: string; fuente: Fuente } | null>;
   leerClaveGuardada(origen: string): Promise<{ clave: string; fuente: "llavero" | "archivo" } | null>;
+  leerClaveCompleta(origen: string): Promise<Lectura<Fuente>>;
+  leerClaveGuardadaCompleta(origen: string, techoMs?: number): Promise<Lectura<"llavero" | "archivo">>;
   guardarClave(origen: string, clave: string, techoMs?: number): Promise<{ donde: "llavero" | "archivo" }>;
   borrarClave(origen: string): Promise<void>;
+  borrarClaveDe(origen: string, almacen: "llavero" | "archivo"): Promise<void>;
   leerPendiente(origen: string): Promise<Pendiente | null>;
   guardarPendiente(origen: string, p: Pendiente, techoMs?: number): Promise<void>;
   borrarPendiente(origen: string, techoMs?: number): Promise<boolean>;
@@ -95,16 +101,24 @@ export function crearGuardado(d: {
   // Gana el `escritoEn` más alto, no el almacén (Review Focus 8): si el llavero falla una vez, la
   // clave nueva cae al archivo; cuando el llavero vuelve, todavía tiene la VIEJA. Preferir el
   // llavero por ser el llavero devolvería una clave ya reemplazada (y quizás revocada).
-  async function leerCuenta(cuenta: string, queda: Queda): Promise<{ r: Registro; fuente: "llavero" | "archivo" } | null> {
+  async function leerCuentaCompleta(cuenta: string, queda: Queda): Promise<{ mejor: { r: Registro; fuente: "llavero" | "archivo" } | null; completa: boolean }> {
     let mejor: { r: Registro; fuente: "llavero" | "archivo" } | null = null;
+    let completa = true;
     for (const a of almacenes()) {
       const i = await intentar(a, queda, (x, t) => x.leer(cuenta, t));
+      if (i.estado === "fallo") completa = false;
       if (i.estado === "ok" && i.valor !== null && (mejor === null || i.valor.escritoEn > mejor.r.escritoEn)) {
         mejor = { r: i.valor, fuente: a.nombre };
       }
     }
-    return mejor;
+    return { mejor, completa };
   }
+  const leerCuenta = async (cuenta: string, queda: Queda) => (await leerCuentaCompleta(cuenta, queda)).mejor;
+
+  const errorDeBorrado = (fallidos: Almacen["nombre"][]) => {
+    const donde = fallidos.map((n) => (n === "llavero" ? "del llavero del sistema" : `de ${d.rutaDelArchivo}`)).join(" ni ");
+    return new FalloDeLaTerminal(SALIDA.inesperado, "no_se_pudo_borrar", `No pude borrar la clave guardada ${donde}.`);
+  };
 
   // El chequeo del repo va ANTES de escribir (Review Focus 1): una vez escrita, la clave ya está a
   // un `git add -A` de publicarse, y borrarla después no deshace un commit. Mira la ruta REAL además
@@ -166,15 +180,32 @@ export function crearGuardado(d: {
       const l = await leerCuenta(cuentaDeClave(origen), plazo());
       return l === null ? null : { clave: l.r.valor, fuente: l.fuente };
     },
+    async leerClaveCompleta(origen) {
+      const env = d.env.SUPCOFLOW_TOKEN;
+      if (env) return { valor: { clave: env, fuente: "env" }, completa: true };
+      return guardado.leerClaveGuardadaCompleta(origen);
+    },
+    // Las de arriba tragan un almacén que no contesta como «no hay»; ésta lo dice, porque quien va a
+    // PISAR o BORRAR la clave necesita saber si leyó todo (Review Focus 12 y 14): con A en un llavero
+    // bloqueado, «no hay» deja que un login la reemplace sin revocarla.
+    async leerClaveGuardadaCompleta(origen, techoMs) {
+      const { mejor, completa } = await leerCuentaCompleta(cuentaDeClave(origen), plazo(techoMs));
+      return { valor: mejor === null ? null : { clave: mejor.r.valor, fuente: mejor.fuente }, completa };
+    },
     async guardarClave(origen, clave, techoMs) {
       return { donde: await escribirCuenta(cuentaDeClave(origen), clave, "la clave", techoMs) };
     },
     async borrarClave(origen) {
       // Un borrado a medias de una clave no se informa como hecho: la que quedó sigue sirviendo.
       const fallidos = await borrarCuenta(cuentaDeClave(origen));
-      if (fallidos.length > 0) {
-        const donde = fallidos.map((n) => (n === "llavero" ? "del llavero del sistema" : `de ${d.rutaDelArchivo}`)).join(" ni ");
-        throw new FalloDeLaTerminal(SALIDA.inesperado, "no_se_pudo_borrar", `No pude borrar la clave guardada ${donde}.`);
+      if (fallidos.length > 0) throw errorDeBorrado(fallidos);
+    },
+    // Para cuando la lectura fue incompleta: se borra sólo la copia que se leyó y se revocó. La del
+    // almacén que no contestó puede ser OTRA clave, viva; borrarla a ciegas la olvidaría sin revocar.
+    async borrarClaveDe(origen, almacen) {
+      const a = almacen === "llavero" ? d.llavero : d.archivo;
+      if ((await intentar(a, plazo(), (x, t) => x.borrar(cuentaDeClave(origen), t))).estado === "fallo") {
+        throw errorDeBorrado([almacen]);
       }
     },
     async leerPendiente(origen) {

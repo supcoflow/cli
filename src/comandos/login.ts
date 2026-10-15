@@ -123,12 +123,23 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
     return fallo(SALIDA.entradaInvalida, "sin_login_en_curso", "No hay un inicio de sesión en curso: empezá con `supcoflow login --start`.");
   }
   // La anterior se lee ANTES de sondear, así no consume la reserva del cierre. Se pide por
-  // `leerClave` para saber de paso si SUPCOFLOW_TOKEN está definida (sin costo: la variable se
-  // devuelve sin tocar los almacenes); en ese caso la anterior es la GUARDADA, nunca la del
+  // `leerClaveCompleta` para saber de paso si SUPCOFLOW_TOKEN está definida (sin costo: la variable
+  // se devuelve sin tocar los almacenes); en ese caso la anterior es la GUARDADA, nunca la del
   // entorno, que no es de este login y no se revoca acá.
-  const vigente = await d.guardado.leerClave(origen);
-  const conVariable = vigente?.fuente === "env";
-  const anterior = conVariable ? await d.guardado.leerClaveGuardada(origen) : vigente;
+  const vigente = await d.guardado.leerClaveCompleta(origen);
+  const conVariable = vigente.valor?.fuente === "env";
+  const lectura = conVariable ? await d.guardado.leerClaveGuardadaCompleta(origen) : vigente;
+  // Un llavero que no contestó no es «no había clave» (Review Focus 12 y 14): seguir guardaría la
+  // nueva encima de la anterior sin revocarla, viva y olvidada. Se corta antes de canjear el código
+  // y sin borrar el pendiente, así el mismo `--wait` sirve cuando el llavero vuelva.
+  if (!lectura.completa) {
+    const salida = conVariable
+      ? "desbloqueá el llavero y volvé a llamar `supcoflow login --wait`."
+      : "desbloqueá el llavero y volvé a llamar `supcoflow login --wait` (o, sin login, exportá SUPCOFLOW_TOKEN con una clave vigente).";
+    return fallo(SALIDA.inesperado, "no_pude_leer_la_clave",
+      `No pude leer tu clave guardada (el llavero no respondió), y sin saber cuál es no la puedo reemplazar sin dejarla viva: ${salida}`);
+  }
+  const anterior = lectura.valor;
 
   let fin;
   try {
