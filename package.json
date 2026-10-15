@@ -1,0 +1,14 @@
+{
+  "name": "supcoflow",
+  "version": "0.1.0",
+  "description": "La terminal de Supcoflow: iniciar sesión y manejar el chat de soporte desde la consola o un asistente.",
+  "type": "module",
+  "bin": { "supcoflow": "dist/cli.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=24" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "dependencies": {},
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0", "vitest": "^4.0.0" },
+  "license": "UNLICENSED",
+  "private": true
+}
