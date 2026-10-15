@@ -1,6 +1,6 @@
 // Lo único que toca el mundo de verdad: el proceso, el disco, el llavero, la red y el reloj. Todo lo
 // demás recibe estas piezas inyectadas y se prueba con dobles; acá sólo se enchufan.
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { chmodSync, closeSync, fchmodSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,7 @@ import type { DepsDeLogin } from "./comandos/login.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
+import type { Git } from "./repo-local.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
 
 // El `.tmp` se crea en exclusiva (`wx`: falla si quedó algo, enlace incluido, en vez de escribir a
@@ -107,6 +108,17 @@ export const correrReal: Correr = (bin, args, stdin, techoMs) =>
     hijo.stdin.end(stdin ?? undefined);
   });
 
+// `git` con entorno mínimo (sólo PATH): ni GIT_DIR ni GIT_CONFIG del shell desvían la lectura, y
+// SUPCOFLOW_TOKEN no le llega. Un git ausente (ENOENT) es «sin git», no un fallo.
+export const gitReal: Git = (args, cwd) =>
+  new Promise((resolve) => {
+    execFile("git", args, { cwd, timeout: 5_000, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
+      if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
+      const codigo = (e as NodeJS.ErrnoException).code;
+      resolve({ codigo: typeof codigo === "number" ? codigo : null, stdout: "" });
+    });
+  });
+
 const LOCALES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export type Entorno = {
@@ -120,6 +132,7 @@ export type Entorno = {
   guardado: Guardado;
   login: DepsDeLogin;
   quienSoy: (api: URL, clave: string) => Promise<Yo>;
+  git: Git;
 };
 
 export function entornoReal(env: Record<string, string | undefined> = process.env): Entorno {
@@ -163,5 +176,6 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       tramoMs,
     },
     quienSoy: (a, clave) => quienSoy(a, clave, fetch),
+    git: gitReal,
   };
 }
