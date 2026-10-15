@@ -24,9 +24,9 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.1.0); sólo identifica a la terminal
+// A mano a propósito: tiene que coincidir con package.json (0.2.0); sólo identifica a la terminal
 // en los logs del motor, no decide nada.
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 
 type Respuesta = { status: number; cuerpo: Record<string, unknown> };

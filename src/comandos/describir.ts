@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -49,6 +49,39 @@ export const DESCRIPCION: {
       flags: ["--json"],
       ejemplos: ["supcoflow describir --json"],
       codigos: [0],
+    },
+    {
+      nombre: "repo conectar",
+      resumen: "Conecta el repo de esta carpeta (o el de --repo) con la App de GitHub: una persona lo confirma en la consola. Sin terminal interactiva, en dos pasos: --start y después --wait.",
+      flags: [
+        "--start: pide la conexión y sale 5 con la URL para confirmarla",
+        "--wait: espera la confirmación hasta 90 s; sale 5 si todavía no llegó (volvé a llamarlo)",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta",
+        "--dry-run: dice qué pediría sin pedir nada (--wait sólo lee)",
+        "--json",
+      ],
+      ejemplos: ["supcoflow repo conectar", "supcoflow repo conectar --start --json", "supcoflow repo conectar --wait --json"],
+      codigos: [0, 1, 2, 3, 4, 5],
+    },
+    {
+      nombre: "proyecto crear",
+      resumen: "Crea (o reusa) el proyecto del repo ya conectado y lo anota en .supcoflow/proyecto.json; un archivo distinto nunca se pisa (sale 4).",
+      flags: [
+        "--install \"…\": el comando de instalación, cuando el motor no lo puede deducir",
+        "--test \"…\": el comando de pruebas, ídem",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin escribir el archivo)",
+        "--dry-run: dice qué crearía sin crear nada",
+        "--json",
+      ],
+      ejemplos: ["supcoflow proyecto crear --json", "supcoflow proyecto crear --install \"pnpm i\" --test \"pnpm test\""],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "proyecto ver",
+      resumen: "Muestra el proyecto del repo: rama, comandos y el estado de la App de GitHub; null si todavía no tiene.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
+      ejemplos: ["supcoflow proyecto ver --json"],
+      codigos: [0, 1, 2, 3],
     },
   ],
   flags_globales: ["--json: el resultado en una línea de JSON por stdout; los avisos van por stderr", "--help, -h: la ayuda con ejemplos"],

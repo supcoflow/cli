@@ -1,14 +1,22 @@
 // Lo único que toca el mundo de verdad: el proceso, el disco, el llavero, la red y el reloj. Todo lo
 // demás recibe estas piezas inyectadas y se prueba con dobles; acá sólo se enchufan.
 import { execFile, spawn } from "node:child_process";
-import { chmodSync, closeSync, fchmodSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  chmodSync, closeSync, constants, fchmodSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
+} from "node:fs";
 import { homedir, hostname } from "node:os";
-import { join } from "node:path";
-import { canjear, pedirCodigo, quienSoy, revocarPropia, urlDeLaApi, type Yo } from "./api.ts";
+import { basename, dirname, join } from "node:path";
+import {
+  buscarProyecto, canjear, crearConexion, crearProyecto, leerProyecto, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Yo,
+} from "./api.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
+import type { DepsDeProyecto } from "./comandos/proyecto.ts";
+import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
+import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
 import type { Git } from "./repo-local.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
 
@@ -119,6 +127,91 @@ export const gitReal: Git = (args, cwd) =>
     });
   });
 
+// `.supcoflow/proyecto.json` vive DENTRO del repo, y el repo puede ser un clon ajeno: su contenido lo
+// decide quien lo escribió. Por eso ni la carpeta ni el archivo se siguen si son enlaces (uno hacia
+// `~/.ssh/…` haría que la terminal leyera, o escribiera, lo que el repo quiera), y se lee con tope.
+export const TOPE_DEL_ARCHIVO_DEL_REPO = 64 * 1024;
+// Lo que devuelve `leer` cuando hay ALGO ahí que no se lee (un enlace, una carpeta, algo enorme, sin
+// permiso). No es JSON a propósito: `proyecto crear` lo trata como un archivo distinto (sale 4, «no lo
+// toqué») sin que nada de lo que hay ahí llegue a la salida.
+export const ARCHIVO_QUE_NO_SE_LEE = "\u0000(no se lee)";
+
+export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["archivos"] {
+  // La carpeta: tiene que ser una carpeta de verdad. Un enlace o un archivo con ese nombre se rechaza;
+  // `null` sólo si no existe.
+  const carpetaPropia = (dir: string): "propia" | "ausente" | "ajena" => {
+    try {
+      const st = lstatSync(dir);
+      return st.isDirectory() && !st.isSymbolicLink() ? "propia" : "ajena";
+    } catch (e) {
+      return (e as NodeJS.ErrnoException).code === "ENOENT" ? "ausente" : "ajena";
+    }
+  };
+  const noSeLee = (p: string, porque: string) => {
+    avisar(`No leo ${p}: ${porque}.`);
+    return ARCHIVO_QUE_NO_SE_LEE;
+  };
+
+  return {
+    leer(p) {
+      const carpeta = carpetaPropia(dirname(p));
+      if (carpeta === "ausente") return null;
+      if (carpeta === "ajena") return noSeLee(p, `${basename(dirname(p))} no es una carpeta común (¿un enlace?)`);
+      let fd: number;
+      try {
+        // O_NOFOLLOW: un enlace en el último tramo falla (ELOOP) en vez de abrir su destino.
+        // O_NONBLOCK: abrir un FIFO no se cuelga esperando a quien escriba.
+        fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      } catch (e) {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === "ENOENT") return null;
+        return noSeLee(p, code === "ELOOP" ? "es un enlace" : "no se pudo abrir");
+      }
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile()) return noSeLee(p, "no es un archivo común");
+        if (st.size > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, "es demasiado grande");
+        // Se lee hasta el tope + 1 y no `st.size`: el archivo puede crecer entre el fstat y la lectura.
+        const buf = Buffer.alloc(TOPE_DEL_ARCHIVO_DEL_REPO + 1);
+        let n = 0;
+        for (;;) {
+          const leidos = readSync(fd, buf, n, buf.length - n, null);
+          if (leidos === 0) break;
+          n += leidos;
+          if (n > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, "es demasiado grande");
+        }
+        return buf.subarray(0, n).toString("utf8");
+      } catch {
+        return noSeLee(p, "no se pudo leer");
+      } finally {
+        closeSync(fd);
+      }
+    },
+    // Sólo se llama cuando `leer` dijo que no hay nada. El `.tmp` lleva un nombre al azar y se crea en
+    // exclusiva (`wx` no atraviesa un enlace que alguien dejara con ese nombre), y la carpeta se vuelve
+    // a mirar DESPUÉS del mkdir: `mkdir -p` sobre un enlace a una carpeta no falla, y escribir ahí
+    // sería escribir donde el repo quiera.
+    escribir(p, s) {
+      const dir = dirname(p);
+      mkdirSync(dir, { recursive: true });
+      if (carpetaPropia(dir) !== "propia") throw new Error(`${dir} no es una carpeta común`);
+      const tmp = join(dir, `.${basename(p)}.${randomUUID()}.tmp`);
+      try {
+        const fd = openSync(tmp, "wx", 0o644);
+        try {
+          writeSync(fd, s);
+        } finally {
+          closeSync(fd);
+        }
+        renameSync(tmp, p);
+      } catch (e) {
+        rmSync(tmp, { force: true });
+        throw e;
+      }
+    },
+  };
+}
+
 const LOCALES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 export type Entorno = {
@@ -133,6 +226,10 @@ export type Entorno = {
   login: DepsDeLogin;
   quienSoy: (api: URL, clave: string) => Promise<Yo>;
   git: Git;
+  cwd: string;
+  idempotencia: RegistroDeIdempotencia;
+  conexion: DepsDeConexion;
+  proyecto: DepsDeProyecto;
 };
 
 export function entornoReal(env: Record<string, string | undefined> = process.env): Entorno {
@@ -154,6 +251,21 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     env, llavero, archivo: almacenDeArchivo(rutaDelArchivo, fsReal), rutaDelArchivo, fs: fsReal, ahora: Date.now, avisar,
   });
 
+  // Al lado de las credenciales y con el mismo almacén (carpeta 0700, archivo 0600, `.tmp` en
+  // exclusiva): nunca dentro del repo donde se corre el comando, que la publicaría con un `git add -A`.
+  const rutaDeIdempotencia = join(dirname(rutaDelArchivo), "idempotencia.json");
+  const idempotencia = crearRegistroDeIdempotencia({
+    origen: api.origin,
+    almacen: almacenDeArchivo(rutaDeIdempotencia, fsReal),
+    rutaDelArchivo: rutaDeIdempotencia,
+    fs: fsReal,
+    generar: randomUUID,
+    ahora: Date.now,
+    avisar,
+  });
+  const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  const cwd = process.cwd();
+
   return {
     env,
     api,
@@ -168,7 +280,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       guardado,
       maquina: hostname(),
       ahora: Date.now,
-      dormir: (ms) => new Promise((r) => setTimeout(r, ms)),
+      dormir,
       pedirCodigo: (a, maquina) => pedirCodigo(a, maquina, fetch),
       canjear: (a, deviceCode, plazoMs) => canjear(a, deviceCode, fetch, plazoMs),
       revocarPropia: (a, clave, plazoMs) => revocarPropia(a, clave, fetch, plazoMs),
@@ -177,5 +289,19 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     },
     quienSoy: (a, clave) => quienSoy(a, clave, fetch),
     git: gitReal,
+    cwd,
+    idempotencia,
+    conexion: {
+      api, guardado, git: gitReal, cwd, ahora: Date.now, dormir, avisar, tramoMs,
+      crearConexion: (a, clave, repo) => crearConexion(a, clave, repo, fetch),
+      ultimaConexion: (a, clave, repo, plazoMs) => ultimaConexion(a, clave, repo, fetch, plazoMs),
+    },
+    proyecto: {
+      api, guardado, git: gitReal, cwd, idempotencia, archivos: archivosDelRepo(avisar), avisar,
+      buscarProyecto: (a, clave, repo) => buscarProyecto(a, clave, repo, fetch),
+      ultimaConexion: (a, clave, repo, plazoMs) => ultimaConexion(a, clave, repo, fetch, plazoMs),
+      crearProyecto: (a, clave, conexionId, cuerpo, key) => crearProyecto(a, clave, conexionId, cuerpo, key, fetch),
+      leerProyecto: (a, clave, id) => leerProyecto(a, clave, id, fetch),
+    },
   };
 }
