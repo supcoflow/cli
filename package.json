@@ -6,7 +6,7 @@
   "bin": { "supcoflow": "dist/cli.js" },
   "files": ["dist"],
   "engines": { "node": ">=24" },
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "scripts": { "build": "tsc -p tsconfig.json && chmod +x dist/cli.js", "test": "vitest run", "typecheck": "tsc --noEmit" },
   "dependencies": {},
   "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0", "vitest": "^4.0.0" },
   "license": "UNLICENSED",
