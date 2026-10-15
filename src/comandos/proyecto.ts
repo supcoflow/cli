@@ -15,6 +15,9 @@ const OPERACION = "proyecto_crear";
 // Lo único que se lee de un `.supcoflow/proyecto.json` ajeno es su id, y sólo si tiene esta forma:
 // así lo que salga a la terminal no puede ser otra cosa que un id (Review Focus 11).
 const FORMA_DEL_ID = /^proj_[a-z0-9-]{1,80}$/;
+// Los 422/409 del alta que el plan no listaba (alta-desde-conexion.ts del motor).
+const RECHAZOS_DE_UNA_PERSONA = new Set(["instalacion_no_verificada", "repo_fuera_de_la_instalacion"]);
+const RECHAZOS_TRANSITORIOS = new Set(["slug_ocupado", "repo_ya_conectado"]);
 
 export type DepsDeProyecto = {
   api: URL;
@@ -121,7 +124,18 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
     return resultadoDeFallo(e);
   }
   // Un repo con proyecto no vuelve a pasar por la conexión: el proyecto ya está atado a su instalación.
-  if (existente !== null) return resultadoDelProyecto(existente, true, raiz, d);
+  if (existente !== null) {
+    // Una clave guardada de un intento anterior (respuesta perdida, `en_curso`) ya no sirve: el proyecto
+    // existe. Si quedara, un alta futura del mismo repo (borrado y vuelto a crear) mandaría una clave
+    // vieja con otro contenido y el motor contestaría 409. Con --dry-run no se toca ni lo local.
+    if (!flags.dryRun) await d.idempotencia.olvidar(OPERACION, repo);
+    if (flags.install !== null || flags.test !== null) {
+      // Sin copiar los valores: son texto del usuario y el aviso sólo dice qué pasó con ellos. Callarlo
+      // haría creer que el proyecto quedó con los comandos pedidos.
+      d.avisar("El proyecto ya existe: ignoré --install/--test. Para cambiar sus comandos hay que configurarlo.");
+    }
+    return resultadoDelProyecto(existente, true, raiz, d);
+  }
 
   if (conexion === null || conexion.estado !== "conectado") {
     return fallo(SALIDA.haceFaltaUnaPersona, "repo_sin_conectar", "Conectá el repo primero: `supcoflow repo conectar`.", {
@@ -168,8 +182,20 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
       // No debería pasar (la clave es por repo y un reintento manda lo mismo); olvidarla deja reintentar limpio.
       await d.idempotencia.olvidar(OPERACION, repo);
       return fallo(SALIDA.inesperado, "clave_reusada", "El motor rechazó la clave de idempotencia guardada; la descarté, probá de nuevo.");
-    case "rechazo":
-      return fallo(SALIDA.entradaInvalida, alta.error, alta.message || "El motor rechazó el pedido.");
+    case "rechazo": {
+      // La clave se conserva: tras un rechazo el motor ya la soltó, y el próximo intento la reusa sin
+      // chocar. Lo que cambia es el código: no todo rechazo es culpa de lo que se escribió.
+      const message = alta.message || "El motor rechazó el pedido.";
+      if (RECHAZOS_DE_UNA_PERSONA.has(alta.error)) {
+        // Lo arregla alguien con permisos en GitHub (instalar la App, sumarle el repo): reintentar o
+        // cambiar flags no sirve, y un 3 haría que un asistente siguiera probando entradas.
+        return fallo(SALIDA.haceFaltaUnaPersona, alta.error,
+          `${message} Revisá la instalación de la App en GitHub y volvé a conectar con \`supcoflow repo conectar\`.`);
+      }
+      // Dos altas al mismo tiempo, o un proyecto borrado en el medio: el mismo pedido otra vez anda.
+      if (RECHAZOS_TRANSITORIOS.has(alta.error)) return fallo(SALIDA.inesperado, alta.error, message);
+      return fallo(SALIDA.entradaInvalida, alta.error, message);
+    }
   }
 }
 

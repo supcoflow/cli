@@ -41,7 +41,15 @@ export function crearRegistroDeIdempotencia(d: {
       // Perder la clave no duplica nada: el motor reusa el proyecto por su repo. Por eso un destino
       // dentro de un repo (misma regla que las credenciales: un `git add -A` la publicaría) o un disco
       // que falla avisan y siguen, en vez de frenar el comando.
-      const raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
+      // `realpath` lanza con un tramo que es un enlace roto (`~/.config/supcoflow` apuntando a un repo
+      // de dotfiles que ya no está): no saber dónde cae el destino es otro «no se puede guardar».
+      let raiz: string | null;
+      try {
+        raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
+      } catch {
+        d.avisar(`No pude resolver la ruta de ${d.rutaDelArchivo}: sigo con una clave de idempotencia sin guardar.`);
+        return nueva;
+      }
       if (raiz !== null) {
         d.avisar(`No guardo la clave de idempotencia dentro de un repo de git (${raiz}): un reintento mandará otra.`);
         return nueva;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { API_DE_PRODUCCION, buscarProyecto, canjear, crearConexion, crearProyecto, leerProyecto, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
 const API = new URL("http://localhost:3000");
@@ -110,6 +110,17 @@ describe("conexión y proyecto", () => {
     expect(await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k", falso(409, { error: "idempotency_en_curso", message: "x" }))).toEqual({ tipo: "en_curso" });
     expect(await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k", falso(409, { error: "idempotency_key_reusada", message: "x" }))).toEqual({ tipo: "clave_reusada" });
     expect(await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k", falso(409, { error: "conexion_no_conectada", message: "pendiente" }))).toEqual({ tipo: "no_conectada", message: "pendiente" });
+  });
+  it("M3: los dos POST que crean algo esperan 30 s (el motor habla con Vercel y GitHub detrás); los demás, 15 s", async () => {
+    const plazos = vi.spyOn(AbortSignal, "timeout");
+    try {
+      await crearConexion(API, CLAVE, "d/r", falso(201, { pedido: PEDIDO }));
+      await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k", falso(201, { proyecto: PROYECTO, reusado: false }));
+      await buscarProyecto(API, CLAVE, "d/r", falso(200, { proyecto: null }));
+      expect(plazos.mock.calls.map((c) => c[0])).toEqual([30_000, 30_000, 15_000]);
+    } finally {
+      plazos.mockRestore();
+    }
   });
   it("buscarProyecto y leerProyecto", async () => {
     expect(await buscarProyecto(API, CLAVE, "d/r", falso(200, { proyecto: null }))).toBeNull();

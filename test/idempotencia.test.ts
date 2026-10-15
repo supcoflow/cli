@@ -33,3 +33,15 @@ it("dentro de un repo no escribe nada", async () => {
   await armar(almacen, (p) => p === "/h/.git").claveDe("proyecto_crear", "d/r");
   expect(almacen.datos.size).toBe(0);
 });
+it("M2: si resolver la ruta lanza (un enlace roto en ~/.config), avisa y devuelve una clave igual", async () => {
+  const avisos: string[] = [];
+  const almacen = memoria();
+  const r = crearRegistroDeIdempotencia({
+    origen: "http://localhost:3000", almacen, rutaDelArchivo: "/h/.config/supcoflow/idempotencia.json",
+    fs: { realpath: () => { throw new Error("ENOENT"); }, existe: () => false },
+    generar: () => "k-roto", ahora: () => 1, avisar: (s) => avisos.push(s),
+  });
+  expect(await r.claveDe("proyecto_crear", "d/r")).toBe("k-roto");
+  expect(avisos).toHaveLength(1);
+  expect(almacen.datos.size).toBe(0);
+});

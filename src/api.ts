@@ -28,6 +28,10 @@ export type Fetch = typeof fetch;
 // en los logs del motor, no decide nada.
 const VERSION = "0.2.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
+// Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
+// veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
+// sólo quedaba reintentar; el sondeo no los usa, así que su tope por tramo no cambia.
+const PLAZO_DE_ALTA_MS = 30_000;
 
 type Respuesta = { status: number; cuerpo: Record<string, unknown> };
 
@@ -43,8 +47,9 @@ async function pedir(api: URL, ruta: string, init: RequestInit, f: Fetch, plazoM
       headers: { ...(init.headers as Record<string, string> | undefined), "user-agent": `supcoflow-cli/${VERSION}` },
       signal: AbortSignal.timeout(plazoMs ?? PLAZO_POR_DEFECTO_MS),
       // Un 307/308 reenvía el cuerpo del formulario (con el device_code) adonde diga `Location`, aunque
-      // sea otro origen o http. Los cuatro endpoints del motor nunca redirigen: una redirección es
-      // anómala y sale como `motor_inalcanzable`, sin Location ni cuerpo en el mensaje.
+      // sea otro origen o http; con el Bearer pasaría lo mismo con la clave. Ninguna ruta del motor que
+      // llama la terminal redirige: una redirección es anómala y sale como `motor_inalcanzable`, sin
+      // Location ni cuerpo en el mensaje.
       redirect: "error",
     });
     texto = await res.text();
@@ -223,7 +228,7 @@ function rechazada(r: Respuesta): FalloDeLaTerminal {
 const JSON_BODY = { "content-type": "application/json" };
 
 export async function crearConexion(api: URL, clave: string, repo: string, f: Fetch): Promise<Pedido> {
-  const r = await conClave(api, clave, "/api/conexiones", { method: "POST", headers: JSON_BODY, body: JSON.stringify({ repo }) }, f);
+  const r = await conClave(api, clave, "/api/conexiones", { method: "POST", headers: JSON_BODY, body: JSON.stringify({ repo }) }, f, PLAZO_DE_ALTA_MS);
   if (r.status !== 200 && r.status !== 201) throw rechazada(r);
   return aPedido(r.cuerpo.pedido, r.status);
 }
@@ -248,7 +253,7 @@ export async function crearProyecto(
 ): Promise<AltaRemota> {
   const r = await conClave(
     api, clave, `/api/conexiones/${encodeURIComponent(conexionId)}/proyecto`,
-    { method: "POST", headers: { ...JSON_BODY, "idempotency-key": idempotencyKey }, body: JSON.stringify(cuerpo) }, f,
+    { method: "POST", headers: { ...JSON_BODY, "idempotency-key": idempotencyKey }, body: JSON.stringify(cuerpo) }, f, PLAZO_DE_ALTA_MS,
   );
   const error = texto(r.cuerpo.error);
   const message = taparSecretos(texto(r.cuerpo.message) ?? "");

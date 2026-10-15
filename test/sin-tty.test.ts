@@ -200,17 +200,21 @@ describe("supcoflow sin terminal", () => {
     expect(motor.revocadas).toContain(CLAVE_B);
   }, 60_000);
 
+  // La tercera columna: sin repo que pedir, `repo conectar` tiene que frenar ANTES de hablar con el
+  // motor; si sólo se mirara el código, un 3 que llega después de un pedido pasaría igual.
   it.each([
-    [["repo", "conectar"], 3],
-    [["repo", "conectar", "--json"], 3],
-    [["repo", "conectar", "--start", "--json", "--repo", "d/r"], 5],
-    [["repo", "conectar", "--wait", "--json", "--repo", "d/r"], 5],
-    [["proyecto", "ver", "--json", "--repo", "d/r"], 0],
-    [["proyecto", "crear", "--json", "--repo", "d/r"], 4],
-    [["repo"], 3],
-  ])("sin terminal, %j termina solo con %i", async (args, codigo) => {
+    [["repo", "conectar"], 3, true],
+    [["repo", "conectar", "--json"], 3, true],
+    [["repo", "conectar", "--start", "--json", "--repo", "d/r"], 5, false],
+    [["repo", "conectar", "--wait", "--json", "--repo", "d/r"], 5, false],
+    [["proyecto", "ver", "--json", "--repo", "d/r"], 0, false],
+    [["proyecto", "crear", "--json", "--repo", "d/r"], 4, false],
+    [["repo"], 3, false],
+  ])("sin terminal, %j termina solo con %i", async (args, codigo, sinMotor) => {
+    pedidosAlMotor.length = 0;
     const r = await correrSinTty([...args], { conClave: true });
     expect(r.codigo).toBe(codigo);
+    if (sinMotor) expect(pedidosAlMotor).toEqual([]);
     expect(r.stdout.trimEnd().split("\n").length).toBeLessThanOrEqual(1);
     expect(r.stdout + r.stderr).not.toMatch(/scf_[0-9a-f]{16}_|[0-9a-f]{64}/);
   }, 60_000);
