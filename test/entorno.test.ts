@@ -22,6 +22,19 @@ describe("el Correr real", () => {
     expect(r).toMatchObject({ codigo: 7, stdout: "secreto", vencido: false });
   });
 
+  it("el hijo no hereda SUPCOFLOW_TOKEN y sí el PATH", async () => {
+    const antes = process.env.SUPCOFLOW_TOKEN;
+    process.env.SUPCOFLOW_TOKEN = "scf_secreto";
+    try {
+      const r = await correrReal(process.execPath, ["-e", "console.log(JSON.stringify(process.env))"], null, 5_000);
+      const env = JSON.parse(r.stdout) as Record<string, string>;
+      expect(env.SUPCOFLOW_TOKEN).toBeUndefined();
+      expect(env.PATH).toBe(process.env.PATH);
+    } finally {
+      if (antes === undefined) delete process.env.SUPCOFLOW_TOKEN; else process.env.SUPCOFLOW_TOKEN = antes;
+    }
+  });
+
   it("sin stdin, el hijo ve el fin enseguida y no se cuelga esperándolo", async () => {
     const r = await correrReal(process.execPath, ["-e", "process.stdin.resume(); process.stdin.on('end', () => console.log('fin'))"], null, 5_000);
     expect(r).toMatchObject({ codigo: 0, stdout: "fin\n", vencido: false });

@@ -1,5 +1,6 @@
 // El llavero del sistema: Keychain en macOS (`security`), Secret Service en Linux (`secret-tool`).
 // Sin dependencias: se habla con el binario del sistema, inyectado como `Correr` para los tests.
+import { existsSync } from "node:fs";
 import { esRegistro } from "./archivo.ts";
 import type { Almacen, Registro } from "./index.ts";
 
@@ -44,7 +45,8 @@ function cuentaSegura(cuenta: string): string {
 }
 
 type Comandos = {
-  bin: string;
+  // Candidatas en orden: se usa la primera que exista. Ninguna existe → el llavero está AUSENTE.
+  bins: string[];
   escribir(cuenta: string, secreto: string): { args: string[]; stdin: string };
   leer(cuenta: string): string[];
   borrar(cuenta: string): string[];
@@ -55,7 +57,7 @@ type Comandos = {
 // directorio del repo en el PATH) y recibiría la clave. El secreto va con `-i` por stdin porque en
 // `argv` lo ve cualquiera con `ps` mientras el comando corre; leer y borrar no llevan secreto.
 const MACOS: Comandos = {
-  bin: "/usr/bin/security",
+  bins: ["/usr/bin/security"],
   escribir: (cuenta, secreto) => ({
     args: ["-i"],
     stdin: `add-generic-password -U -s ${SERVICIO} -a ${cuenta} -w ${secreto}\n`,
@@ -67,8 +69,11 @@ const MACOS: Comandos = {
 };
 
 // `secret-tool store` lee el secreto de stdin cuando no hay terminal: nunca en `argv`.
+//
+// Rutas ABSOLUTAS y no `secret-tool` por el PATH, por la misma razón que `security` arriba: un
+// `node_modules/.bin/secret-tool` plantado recibiría cada clave por stdin.
 const LINUX: Comandos = {
-  bin: "secret-tool",
+  bins: ["/usr/bin/secret-tool", "/bin/secret-tool", "/usr/local/bin/secret-tool"],
   escribir: (cuenta, secreto) => ({
     args: ["store", "--label=Supcoflow", "servicio", SERVICIO, "cuenta", cuenta],
     stdin: secreto,
@@ -78,14 +83,18 @@ const LINUX: Comandos = {
   noEncontrado: (codigo, stdout) => codigo === 1 && stdout.trim() === "",
 };
 
-export function almacenDeLlavero(plataforma: NodeJS.Platform, correr: Correr): Almacen | null {
+export function almacenDeLlavero(
+  plataforma: NodeJS.Platform, correr: Correr, existe: (ruta: string) => boolean = existsSync,
+): Almacen | null {
   const c = plataforma === "darwin" ? MACOS : plataforma === "linux" ? LINUX : null;
   if (c === null) return null;
 
   // Ni el stdout ni el stdin van al mensaje: los dos pueden llevar el secreto.
   async function ejecutar(args: string[], stdin: string | null, techoMs: number) {
-    const r = await correr(c!.bin, args, stdin, techoMs);
-    if (r.ausente) throw new LlaveroAusente(c!.bin);
+    const bin = c!.bins.find((b) => existe(b));
+    if (bin === undefined) throw new LlaveroAusente(c!.bins[0]!);
+    const r = await correr(bin, args, stdin, techoMs);
+    if (r.ausente) throw new LlaveroAusente(bin);
     if (r.vencido) throw new Error(`El llavero no contestó en ${Math.round(techoMs / 1000)} s.`);
     return r;
   }

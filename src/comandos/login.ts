@@ -173,6 +173,8 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
 // El login de una persona frente a la terminal: los mismos dos pasos, encadenados. Sin TTY (o con
 // `--json`) no pide código: nadie iba a ver la URL, y un pedido que nadie aprueba sólo gasta el tope
 // de pedidos por IP del motor. A un asistente le corresponde el camino partido.
+const PAUSA_ENTRE_TRAMOS_MS = 1_000;
+
 export async function loginInteractivo(
   d: DepsDeLogin & { esTty: boolean; mostrar: (s: string) => void }, flags: { json: boolean; dryRun: boolean },
 ): Promise<Resultado> {
@@ -190,6 +192,9 @@ export async function loginInteractivo(
   let r: Resultado;
   do {
     r = await loginWait(d);
+    // Un `loginWait` que devuelve 5 sin haber sondeado (el intervalo era más largo que la ventana
+    // que quedaba) volvería a girar sin esperar nada: este segundo evita quemar CPU en el vacío.
+    if (r.codigo === SALIDA.esperandoAUnaPersona) await d.dormir(PAUSA_ENTRE_TRAMOS_MS);
   } while (r.codigo === SALIDA.esperandoAUnaPersona);
   return r;
 }

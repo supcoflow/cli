@@ -21,6 +21,20 @@ describe("la URL de la API (§5.2)", () => {
   });
 });
 
+describe("las redirecciones", () => {
+  it("fetch recibe redirect error y una redirección sale como motor_inalcanzable sin Location", async () => {
+    let init: RequestInit | undefined;
+    const f = (async (_i: RequestInfo | URL, i?: RequestInit) => {
+      init = i;
+      throw new TypeError("fetch failed: redirect to https://evil.example/robo");
+    }) as Fetch;
+    const e = await pedirCodigo(API, "m", f).catch((x) => x);
+    expect(init?.redirect).toBe("error");
+    expect(e).toMatchObject({ codigo: 1, error: "motor_inalcanzable" });
+    expect(JSON.stringify(e.message)).not.toContain("evil");
+  });
+});
+
 describe("los pedidos", () => {
   it("pedirCodigo manda client_id y maquina como formulario", async () => {
     const vistos: Request[] = [];

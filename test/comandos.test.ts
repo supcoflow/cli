@@ -118,6 +118,14 @@ describe("loginInteractivo", () => {
     sinSecretos(r);
     expect(await guardado.leerClave(ORIGEN)).toEqual({ clave: A, fuente: "llavero" });
   });
+  it("entre un tramo y el siguiente duerme 1 s: un 5 sin sondeos no gira en vacío", async () => {
+    const { d, mostrado } = armar({ canjes: [{ tipo: "pendiente" }, { tipo: "pendiente" }, { tipo: "token", clave: A, equipo: "acme" }] });
+    const dormidos: number[] = [];
+    const dormir = async (ms: number) => { dormidos.push(ms); await d.dormir(ms); };
+    const r = await loginInteractivo({ ...d, dormir, tramoMs: 15_000, esTty: true, mostrar: (s) => mostrado.push(s) }, { json: false, dryRun: false });
+    expect(r.codigo).toBe(0);
+    expect(dormidos.filter((ms) => ms === 1_000).length).toBeGreaterThanOrEqual(1);
+  });
   it("con TTY y un rechazo: devuelve el final (4)", async () => {
     const { d, mostrado } = armar({ canjes: [{ tipo: "rechazado" }] });
     const r = await loginInteractivo({ ...d, esTty: true, mostrar: (s) => mostrado.push(s) }, { json: false, dryRun: false });

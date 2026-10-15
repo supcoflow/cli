@@ -108,7 +108,7 @@ describe("crearGuardado", () => {
   it("Linux sin secret-tool: guardar, leer, borrar la clave y el pendiente andan sólo con el archivo (Review Focus 12)", async () => {
     const correr: Correr = async () => ({ codigo: null, stdout: "", vencido: false, ausente: true });
     let t = 0; const archivo = memoria("archivo");
-    const g = crearGuardado({ env: {}, llavero: almacenDeLlavero("linux", correr), archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {} });
+    const g = crearGuardado({ env: {}, llavero: almacenDeLinux(correr), archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {} });
     await g.guardarPendiente(PROD, { deviceCode: "e".repeat(64), userCode: "BCDF-GHJK", verificationUriComplete: "u", venceEn: 9, intervaloS: 5, ultimoSondeoEn: null });
     expect(await g.guardarClave(PROD, A)).toEqual({ donde: "archivo" });
     expect(await g.borrarPendiente(PROD)).toBe(true);
@@ -148,6 +148,9 @@ describe("crearGuardado", () => {
   });
 });
 
+// Un Linux de mentira que sí tiene `secret-tool`: el llavero comprueba la ruta absoluta antes de llamar.
+const almacenDeLinux = (correr: Correr) => almacenDeLlavero("linux", correr, (r) => r === "/usr/bin/secret-tool");
+
 describe("almacenDeLlavero", () => {
   it("macOS: el secreto viaja por stdin, nunca en los argumentos", async () => {
     const llamadas: { bin: string; args: string[]; stdin: string | null }[] = [];
@@ -161,7 +164,7 @@ describe("almacenDeLlavero", () => {
   it("un llavero que se cuelga vence el techo y se trata como falla (Review Focus 2)", async () => {
     const techos: number[] = [];
     const correr: Correr = async (_b, _a, _s, techo) => { techos.push(techo); return { codigo: null, stdout: "", vencido: true }; };
-    await expect(almacenDeLlavero("linux", correr)!.escribir(PROD, { valor: A, escritoEn: 1 })).rejects.toThrow();
+    await expect(almacenDeLinux(correr)!.escribir(PROD, { valor: A, escritoEn: 1 })).rejects.toThrow();
     expect(techos[0]).toBe(TECHO_DEL_LLAVERO_MS);
   });
   it("Windows no tiene llavero soportado", () => {
@@ -236,8 +239,8 @@ describe("reglas en prosa", () => {
   });
   it("Linux: el secreto viaja por stdin, nunca en los argumentos", async () => {
     const vistas: { bin: string; args: string[]; stdin: string | null; techo: number }[] = [];
-    await almacenDeLlavero("linux", registrador(vistas, () => ({ codigo: 0, stdout: "", vencido: false })))!.escribir(PROD, { valor: A, escritoEn: 1 });
-    expect(vistas[0]!.bin).toBe("secret-tool");
+    await almacenDeLinux(registrador(vistas, () => ({ codigo: 0, stdout: "", vencido: false })))!.escribir(PROD, { valor: A, escritoEn: 1 });
+    expect(vistas[0]!.bin).toBe("/usr/bin/secret-tool");
     expect(vistas[0]!.args).toEqual(["store", "--label=Supcoflow", "servicio", "supcoflow", "cuenta", PROD]);
     expect(vistas[0]!.stdin).not.toBeNull();
     const b64 = Buffer.from(A).toString("base64url");
@@ -252,11 +255,23 @@ describe("reglas en prosa", () => {
     await expect(roto.leer(PROD)).rejects.toThrow();
     await expect(roto.borrar(PROD)).rejects.toThrow();
   });
+  it("Linux: secret-tool se busca por ruta absoluta, nunca por el PATH, y sin ninguna es AUSENTE", async () => {
+    const vistas: string[] = [];
+    const correr: Correr = async (bin) => { vistas.push(bin); return { codigo: 0, stdout: "", vencido: false }; };
+    const consultadas: string[] = [];
+    const sin = almacenDeLlavero("linux", correr, (r) => { consultadas.push(r); return false; })!;
+    await expect(sin.leer(PROD)).rejects.toBeInstanceOf(LlaveroAusente);
+    expect(vistas).toEqual([]);
+    expect(consultadas).toEqual(["/usr/bin/secret-tool", "/bin/secret-tool", "/usr/local/bin/secret-tool"]);
+    const ultima = almacenDeLlavero("linux", correr, (r) => r === "/usr/local/bin/secret-tool")!;
+    await ultima.borrar(PROD);
+    expect(vistas).toEqual(["/usr/local/bin/secret-tool"]);
+  });
   it("Linux: código 1 sin salida es no encontrado; ausente lanza LlaveroAusente", async () => {
-    const ll = almacenDeLlavero("linux", async () => ({ codigo: 1, stdout: "", vencido: false }))!;
+    const ll = almacenDeLinux(async () => ({ codigo: 1, stdout: "", vencido: false }))!;
     expect(await ll.leer(PROD)).toBeNull();
     await expect(ll.borrar(PROD)).resolves.toBeUndefined();
-    const sin = almacenDeLlavero("linux", async () => ({ codigo: null, stdout: "", vencido: false, ausente: true }))!;
+    const sin = almacenDeLinux(async () => ({ codigo: null, stdout: "", vencido: false, ausente: true }))!;
     await expect(sin.leer(PROD)).rejects.toBeInstanceOf(LlaveroAusente);
   });
   it("las cuentas: la clave es el origen, el pendiente y la lista por revocar llevan sufijo", async () => {
@@ -279,7 +294,7 @@ describe("reglas en prosa", () => {
   it("un llavero que acaba de fallar no se vuelve a esperar para limpiar", async () => {
     const vistas: { bin: string; args: string[]; stdin: string | null; techo: number }[] = [];
     let t = 0; const archivo = memoria("archivo");
-    const llavero = almacenDeLlavero("linux", registrador(vistas, () => ({ codigo: null, stdout: "", vencido: true })));
+    const llavero = almacenDeLinux(registrador(vistas, () => ({ codigo: null, stdout: "", vencido: true })));
     const g = crearGuardado({ env: {}, llavero, archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {} });
     expect(await g.guardarClave(PROD, A)).toEqual({ donde: "archivo" });
     expect(vistas.length).toBe(1);
@@ -288,7 +303,7 @@ describe("reglas en prosa", () => {
     const vistas: { bin: string; args: string[]; stdin: string | null; techo: number }[] = [];
     let t = 0; const archivo = memoria("archivo");
     // Cada llamada al reloj avanza 1 s: el plazo que le queda a la segunda llamada es menor.
-    const llavero = almacenDeLlavero("linux", registrador(vistas, (args) => ({ codigo: args[0] === "lookup" ? 1 : 0, stdout: "", vencido: false })));
+    const llavero = almacenDeLinux(registrador(vistas, (args) => ({ codigo: args[0] === "lookup" ? 1 : 0, stdout: "", vencido: false })));
     const g = crearGuardado({ env: {}, llavero, archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => (t += 1_000), avisar: () => {} });
     await g.anotarPorRevocar(PROD, A, 4_000);
     expect(vistas.map((v) => v.args[0])).toEqual(["lookup", "store"]);
@@ -299,14 +314,14 @@ describe("reglas en prosa", () => {
   it("un plazo agotado no llama al llavero: cae al archivo", async () => {
     const vistas: { bin: string; args: string[]; stdin: string | null; techo: number }[] = [];
     let t = 0; const archivo = memoria("archivo");
-    const llavero = almacenDeLlavero("linux", registrador(vistas, () => ({ codigo: 0, stdout: "", vencido: false })));
+    const llavero = almacenDeLinux(registrador(vistas, () => ({ codigo: 0, stdout: "", vencido: false })));
     const g = crearGuardado({ env: {}, llavero, archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => (t += 10_000), avisar: () => {} });
     expect(await g.guardarClave(PROD, A, 5_000)).toEqual({ donde: "archivo" });
     expect(vistas.length).toBe(0);
   });
   it("leerPorRevocar con el llavero AUSENTE es completa (ausente no es fallido, Review Focus 12)", async () => {
     let t = 0; const archivo = memoria("archivo");
-    const llavero = almacenDeLlavero("linux", async () => ({ codigo: null, stdout: "", vencido: false, ausente: true }));
+    const llavero = almacenDeLinux(async () => ({ codigo: null, stdout: "", vencido: false, ausente: true }));
     const g = crearGuardado({ env: {}, llavero, archivo, rutaDelArchivo: RUTA, fs: sinEnlaces(), ahora: () => ++t, avisar: () => {} });
     await g.anotarPorRevocar(PROD, A);
     expect(await g.leerPorRevocar(PROD)).toEqual({ claves: [A], completa: true });

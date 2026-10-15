@@ -42,6 +42,10 @@ async function pedir(api: URL, ruta: string, init: RequestInit, f: Fetch, plazoM
       ...init,
       headers: { ...(init.headers as Record<string, string> | undefined), "user-agent": `supcoflow-cli/${VERSION}` },
       signal: AbortSignal.timeout(plazoMs ?? PLAZO_POR_DEFECTO_MS),
+      // Un 307/308 reenvía el cuerpo del formulario (con el device_code) adonde diga `Location`, aunque
+      // sea otro origen o http. Los cuatro endpoints del motor nunca redirigen: una redirección es
+      // anómala y sale como `motor_inalcanzable`, sin Location ni cuerpo en el mensaje.
+      redirect: "error",
     });
     texto = await res.text();
   } catch {

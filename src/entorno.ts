@@ -61,6 +61,19 @@ export const fsReal: FsMinimo = {
 // Para hablar con `security`/`secret-tool`. stderr se descarta: no hace falta y podría traer algo
 // del secreto. Al techo el hijo se mata con SIGKILL (un llavero bloqueado no atiende un SIGTERM) y se
 // resuelve sin esperar a que muera: un `close` que no llega no puede colgar el comando (Review Focus 2).
+// Un entorno mínimo para el hijo: con `process.env` entero, SUPCOFLOW_TOKEN (y cualquier otro
+// secreto del shell) llegaría a `security`/`secret-tool`, que no lo necesitan. Las variables de D-Bus
+// y XDG sí: sin ellas `secret-tool` no encuentra el bus del Secret Service.
+const VARIABLES_DEL_HIJO = ["PATH", "HOME", "USER", "LANG", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "DISPLAY", "XDG_CONFIG_HOME"];
+function entornoDelHijo(): Record<string, string> {
+  const r: Record<string, string> = {};
+  for (const k of VARIABLES_DEL_HIJO) {
+    const v = process.env[k];
+    if (v !== undefined) r[k] = v;
+  }
+  return r;
+}
+
 export const correrReal: Correr = (bin, args, stdin, techoMs) =>
   new Promise((resolve) => {
     let listo = false;
@@ -71,7 +84,7 @@ export const correrReal: Correr = (bin, args, stdin, techoMs) =>
       clearTimeout(reloj);
       resolve({ ...r, stdout });
     };
-    const hijo = spawn(bin, args, { stdio: ["pipe", "pipe", "ignore"] });
+    const hijo = spawn(bin, args, { stdio: ["pipe", "pipe", "ignore"], env: entornoDelHijo() });
     const reloj = setTimeout(() => {
       hijo.kill("SIGKILL");
       terminar({ codigo: null, vencido: true });
