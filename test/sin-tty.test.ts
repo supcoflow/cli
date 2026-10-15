@@ -84,7 +84,10 @@ function correr(args: string[], o: { stdin: "ignore"; techoMs?: number }): Promi
       stdio: [o.stdin, "pipe", "pipe"],
       env: {
         PATH: process.env.PATH, HOME: tmp, XDG_CONFIG_HOME: join(tmp, "config"),
-        SUPCOFLOW_API_URL: api, SUPCOFLOW_SIN_LLAVERO: "1", SUPCOFLOW_TRAMO_MS: "3000",
+        // 9 s y no 3 s: la ventana de sondeo (tramo - tramo/3) tiene que superar con holgura el
+        // mínimo de 2 s (PLAZO_MINIMO_DE_SONDEO_MS); con 3 s sobraban 2000 ms justos y cualquier
+        // milisegundo gastado antes del primer sondeo lo salteaba (flaky, T18).
+        SUPCOFLOW_API_URL: api, SUPCOFLOW_SIN_LLAVERO: "1", SUPCOFLOW_TRAMO_MS: "9000",
       },
     });
     let stdout = "";
