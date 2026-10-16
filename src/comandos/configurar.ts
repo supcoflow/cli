@@ -17,7 +17,7 @@ export type DepsDeConfigurar = DepsDelProyectoDelRepo & {
 };
 export type { Fetch };
 
-const fallo = (codigo: Resultado["codigo"], error: string, message: string): Resultado => ({ codigo, json: { ok: false, error, message }, texto: message });
+export const fallo = (codigo: Resultado["codigo"], error: string, message: string): Resultado => ({ codigo, json: { ok: false, error, message }, texto: message });
 const PIDEN_UNA_PERSONA = new Set(["skill_no_aprobada"]);
 const TRANSITORIOS = new Set(["sitios_cambiaron", "idempotency_en_curso"]);
 
@@ -30,8 +30,8 @@ export function desenlace(r: Respuesta, ok: (cuerpo: Record<string, unknown>) =>
   return fallo(SALIDA.entradaInvalida, error, message);
 }
 
-const rutaDe = (p: { id: string }, resto: string) => `/api/proyectos/${encodeURIComponent(p.id)}${resto}`;
-const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` });
+export const rutaDe = (p: { id: string }, resto: string) => `/api/proyectos/${encodeURIComponent(p.id)}${resto}`;
+export const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` });
 
 export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flags, "repo">): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);

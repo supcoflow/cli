@@ -336,3 +336,15 @@ export async function listarClaves(api: URL, clave: string, proyectoId: string, 
     return { id, nombre, creadaEn };
   });
 }
+
+// ¿Esta clave es una clave de CONSULTA de este proyecto y autentica? La prueba de posesión de
+// `claves crear`: el motor es el único que sabe cuál generación es la vigente, y de qué alcance. Que lea el
+// proyecto no alcanza: una clave personal también lo lee y puede mucho más (tercera revisión, hallazgo 2).
+// Sin `conClave`: un 401 acá es la respuesta («no»), no «iniciá sesión».
+export async function esClaveDeConsultaDelProyecto(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<boolean> {
+  const r = await pedir(api, "/api/yo", { method: "GET", headers: bearer(clave) }, f);
+  if (r.status === 401) return false;
+  if (r.status >= 500) throw sinServicio(r.status);
+  if (r.status !== 200) throw inesperada(r.status);
+  return r.cuerpo.via === "clave_de_consulta" && r.cuerpo.proyecto === proyectoId;
+}

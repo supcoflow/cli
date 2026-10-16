@@ -10,6 +10,7 @@ import { basename, dirname, join } from "node:path";
 import {
   buscarProyecto, canjear, crearConexion, crearProyecto, leerProyecto, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Yo,
 } from "./api.ts";
+import type { FsDelCandado } from "./candado.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
@@ -18,6 +19,7 @@ import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts"
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
 import type { Git } from "./repo-local.ts";
+import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
 
 // El `.tmp` se crea en exclusiva (`wx`: falla si quedó algo, enlace incluido, en vez de escribir a
@@ -66,6 +68,85 @@ export const fsReal: FsMinimo = {
     }
   },
 };
+
+// El candado de `claves crear` (src/candado.ts). `wx` es la exclusión: SÓLO `EEXIST` es «ya hay uno»;
+// cualquier otro error (permisos, disco) se relanza y sale `no_disponible`, nunca «ocupado». La lectura no
+// sigue enlaces: un `.lock` que alguien cambió por un enlace no se lee como si fuera el nuestro.
+export const fsDelCandadoReal: FsDelCandado = {
+  crearExclusivo(p, contenido, modo) {
+    let fd: number;
+    try {
+      fd = openSync(p, "wx", modo);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
+      throw e;
+    }
+    try {
+      fchmodSync(fd, modo);
+      writeSync(fd, contenido);
+    } finally {
+      closeSync(fd);
+    }
+    return true;
+  },
+  leer(p) {
+    try {
+      const fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        return readFileSync(fd, "utf8");
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      return null;
+    }
+  },
+  borrar: (p) => rmSync(p, { force: true }),
+  crearDir: (p, modo) => void mkdirSync(p, { recursive: true, mode: modo }),
+};
+
+// ¿Sigue vivo el dueño de un candado? `kill(pid, 0)` no manda nada: sólo pregunta. `EPERM` es «existe pero
+// es de otro usuario»: vivo. Sólo `ESRCH` (no existe) lo da por muerto.
+export function procesoVivo(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+// El destino del secreto de `claves crear` (src/secreto-a-archivo.ts): el `fsReal` de siempre más una
+// lectura que no sigue un enlace en el último tramo (`O_NOFOLLOW` → `ELOOP`), no se cuelga en un FIFO y
+// tiene tope. Sólo archivos comunes.
+function leerSinSeguir(p: string, tope: number): LecturaSinSeguir {
+  let fd: number;
+  try {
+    fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return { tipo: "ausente" };
+    // macOS y Linux dan `ELOOP` al abrir un enlace con O_NOFOLLOW; algunos BSD, `EMLINK`.
+    return code === "ELOOP" || code === "EMLINK" ? { tipo: "enlace" } : { tipo: "ilegible" };
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return { tipo: "ilegible" };
+    const buf = Buffer.alloc(tope + 1);
+    let n = 0;
+    for (;;) {
+      const leidos = readSync(fd, buf, n, buf.length - n, null);
+      if (leidos === 0) break;
+      n += leidos;
+      if (n > tope) return { tipo: "ilegible" };
+    }
+    return { tipo: "contenido", texto: buf.subarray(0, n).toString("utf8") };
+  } catch {
+    return { tipo: "ilegible" };
+  } finally {
+    closeSync(fd);
+  }
+}
+export const fsDeSecretosReal: FsDeSecretos = { ...fsReal, leerSinSeguir };
 
 // Para hablar con `security`/`secret-tool`. stderr se captura sólo como señal (¿dijo algo?: es lo
 // que separa «no encontrado» de «sin D-Bus» en `secret-tool`), recortado, y nunca se muestra ni se

@@ -19,6 +19,7 @@ function deps(o: Partial<DepsDeProyecto> = {}) {
     cwd: "/w/r",
     idempotencia: {
       claveDe: async () => { const k = claves.at(-1) && !olvidadas.includes(claves.at(-1)!) ? claves.at(-1)! : `k-${++siguiente}`; if (!claves.includes(k)) claves.push(k); return k; },
+      tiene: async () => false,
       olvidar: async (op, alcance) => { olvidos.push(`${op}#${alcance}`); if (claves.length > 0) olvidadas.push(claves.at(-1)!); },
     },
     buscarProyecto: async () => null,

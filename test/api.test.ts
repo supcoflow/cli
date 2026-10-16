@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { API_DE_PRODUCCION, buscarProyecto, canjear, configurar, crearConexion, crearProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
+import { API_DE_PRODUCCION, buscarProyecto, canjear, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
 const API = new URL("http://localhost:3000");
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
@@ -172,5 +172,23 @@ describe("configurar (bloque 4)", () => {
     const r = await listarClaves(API, CLAVE, "p", falso(200, { claves: [{ id: "1", nombre: "n", creada_en: "2026-10-16" }] }));
     expect(r).toEqual([{ id: "1", nombre: "n", creadaEn: "2026-10-16" }]);
     await expect(listarClaves(API, CLAVE, "p", falso(200, { claves: [{ id: "1" }] }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+  });
+});
+
+describe("esClaveDeConsultaDelProyecto (la prueba de posesión de claves crear)", () => {
+  it("true sólo con 200, via clave_de_consulta y el mismo proyecto; manda el Bearer a /api/yo", async () => {
+    const vistos: Request[] = [];
+    expect(await esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(200, { via: "clave_de_consulta", equipo: "t", usuario: null, proyecto: "proj_1" }, vistos))).toBe(true);
+    expect(new URL(vistos[0]!.url).pathname).toBe("/api/yo");
+    expect(vistos[0]!.headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+  });
+  it("una clave PERSONAL (lee el proyecto, pero no es de consulta) o de otro proyecto → false", async () => {
+    expect(await esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(200, { via: "api_key", equipo: "t", usuario: { id: "u" }, proyecto: null }))).toBe(false);
+    expect(await esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(200, { via: "clave_de_consulta", equipo: "t", usuario: null, proyecto: "proj_2" }))).toBe(false);
+  });
+  it("401 → false (no «iniciá sesión»); ≥ 500 → motor_inalcanzable; otra cosa → respuesta_inesperada", async () => {
+    expect(await esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(401, { error: "clave_invalida" }))).toBe(false);
+    await expect(esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(503, {}))).rejects.toMatchObject({ error: "motor_inalcanzable" });
+    await expect(esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(403, {}))).rejects.toMatchObject({ error: "respuesta_inesperada" });
   });
 });
