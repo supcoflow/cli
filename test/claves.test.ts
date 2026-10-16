@@ -53,6 +53,7 @@ function deps(m: Mundo, respuestas: { status: number; cuerpo: Record<string, unk
     },
     candados: { tomar: () => (m.candado ? { tipo: "ocupado" } : ((m.candado = true), { tipo: "tomado", soltar: () => { m.candado = false; } })) },
     secretos: {
+      validarDestino: () => null,
       guardar: (ruta, id, s) => {
         const hay = m.archivo.get(ruta);
         if (hay !== undefined && idDe(hay) !== id) return { error: "tiene otra cosa", codigo: 4 };
@@ -225,6 +226,53 @@ describe("claves crear (§6.5)", () => {
   });
 });
 
+describe("claves crear: arreglos de la revisión final", () => {
+  it("el candado normaliza el nombre como la idempotencia: `CI` y `ci` toman el MISMO", async () => {
+    const m = mundo();
+    const nombres: string[] = [];
+    const candados = { tomar: (n: string) => { nombres.push(n); return { tipo: "tomado" as const, soltar: () => {} }; } };
+    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, nombre: "CI" });
+    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, nombre: "ci", guardarEn: "/home/u/otra.key" });
+    expect(nombres[0]).toBe(nombres[1]);
+  });
+  it("409 idempotency_key_reusada: la clave guardada se olvida (no queda trabada para siempre) y sale 3", async () => {
+    const m = mundo();
+    const { d } = deps(m, [{ status: 409, cuerpo: { error: "idempotency_key_reusada", message: "…" } }]);
+    const r = await clavesCrear(d, F);
+    expect(r.codigo).toBe(3);
+    expect(m.registro.size).toBe(0);
+  });
+  it("clave_vencida: el mensaje dice que borre el archivo (que sigue con el secreto vencido) y no filtra nada", async () => {
+    const m = mundo();
+    m.archivo.set(DESTINO, SECRETO_A);
+    m.registro.set("clave_crear#proj_r-1#ci", "k-0");
+    const { d } = deps(m, [{ status: 409, cuerpo: { error: "clave_vencida", message: "…" } }]);
+    const r = await clavesCrear(d, F);
+    expect(r.codigo).toBe(1);
+    expect(r.texto).toContain(DESTINO);
+    expect(r.texto).toMatch(/Borrá/);
+    expect(JSON.stringify(r)).not.toContain(SECRETO_A);
+  });
+  it("el clave_id del motor no es el del secreto: 1 respuesta_inesperada, sin guardar ni confirmar ni filtrar", async () => {
+    const m = mundo();
+    const { d, pedidos } = deps(m, [{ status: 201, cuerpo: { clave_id: "cla_ffffffffffffffff", clave: SECRETO_A, estado: "pendiente" } }]);
+    const r = await clavesCrear(d, F);
+    expect(r).toMatchObject({ codigo: 1, json: { error: "respuesta_inesperada" } });
+    expect(m.archivo.has(DESTINO)).toBe(false);
+    expect(pedidos).toHaveLength(1);
+    expect(JSON.stringify(r)).not.toContain(SECRETO_A);
+  });
+  it("un destino que no sirve (dentro de un repo) se rechaza ANTES de pedir nada: cero POST, cero filas", async () => {
+    const m = mundo();
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { ...deps(m, []).d.secretos, validarDestino: () => ({ error: "cae dentro del repo", codigo: 3 as const }) } });
+    const r = await clavesCrear(d, F);
+    expect(r).toMatchObject({ codigo: 3, json: { error: "destino_invalido" } });
+    expect(pedidos).toEqual([]);
+    expect(m.filasCreadas).toBe(0);
+    expect(m.registro.size).toBe(0);
+  });
+});
+
 describe("claves crear: el secreto no sale por ningún lado", () => {
   it("un rechazo del motor al confirmar con el secreto en el message: tapado, y tampoco en el texto", async () => {
     const m = mundo();
@@ -235,7 +283,7 @@ describe("claves crear: el secreto no sale por ningún lado", () => {
   });
   it("una guarda que no puede escribir: no confirma, y el error no lleva el secreto", async () => {
     const m = mundo();
-    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "cae dentro del repo", codigo: 3 }) } });
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "cae dentro del repo", codigo: 3 }) } });
     const r = await clavesCrear(d, F);
     expect(r).toMatchObject({ codigo: 3, json: { error: "no_se_guardo" } });
     expect(pedidos.map((p) => p.ruta)).toEqual(["/api/proyectos/proj_r-1/claves"]);

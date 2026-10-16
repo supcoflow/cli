@@ -34,14 +34,19 @@ export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const ruta = rutaDe(p.proyecto, "/claves");
+  // Antes de pedir nada: un destino que no sirve (dentro de un repo) dejaba una fila pendiente de más.
+  const invalido = d.secretos.validarDestino(destino);
+  if (invalido !== null) return fallo(invalido.codigo, "destino_invalido", `${destino}: ${invalido.error}.`);
   if (flags.dryRun) return dryRun(`POST ${ruta} y después …/confirmar`);
   const alcance = `${p.proyecto.id}#${flags.nombre}`;
+  // El registro de idempotencia pone el alcance en minúsculas (`CI` y `ci` comparten fila): el candado
+  // tiene que coincidir, o dos procesos con la misma clave de reintento corrían a la vez.
 
   // 1. El candado: el ciclo entero, de a uno por operación en esta máquina. Comprobar que el archivo
   // autentica y después escribirlo no es atómico: sin candado, un segundo `claves crear` atrasado pisaba
   // el secreto vigente con uno que después no confirmaba (segunda revisión externa, hallazgo 1). Dos
   // máquinas no comparten la clave de idempotencia, así que crean filas distintas y no se pisan.
-  const candado = d.candados.tomar(`${OPERACION}#${alcance}`);
+  const candado = d.candados.tomar(`${OPERACION}#${alcance.toLowerCase()}`);
   if (candado.tipo === "ocupado") return fallo(SALIDA.inesperado, "en_curso", "Otro `supcoflow claves crear` igual está corriendo en esta máquina; esperá a que termine.");
   if (candado.tipo === "abandonado") {
     return fallo(SALIDA.inesperado, "candado_abandonado",
@@ -87,13 +92,20 @@ export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "
         if (r.cuerpo.error === "clave_vencida") {
           // La fila vencida no vuelve: el próximo intento tiene que ser otra clave de idempotencia.
           await d.idempotencia.olvidar(OPERACION, alcance);
-          return fallo(SALIDA.inesperado, "clave_vencida", "La clave pendiente venció sin confirmarse; volvé a correr el comando para crear otra.");
+          // El archivo conserva el secreto pendiente vencido y un reintento daría 4 destino_ocupado. Borrarlo
+          // desde acá sería tocar un archivo que quizá no escribió este run; se lo pedimos a la persona.
+          return fallo(SALIDA.inesperado, "clave_vencida",
+            `La clave pendiente venció sin confirmarse. Borrá ${destino} (guarda el secreto vencido, ya no sirve) y volvé a correr el comando para crear otra.`);
         }
+        // Misma clave de reintento con otro cuerpo: no se arregla reintentando, y guardada trabaría para siempre.
+        if (r.cuerpo.error === "idempotency_key_reusada") await d.idempotencia.olvidar(OPERACION, alcance);
         return desenlace(r, () => { throw new Error("inalcanzable"); });
       }
       const claveId = String(r.cuerpo.clave_id);
       const secreto = typeof r.cuerpo.clave === "string" && SUFIJO.test(r.cuerpo.clave) ? r.cuerpo.clave : null;
       if (secreto === null) return fallo(SALIDA.inesperado, "respuesta_inesperada", "El motor no devolvió una clave con la forma esperada.");
+      // El id y el secreto tienen que ser de la misma fila: si no, lo que se guarda no es lo que se confirma.
+      if (claveId !== `cla_${SUFIJO.exec(secreto)![1]}`) return fallo(SALIDA.inesperado, "respuesta_inesperada", "El motor devolvió una clave que no corresponde a su id; no la guardé.");
       const g = d.secretos.guardar(destino, claveId, secreto);
       // Sin guardarla NO se confirma: una pendiente sin confirmar no autentica y vence sola a los 10 minutos.
       if (g !== "guardado") return fallo(g.codigo, "no_se_guardo", `No guardé la clave en ${destino}: ${g.error}. No quedó activa.`);

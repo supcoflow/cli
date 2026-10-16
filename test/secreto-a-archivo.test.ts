@@ -111,4 +111,10 @@ describe("el secreto a un archivo", () => {
     expect(g.leer("/k/sin-salto")).toEqual({ estado: "clave", claveId: ID, secreto: A });
     for (const p of ["/k/basura", "/k/dos-lineas", "/k/enlace", "/k/dir", "/k/enorme"]) expect(g.leer(p)).toEqual({ estado: "otra_cosa" });
   });
+  it("validarDestino: dentro de un repo, 3; fuera, null; sin escribir nada", () => {
+    const f = fsFalso({ "/w/r/.git": { tipo: "dir" } });
+    expect(crearGuardaDeSecretos(f.fs).validarDestino("/w/r/sub/ci.key")).toMatchObject({ codigo: 3 });
+    expect(crearGuardaDeSecretos(f.fs).validarDestino("/home/u/ci.key")).toBeNull();
+    expect(f.escrituras).toEqual([]);
+  });
 });

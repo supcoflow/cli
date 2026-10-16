@@ -19,6 +19,8 @@ export type FsDeSecretos = Pick<FsMinimo, "realpath" | "existe" | "escribirExclu
 };
 
 export type GuardaDeSecretos = {
+  /** ¿Sirve este destino para una clave? Se mira ANTES de pedirle una al motor: una fila pendiente de más no se usa. */
+  validarDestino(ruta: string): { error: string; codigo: 3 } | null;
   guardar(ruta: string, claveId: string, secreto: string): "guardado" | { error: string; codigo: 3 | 4 };
   leer(ruta: string): { estado: "ausente" } | { estado: "clave"; claveId: string; secreto: string } | { estado: "otra_cosa" };
 };
@@ -37,18 +39,27 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
     return m ? { estado: "clave", claveId: `cla_${m[1]}`, secreto: m[0] } : { estado: "otra_cosa" };
   }
 
+  function validarDestino(ruta: string): { error: string; codigo: 3 } | null {
+    const destino = path.resolve(ruta);
+    // `realpath` lanza con un tramo que es un enlace roto: sin saber dónde cae, no se escribe.
+    let raiz: string | null;
+    try {
+      raiz = dentroDeUnWorkingTree(path.dirname(destino), fs);
+    } catch {
+      return { error: "no pude resolver la ruta real de la carpeta (¿un enlace roto?)", codigo: 3 };
+    }
+    if (raiz !== null) return { error: `cae dentro del repo de git ${raiz}, y una clave en un repo termina commiteada; elegí un destino fuera`, codigo: 3 };
+    return null;
+  }
+
   return {
     leer,
+    validarDestino,
     guardar(ruta, claveId, secreto) {
       const destino = path.resolve(ruta);
-      // `realpath` lanza con un tramo que es un enlace roto: sin saber dónde cae, no se escribe.
-      let raiz: string | null;
-      try {
-        raiz = dentroDeUnWorkingTree(path.dirname(destino), fs);
-      } catch {
-        return { error: "no pude resolver la ruta real de la carpeta (¿un enlace roto?)", codigo: 3 };
-      }
-      if (raiz !== null) return { error: `cae dentro del repo de git ${raiz}, y una clave en un repo termina commiteada; elegí un destino fuera`, codigo: 3 };
+      // También acá, aunque `claves crear` ya lo miró antes de pedir: entre una cosa y otra pasa tiempo.
+      const invalido = validarDestino(destino);
+      if (invalido !== null) return invalido;
       const hay = fs.leerSinSeguir(destino, TOPE);
       if (hay.tipo === "enlace") return { error: "el destino es un enlace; elegí un archivo común", codigo: 3 };
       if (hay.tipo !== "ausente") {

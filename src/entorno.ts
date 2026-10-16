@@ -3,7 +3,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, fchmodSync, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
+  chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
 } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -77,21 +77,27 @@ export const fsReal: FsMinimo = {
 // cualquier otro error (permisos, disco) se relanza y sale `no_disponible`, nunca «ocupado». La lectura no
 // sigue enlaces: un `.lock` que alguien cambió por un enlace no se lee como si fuera el nuestro.
 export const fsDelCandadoReal: FsDelCandado = {
+  // Se escribe completo en un temporal de la misma carpeta y se PUBLICA con `link`, que falla con EEXIST si
+  // ya hay uno: con `wx` directo, otro proceso podía leer el `.lock` recién creado y todavía vacío, y
+  // informar `candado_abandonado` de un candado vivo. Así el `.lock` nunca se ve sin contenido.
   crearExclusivo(p, contenido, modo) {
-    let fd: number;
+    const tmp = `${p}.${randomUUID()}.tmp`;
     try {
-      fd = openSync(p, "wx", modo);
+      const fd = openSync(tmp, "wx", modo);
+      try {
+        fchmodSync(fd, modo);
+        writeSync(fd, contenido);
+      } finally {
+        closeSync(fd);
+      }
+      linkSync(tmp, p);
+      return true;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
       throw e;
-    }
-    try {
-      fchmodSync(fd, modo);
-      writeSync(fd, contenido);
     } finally {
-      closeSync(fd);
+      rmSync(tmp, { force: true });
     }
-    return true;
   },
   leer(p) {
     try {

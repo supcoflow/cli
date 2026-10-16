@@ -1,6 +1,6 @@
 // Las piezas REALES de `claves crear` (src/entorno.ts) contra un directorio temporal: lo que los dobles no
 // pueden probar es que el disco de verdad respete el modo, no siga enlaces y haga el candado exclusivo.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -60,6 +60,25 @@ describe("el candado en el disco de verdad", () => {
     if (t.tipo !== "tomado") return;
     t.soltar();
     expect(c.tomar("clave_crear#p#ci").tipo).toBe("tomado");
+  });
+  it("el candado nace completo: nunca se ve un .lock vacío, y un fallo no deja restos", () => {
+    const carpeta = join(tmp, "candados");
+    mkdirSync(carpeta, { recursive: true });
+    const ruta = join(carpeta, "x.lock");
+    expect(fsDelCandadoReal.crearExclusivo(ruta, '{"pid":1,"token":"t"}', 0o600)).toBe(true);
+    expect(readFileSync(ruta, "utf8")).toBe('{"pid":1,"token":"t"}');
+    expect(modo(ruta)).toBe(0o600);
+    // Ya existe: false, el contenido del dueño intacto y ningún temporal de sobra.
+    expect(fsDelCandadoReal.crearExclusivo(ruta, "otro", 0o600)).toBe(false);
+    expect(readFileSync(ruta, "utf8")).toBe('{"pid":1,"token":"t"}');
+    expect(readdirSync(carpeta)).toEqual(["x.lock"]);
+    // Un fallo (carpeta inexistente) lanza y no deja nada.
+    expect(() => fsDelCandadoReal.crearExclusivo(join(tmp, "no-existe", "y.lock"), "z", 0o600)).toThrow();
+    // Un fallo a mitad (ruta final que es una carpeta no vacía): ni vacío ni temporales.
+    const dir = join(carpeta, "d.lock");
+    mkdirSync(dir);
+    expect(fsDelCandadoReal.crearExclusivo(dir, "z", 0o600)).toBe(false);
+    expect(readdirSync(carpeta).sort()).toEqual(["d.lock", "x.lock"]);
   });
   it("procesoVivo: el propio sí; un pid que no existe, no", () => {
     expect(procesoVivo(process.pid)).toBe(true);
