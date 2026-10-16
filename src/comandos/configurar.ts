@@ -23,6 +23,12 @@ const TRANSITORIOS = new Set(["sitios_cambiaron", "idempotency_en_curso"]);
 
 export function desenlace(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => Resultado): Resultado {
   if (r.status >= 200 && r.status < 300) return ok(r.cuerpo);
+  // Propio de esta función (hoy `conClave` ya lo filtra antes): sin esto, un 401 o un 5xx caerían en el 3 de
+  // «entrada inválida» y la persona (o el asistente) corregiría una entrada que estaba bien.
+  if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", "La clave ya no vale: iniciá sesión de nuevo.");
+  if (r.status >= 500 || typeof r.cuerpo !== "object" || r.cuerpo === null) {
+    return fallo(SALIDA.inesperado, "respuesta_inesperada", `El motor contestó algo que no entiendo (${r.status}); probá de nuevo en un rato.`);
+  }
   const error = typeof r.cuerpo.error === "string" ? r.cuerpo.error : "rechazado";
   const message = taparSecretos(typeof r.cuerpo.message === "string" ? r.cuerpo.message : `El motor rechazó el pedido (${r.status}).`);
   if (PIDEN_UNA_PERSONA.has(error)) return fallo(SALIDA.haceFaltaUnaPersona, error, message);

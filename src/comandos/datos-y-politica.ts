@@ -37,7 +37,8 @@ export function leerPermitir(crudo: string): Permitido | { error: string } {
     if (vistos.has(x)) return { error: `«${x}» está repetido.` };
     vistos.add(x);
     if (x.startsWith("atributo:")) {
-      const nombre = x.slice("atributo:".length);
+      // Recortado: « plan» y «plan» son el mismo atributo para quien lo escribe, y el motor lo compara exacto.
+      const nombre = x.slice("atributo:".length).trim();
       if (nombre.length === 0) return { error: "`atributo:` va con el nombre exacto del atributo, por ejemplo atributo:plan." };
       if (nombre.length > MAX_LARGO_DE_ATRIBUTO) return { error: `El nombre de un atributo tiene hasta ${MAX_LARGO_DE_ATRIBUTO} caracteres.` };
       if (p.atributos.length >= MAX_ATRIBUTOS) return { error: `Hasta ${MAX_ATRIBUTOS} atributos.` };

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { API_DE_PRODUCCION, buscarProyecto, canjear, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
@@ -163,7 +164,7 @@ describe("configurar (bloque 4)", () => {
   });
   it("leerCatalogo y leerConfiguracion validan la forma", async () => {
     expect(await leerCatalogo(API, CLAVE, falso(200, { supcoflow: [] }))).toEqual({ supcoflow: [] });
-    await expect(leerCatalogo(API, CLAVE, falso(200, { otro: 1 }))).rejects.toBeDefined();
+    await expect(leerCatalogo(API, CLAVE, falso(200, { otro: 1 }))).rejects.toMatchObject({ codigo: 1, error: "respuesta_inesperada" });
     const c = { chat: {}, sitios: [] };
     expect(await leerConfiguracion(API, CLAVE, "p", falso(200, c))).toEqual(c);
     await expect(leerConfiguracion(API, CLAVE, "p", falso(200, { chat: {} }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
@@ -190,5 +191,14 @@ describe("esClaveDeConsultaDelProyecto (la prueba de posesión de claves crear)"
     expect(await esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(401, { error: "clave_invalida" }))).toBe(false);
     await expect(esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(503, {}))).rejects.toMatchObject({ error: "motor_inalcanzable" });
     await expect(esClaveDeConsultaDelProyecto(API, CLAVE, "proj_1", falso(403, {}))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+  });
+});
+
+describe("la versión que viaja en el user-agent", () => {
+  it("es la del package.json (si se sube una y no la otra, esto avisa)", () => {
+    const fuente = readFileSync(new URL("../src/api.ts", import.meta.url), "utf8");
+    const enApi = /^const VERSION = "([^"]+)";/m.exec(fuente)?.[1];
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(enApi).toBe(pkg.version);
   });
 });

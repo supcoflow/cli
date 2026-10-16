@@ -1,6 +1,6 @@
 // test/configurar.test.ts
 import { describe, expect, it } from "vitest";
-import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios, type DepsDeConfigurar } from "../src/comandos/configurar.ts";
+import { desenlace, chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios, type DepsDeConfigurar } from "../src/comandos/configurar.ts";
 
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
 const PROY = { id: "proj_r-1", slug: "r", repo: "d/r", rama: "main", installCommand: "npm ci", testCommand: "npm test" };
@@ -93,5 +93,22 @@ describe("configurar", () => {
     const { d, posts } = deps();
     expect(await chatPrenderApagar(d, { ...F, dryRun: true }, true)).toMatchObject({ codigo: 0, json: { dry_run: true } });
     expect(posts).toEqual([]);
+  });
+});
+
+describe("desenlace por sí solo", () => {
+  const nunca = () => { throw new Error("no es un éxito"); };
+  it("401: falta el login (2)", () => {
+    expect(desenlace({ status: 401, cuerpo: { error: "no_autenticado" } }, nunca).codigo).toBe(2);
+  });
+  it("5xx o una forma que no se entiende: 1", () => {
+    expect(desenlace({ status: 503, cuerpo: {} }, nunca).codigo).toBe(1);
+    expect(desenlace({ status: 500, cuerpo: { error: "x" } }, nunca).codigo).toBe(1);
+    expect(desenlace({ status: 400, cuerpo: null as never }, nunca).codigo).toBe(1);
+  });
+  it("el resto sigue igual: 4xx de validación 3, skill_no_aprobada 4, transitorios 1", () => {
+    expect(desenlace({ status: 400, cuerpo: { error: "x" } }, nunca).codigo).toBe(3);
+    expect(desenlace({ status: 409, cuerpo: { error: "skill_no_aprobada" } }, nunca).codigo).toBe(4);
+    expect(desenlace({ status: 409, cuerpo: { error: "sitios_cambiaron" } }, nunca).codigo).toBe(1);
   });
 });

@@ -51,8 +51,8 @@ describe("flags de configurar", () => {
     expect(leerArgumentos(["chat", "marca", "--tema", "acento=#000", "--tema", "fondo=#fff"]).flags.tema).toEqual(["acento=#000", "fondo=#fff"]);
   });
   it("Review Focus 10: --tema vacío o --sitio repetido salen 3", () => {
-    expect(() => leerArgumentos(["chat", "marca", "--tema", ""])).toThrow(/--tema/);
-    expect(() => leerArgumentos(["sitios", "agregar", "--sitio", "https://a", "--sitio", "https://b"])).toThrow(/--sitio/);
+    expect(() => leerArgumentos(["chat", "marca", "--tema", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["sitios", "agregar", "--sitio", "https://a", "--sitio", "https://b"])).toThrowError(expect.objectContaining({ codigo: 3 }));
   });
   it("--guardar-en llega como guardarEn", () => {
     expect(leerArgumentos(["claves", "crear", "--guardar-en", "/tmp/k"]).flags.guardarEn).toBe("/tmp/k");

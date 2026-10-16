@@ -39,6 +39,12 @@ describe("describir --json", () => {
     expect(DESCRIPCION.comandos.find((c) => c.nombre === "claves crear")!.codigos).toContain(4);
   });
 
+  it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
+    const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver", "catalogo"].includes(c.nombre));
+    expect(configurar).toHaveLength(12);
+    for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
+  });
+
   it("los textos de datos fijar y configuracion no prometen «toda IA» ni «ninguna IA» y dicen el límite", () => {
     for (const n of ["datos fijar", "configuracion"]) {
       const c = DESCRIPCION.comandos.find((x) => x.nombre === n)!;

@@ -49,6 +49,11 @@ describe("leerPermitir", () => {
     expect(leerPermitir("capturas,capturas")).toHaveProperty("error");
     expect(leerPermitir("nada,email")).toHaveProperty("error");
   });
+  it("el nombre del atributo se recorta: « plan» es «plan»; sólo espacios sigue siendo error", () => {
+    expect(leerPermitir("atributo: plan")).toMatchObject({ atributos: ["plan"] });
+    expect(leerPermitir("atributo:plan ")).toMatchObject({ atributos: ["plan"] });
+    expect(leerPermitir("atributo:   ")).toHaveProperty("error");
+  });
   it("más de 8 atributos, atributo repetido o de más de 40 caracteres", () => {
     const nueve = Array.from({ length: 9 }, (_, i) => `atributo:a${i}`).join(",");
     expect(leerPermitir(nueve)).toHaveProperty("error");
