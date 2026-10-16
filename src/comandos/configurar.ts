@@ -59,11 +59,42 @@ export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flag
     return {
       codigo: SALIDA.ok,
       json: { ok: true, proyecto: p.proyecto.id, ...c },
-      texto: `${p.proyecto.id}: chat ${chat.habilitado ? "prendido" : "apagado"}, ${sitiosLista.length} sitio(s), acuerdo de datos ${acuerdo}.${alcance}`,
+      texto: [
+        `${p.proyecto.id}: chat ${chat.habilitado ? "prendido" : "apagado"}, ${sitiosLista.length} sitio(s), acuerdo de datos ${acuerdo}.${alcance}`,
+        `Política de problemas: ${textoDePolitica(c.politica)}`,
+        `Marca: ${textoDeMarca(c.marca)}`,
+      ].join("\n"),
     };
   } catch (e) {
     return resultadoDeFallo(e);
   }
+}
+
+// La política dicha en palabras llanas (decisión del dueño, 2026-10-16): «guardar» frena sólo lo automático
+// del chat; una persona todavía puede pedir el relevamiento desde la consola, y eso gasta. Un motor viejo que
+// no la manda no se adivina: se dice que no vino.
+function textoDePolitica(v: unknown): string {
+  const modo = (v as { modo?: unknown } | null | undefined)?.modo;
+  if (modo === "relevar") return "relevar: cada problema se releva y nace el issue (gasta).";
+  if (modo === "guardar") return "guardar: los problemas del chat se guardan sin relevar; desde la consola una persona puede pedir el relevamiento (gasta).";
+  return "el motor no la informó.";
+}
+
+// `marca` es null (nunca se fijó: el chat usa la de fábrica) o {titulo, saludo, tema, logo_url}. Del tema se
+// muestran las claves tal cual vinieron: el motor decide cuáles hay, la terminal no las reinterpreta.
+function textoDeMarca(v: unknown): string {
+  if (v === undefined) return "el motor no la informó.";
+  if (v === null) return "sin fijar (el chat usa la de fábrica).";
+  const m = v as { titulo?: unknown; saludo?: unknown; tema?: unknown; logo_url?: unknown };
+  const partes: string[] = [];
+  if (typeof m.titulo === "string" && m.titulo !== "") partes.push(`título «${m.titulo}»`);
+  if (typeof m.saludo === "string" && m.saludo !== "") partes.push(`saludo «${m.saludo}»`);
+  if (typeof m.tema === "object" && m.tema !== null) {
+    const colores = Object.entries(m.tema as Record<string, unknown>).filter(([, x]) => typeof x === "string").map(([k, x]) => `${k} ${x}`);
+    if (colores.length > 0) partes.push(`tema ${colores.join(", ")}`);
+  }
+  partes.push(typeof m.logo_url === "string" && m.logo_url !== "" ? "con logo" : "sin logo");
+  return partes.join(", ") + ".";
 }
 
 export async function chatPrenderApagar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun">, habilitar: boolean): Promise<Resultado> {

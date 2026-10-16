@@ -89,6 +89,20 @@ describe("configurar", () => {
       expect(r.texto).not.toMatch(/toda IA|ninguna IA/);
     }
   });
+  it("configuracion en texto: dice la política en palabras llanas y la marca; el JSON no cambia", async () => {
+    const marca = { titulo: "Ayuda", saludo: "Hola", tema: { acento: "#0a7" }, logo_url: "https://blob/l.png" };
+    const base = { chat: { habilitado: true }, sitios: [], acuerdo: null };
+    const guardar = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ ...base, marca, politica: { modo: "guardar", fijada_en: null } }) }).d, F);
+    expect(guardar.texto).toMatch(/Política de problemas: guardar: los problemas del chat se guardan sin relevar; desde la consola una persona puede pedir el relevamiento/);
+    expect(guardar.texto).toMatch(/Marca: título «Ayuda», saludo «Hola», tema acento #0a7, con logo\./);
+    expect(guardar.json).toEqual({ ok: true, proyecto: "proj_r-1", ...base, marca, politica: { modo: "guardar", fijada_en: null } });
+    const relevar = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ ...base, marca: null, politica: { modo: "relevar", fijada_en: null } }) }).d, F);
+    expect(relevar.texto).toMatch(/Política de problemas: relevar: cada problema se releva y nace el issue \(gasta\)\./);
+    expect(relevar.texto).toMatch(/Marca: sin fijar/);
+    // Un motor que no manda ninguna de las dos: no se inventa.
+    const viejo = await comandoConfiguracion(deps({ leerConfiguracion: async () => base }).d, F);
+    expect(viejo.texto).toMatch(/Política de problemas: el motor no la informó\.\nMarca: el motor no la informó\./);
+  });
   it("--dry-run no escribe", async () => {
     const { d, posts } = deps();
     expect(await chatPrenderApagar(d, { ...F, dryRun: true }, true)).toMatchObject({ codigo: 0, json: { dry_run: true } });
