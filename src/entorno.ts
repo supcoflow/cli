@@ -156,7 +156,18 @@ function leerSinSeguir(p: string, tope: number): LecturaSinSeguir {
     closeSync(fd);
   }
 }
-export const fsDeSecretosReal: FsDeSecretos = { ...fsReal, leerSinSeguir };
+// `link` es el idioma del candado (arriba): crea el nombre sólo si no existe y falla con EEXIST si sí, sin
+// ventana entre mirar y escribir. El temporal queda con dos nombres hasta que `guardar` lo borra.
+function publicarSinPisar(tmp: string, destino: string): boolean {
+  try {
+    linkSync(tmp, destino);
+    return true;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
+    throw e;
+  }
+}
+export const fsDeSecretosReal: FsDeSecretos = { ...fsReal, leerSinSeguir, publicarSinPisar };
 
 // Para hablar con `security`/`secret-tool`. stderr se captura sólo como señal (¿dijo algo?: es lo
 // que separa «no encontrado» de «sin D-Bus» en `secret-tool`), recortado, y nunca se muestra ni se

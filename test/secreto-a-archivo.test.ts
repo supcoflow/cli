@@ -27,6 +27,11 @@ function fsFalso(inicial: Record<string, Nodo> = {}) {
       nodos.set(b, n);
     },
     borrarSiExiste: (p) => void nodos.delete(p),
+    publicarSinPisar(tmp, destino) {
+      if (nodos.has(destino)) return false;
+      nodos.set(destino, { ...nodos.get(tmp)! });
+      return true;
+    },
     leerSinSeguir(p, tope) {
       const n = nodos.get(p);
       if (n === undefined) return { tipo: "ausente" };
@@ -87,12 +92,42 @@ describe("el secreto a un archivo", () => {
     const f = fsFalso({ "/home/u/ci.key": { tipo: "dir" } });
     expect(crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A)).toMatchObject({ codigo: 4 });
   });
+  // Un destino ausente ya no se publica con `renombrar` sino con `publicarSinPisar`: el fallo se simula en la
+  // operación que corresponde a cada caso (antes este test sólo rompía `renombrar`).
   it("una escritura que falla: 3, sin el secreto en el error, y el .tmp no queda", () => {
     const f = fsFalso();
-    f.fs.renombrar = () => { throw new Error(`EACCES con ${A}`); };
+    f.fs.publicarSinPisar = () => { throw new Error(`EACCES con ${A}`); };
     const r = crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A);
     expect(r).toMatchObject({ codigo: 3 });
     expect(JSON.stringify(r)).not.toContain(A);
+    expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);
+  });
+  it("un reemplazo de la misma fila que falla: 3, sin el secreto, sin .tmp, y la clave vieja intacta", () => {
+    const f = fsFalso({ "/home/u/ci.key": { tipo: "archivo", contenido: A + "\n", modo: 0o600 } });
+    f.fs.renombrar = () => { throw new Error(`EACCES con ${B}`); };
+    const r = crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, B);
+    expect(r).toMatchObject({ codigo: 3 });
+    expect(JSON.stringify(r)).not.toContain(B);
+    expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);
+    expect(f.nodos.get("/home/u/ci.key")!.contenido).toBe(A + "\n");
+  });
+  it("carrera: otro `claves crear` (otro nombre, mismo destino) escribe entre la lectura y la publicación → 4, lo suyo intacto, sin .tmp", () => {
+    const f = fsFalso();
+    const ajeno = `scf_${"f".repeat(16)}_${"0".repeat(64)}\n`;
+    const publicar = f.fs.publicarSinPisar;
+    // La intercalación: el otro proceso publica justo después de que éste leyó «ausente».
+    f.fs.publicarSinPisar = (tmp, destino) => {
+      f.nodos.set(destino, { tipo: "archivo", contenido: ajeno, modo: 0o600 });
+      return publicar(tmp, destino);
+    };
+    const renombrar = f.fs.renombrar;
+    let renombres = 0;
+    f.fs.renombrar = (a, b) => { renombres++; renombrar(a, b); };
+    const r = crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A);
+    expect(r).toMatchObject({ codigo: 4 });
+    expect(JSON.stringify(r)).not.toContain(A);
+    expect(f.nodos.get("/home/u/ci.key")!.contenido).toBe(ajeno);
+    expect(renombres).toBe(0);
     expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);
   });
   it("leer: ausente; una clave → {clave, claveId, secreto}; basura, enlace, carpeta o algo enorme → otra_cosa", () => {

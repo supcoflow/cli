@@ -42,6 +42,30 @@ describe("el secreto en el disco de verdad", () => {
     expect(g.guardar(ruta, ID, B)).toMatchObject({ codigo: 3 });
     expect(readFileSync(real, "utf8")).toBe(A + "\n");
   });
+  it("el destino aparece entre la lectura y la publicación: link falla, 4, lo ajeno intacto y sin temporales", () => {
+    const ruta = join(tmp, "ci.key");
+    const ajeno = `scf_${"f".repeat(16)}_${"0".repeat(64)}\n`;
+    // El fs real, salvo que justo antes de publicar otro proceso escribe el destino.
+    const g = crearGuardaDeSecretos({
+      ...fsDeSecretosReal,
+      publicarSinPisar(t, d) {
+        writeFileSync(d, ajeno, { mode: 0o600 });
+        return fsDeSecretosReal.publicarSinPisar(t, d);
+      },
+    });
+    expect(g.guardar(ruta, ID, A)).toMatchObject({ codigo: 4 });
+    expect(readFileSync(ruta, "utf8")).toBe(ajeno);
+    expect(readdirSync(tmp)).toEqual(["ci.key"]);
+  });
+  it("publicarSinPisar real: false si el destino existe, true si no", () => {
+    const t = join(tmp, "t");
+    writeFileSync(t, "x");
+    writeFileSync(join(tmp, "ya"), "y");
+    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "ya"))).toBe(false);
+    expect(readFileSync(join(tmp, "ya"), "utf8")).toBe("y");
+    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "nuevo"))).toBe(true);
+    expect(readFileSync(join(tmp, "nuevo"), "utf8")).toBe("x");
+  });
   it("dentro de un repo (hay .git): 3, nada escrito", () => {
     mkdirSync(join(tmp, "r", ".git"), { recursive: true });
     const ruta = join(tmp, "r", "ci.key");

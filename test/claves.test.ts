@@ -290,6 +290,15 @@ describe("claves crear: el secreto no sale por ningún lado", () => {
     expect(JSON.stringify(r)).not.toContain(SECRETO_A);
     expect(m.candado).toBe(false);
   });
+  it("carrera por el destino (otro nombre escribió primero): 4, no confirma, la pendiente queda para vencer sola", async () => {
+    const m = mundo();
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 }) } });
+    const r = await clavesCrear(d, F);
+    expect(r).toMatchObject({ codigo: 4, json: { error: "no_se_guardo" } });
+    expect(pedidos.map((p) => p.ruta)).toEqual(["/api/proyectos/proj_r-1/claves"]);
+    expect(JSON.stringify(r)).not.toContain(SECRETO_A);
+    expect(m.candado).toBe(false);
+  });
   it("--dry-run: 0 sin tomar el candado ni pedir nada", async () => {
     const m = mundo();
     const { d, pedidos } = deps(m, []);

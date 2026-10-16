@@ -7,6 +7,15 @@
 // Lo que ya hay en el destino no se pisa salvo que sea una clave de LA MISMA fila (mismo sufijo): eso es
 // la recuperación de un intento a medias, y `claves crear` sólo llega con el candado tomado. Cualquier otra
 // cosa podría ser una clave vigente de otro proyecto. Y nada de lo que hay ahí llega a un mensaje.
+//
+// ─── Un destino ausente se publica sin pisar (revisión del 2026-10-16) ──────────
+//
+// El candado es por proyecto + NOMBRE de la clave, no por destino. Dos `claves crear` con nombres distintos y
+// el mismo `--guardar-en` leían los dos «ausente» y hacían los dos `rename`: el segundo pisaba el archivo del
+// primero, que igual confirmaba su clave, activa y sin nadie que tuviera el secreto. Por eso, cuando el
+// destino estaba ausente, el temporal se publica con una operación que FALLA si ya existe (`link`); quien
+// llega segundo recibe el mismo 4 de «ya tiene otra cosa» y no confirma. El `rename` que pisa queda sólo
+// para la recuperación de la MISMA fila, que sí está bajo el candado de ese nombre.
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { FsMinimo } from "./guardado/archivo.ts";
@@ -16,6 +25,8 @@ export type LecturaSinSeguir = { tipo: "ausente" } | { tipo: "enlace" } | { tipo
 export type FsDeSecretos = Pick<FsMinimo, "realpath" | "existe" | "escribirExclusivo" | "renombrar" | "borrarSiExiste"> & {
   /** Abre sin seguir un enlace en el último tramo, sólo archivos comunes y con tope. */
   leerSinSeguir(p: string, tope: number): LecturaSinSeguir;
+  /** Publica `tmp` en `destino` sólo si `destino` no existe: `false` si ya hay algo; lanza ante cualquier otro error. No borra `tmp`. */
+  publicarSinPisar(tmp: string, destino: string): boolean;
 };
 
 export type GuardaDeSecretos = {
@@ -28,6 +39,7 @@ export type GuardaDeSecretos = {
 // Una clave ocupa 85 caracteres: 4 KB es de sobra, y algo más grande ya no es una clave.
 const TOPE = 4 * 1024;
 const CLAVE = /^scf_([0-9a-f]{16})_[0-9a-f]{64}$/;
+const OCUPADO = { error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 } as const;
 
 export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
   function leer(ruta: string): ReturnType<GuardaDeSecretos["leer"]> {
@@ -64,16 +76,21 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
       if (hay.tipo === "enlace") return { error: "el destino es un enlace; elegí un archivo común", codigo: 3 };
       if (hay.tipo !== "ausente") {
         const actual = leer(destino);
-        if (actual.estado !== "clave" || actual.claveId !== claveId) {
-          return { error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 };
-        }
+        if (actual.estado !== "clave" || actual.claveId !== claveId) return OCUPADO;
       }
       // El temporal en la MISMA carpeta (el `rename` sólo es atómico dentro del mismo disco), con nombre al
       // azar y en exclusiva: `wx` no atraviesa un enlace que alguien dejara con ese nombre.
       const tmp = path.join(path.dirname(destino), `.${path.basename(destino)}.${randomUUID()}.tmp`);
+      let publicado: boolean;
       try {
         fs.escribirExclusivo(tmp, secreto + "\n", 0o600);
-        fs.renombrar(tmp, destino);
+        if (hay.tipo === "ausente") {
+          publicado = fs.publicarSinPisar(tmp, destino);
+          fs.borrarSiExiste(tmp);
+        } else {
+          fs.renombrar(tmp, destino);
+          publicado = true;
+        }
       } catch {
         // El mensaje del sistema no se reenvía: podría traer la ruta del temporal o algo peor.
         try {
@@ -83,7 +100,8 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
         }
         return { error: "no se pudo escribir ahí (¿la carpeta existe y tenés permiso?)", codigo: 3 };
       }
-      return "guardado";
+      // Otro apareció entre la lectura y la publicación: lo suyo queda intacto y esta clave no se confirma.
+      return publicado ? "guardado" : OCUPADO;
     },
   };
 }
