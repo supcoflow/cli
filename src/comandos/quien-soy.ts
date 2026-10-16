@@ -3,6 +3,7 @@
 import type { Yo } from "../api.ts";
 import { FalloDeLaTerminal, resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
 import type { Guardado } from "../guardado/index.ts";
+import { claveVigente } from "./clave-vigente.ts";
 
 export async function comandoQuienSoy(d: {
   api: URL;
@@ -11,19 +12,10 @@ export async function comandoQuienSoy(d: {
   avisar: (s: string) => void;
 }): Promise<Resultado> {
   const origen = d.api.origin;
-  const lectura = await d.guardado.leerClaveCompleta(origen);
-  const vigente = lectura.valor;
-  // «Iniciá sesión» con la clave guardada en un llavero que no contestó invita a un login que la
-  // pisaría: no es «sin sesión», es «no pude mirar» (Review Focus 12).
-  if (vigente === null && !lectura.completa) {
-    const message = "No pude leer la clave guardada (el llavero no respondió). Desbloquealo y probá de nuevo.";
-    return { codigo: SALIDA.inesperado, json: { ok: false, error: "llavero_no_responde", message }, texto: message };
-  }
-  if (vigente === null) {
-    const message = "Iniciá sesión con `supcoflow login`.";
-    return { codigo: SALIDA.faltaLogin, json: { ok: false, error: "sin_sesion", message }, texto: message };
-  }
-  if (!lectura.completa) {
+  const leida = await claveVigente(d.guardado, origen);
+  if (!leida.ok) return leida.resultado;
+  const vigente = leida.vigente;
+  if (!vigente.completa) {
     const otro = vigente.fuente === "archivo" ? "el llavero del sistema" : "el archivo de credenciales";
     d.avisar(`Uso la clave de ${vigente.fuente}, pero no pude leer ${otro}: puede haber guardada otra más nueva.`);
   }

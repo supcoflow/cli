@@ -1,7 +1,11 @@
 // Las piezas reales de src/entorno.ts que no son el archivo: el `Correr` que habla con el llavero
-// (probado con hijos inofensivos, NUNCA con `security`) y las perillas de prueba.
+// (probado con hijos inofensivos, NUNCA con `security`), las perillas de prueba y lo que se lee y se
+// escribe dentro del repo.
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { correrReal, entornoReal } from "../src/entorno.ts";
+import { ARCHIVO_QUE_NO_SE_LEE, archivosDelRepo, leerArchivoChico, correrReal, entornoReal, TOPE_DEL_ARCHIVO_DEL_REPO } from "../src/entorno.ts";
 
 describe("el Correr real", () => {
   it("mata al hijo en el techo y lo dice", async () => {
@@ -83,5 +87,63 @@ describe("las perillas de prueba", () => {
   it("la ruta del archivo sigue a XDG_CONFIG_HOME", () => {
     const e = entornoReal({ XDG_CONFIG_HOME: "/x/conf" });
     expect(e.rutaDelArchivo).toBe("/x/conf/supcoflow/credenciales.json");
+  });
+});
+
+describe("los archivos del repo (`.supcoflow/proyecto.json`)", () => {
+  const nuevo = () => mkdtempSync(join(tmpdir(), "supcoflow-archivos-"));
+
+  it("sin la carpeta o sin el archivo, null; con uno común, su contenido", () => {
+    const raiz = nuevo();
+    const a = archivosDelRepo(() => {});
+    const p = join(raiz, ".supcoflow", "proyecto.json");
+    expect(a.leer(p)).toBeNull();
+    mkdirSync(join(raiz, ".supcoflow"));
+    expect(a.leer(p)).toBeNull();
+    writeFileSync(p, '{"id":"proj_x"}');
+    expect(a.leer(p)).toBe('{"id":"proj_x"}');
+  });
+
+  it("uno más grande que el tope no se lee: devuelve la marca y avisa sin el contenido", () => {
+    const raiz = nuevo();
+    mkdirSync(join(raiz, ".supcoflow"));
+    const p = join(raiz, ".supcoflow", "proyecto.json");
+    writeFileSync(p, "x".repeat(TOPE_DEL_ARCHIVO_DEL_REPO + 1));
+    const avisos: string[] = [];
+    expect(archivosDelRepo((s) => avisos.push(s)).leer(p)).toBe(ARCHIVO_QUE_NO_SE_LEE);
+    expect(avisos.join("")).not.toContain("xxx");
+  });
+
+  it("escribir crea la carpeta y deja sólo el archivo, sin .tmp", () => {
+    const raiz = nuevo();
+    const p = join(raiz, ".supcoflow", "proyecto.json");
+    archivosDelRepo(() => {}).escribir(p, "{}\n");
+    expect(readFileSync(p, "utf8")).toBe("{}\n");
+    expect(readdirSync(join(raiz, ".supcoflow"))).toEqual(["proyecto.json"]);
+    expect(statSync(p).isFile()).toBe(true);
+  });
+
+  it("la clave de idempotencia va a idempotencia.json al lado de las credenciales, 0600", async () => {
+    const conf = nuevo();
+    const e = entornoReal({ XDG_CONFIG_HOME: conf, SUPCOFLOW_API_URL: "http://127.0.0.1:4000", SUPCOFLOW_SIN_LLAVERO: "1" });
+    const k = await e.idempotencia.claveDe("proyecto_crear", "d/r");
+    expect(k).toMatch(/^[0-9a-f-]{36}$/);
+    const ruta = join(conf, "supcoflow", "idempotencia.json");
+    expect(statSync(ruta).mode & 0o777).toBe(0o600);
+    expect(statSync(join(conf, "supcoflow")).mode & 0o777).toBe(0o700);
+    expect(await e.idempotencia.claveDe("proyecto_crear", "D/R")).toBe(k);
+  });
+});
+
+describe("leerArchivoChico", () => {
+  it("común dentro del tope se lee; más grande, enlace o inexistente dan error", () => {
+    const raiz = mkdtempSync(join(tmpdir(), "supcoflow-chico-"));
+    const p = join(raiz, "l.png");
+    writeFileSync(p, "abc");
+    expect(leerArchivoChico(p, 10)).toEqual({ bytes: new Uint8Array([97, 98, 99]) });
+    expect(leerArchivoChico(p, 2)).toEqual({ error: "es demasiado grande" });
+    expect(leerArchivoChico(join(raiz, "no"), 10)).toEqual({ error: "no existe" });
+    symlinkSync(p, join(raiz, "enlace.png"));
+    expect(leerArchivoChico(join(raiz, "enlace.png"), 10)).toEqual({ error: "es un enlace" });
   });
 });
