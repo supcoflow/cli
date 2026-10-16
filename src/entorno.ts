@@ -136,6 +136,34 @@ export const TOPE_DEL_ARCHIVO_DEL_REPO = 64 * 1024;
 // toqué») sin que nada de lo que hay ahí llegue a la salida.
 export const ARCHIVO_QUE_NO_SE_LEE = "\u0000(no se lee)";
 
+// Un archivo que la persona nombra (el logo) con las mismas defensas que los del repo: sin seguir
+// enlaces, sin FIFOs que cuelguen, sólo archivos comunes y con tope (se lee tope + 1 por si crece).
+export function leerArchivoChico(p: string, tope: number): { bytes: Uint8Array } | { error: string } {
+  let fd: number;
+  try {
+    fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return { error: code === "ENOENT" ? "no existe" : code === "ELOOP" ? "es un enlace" : "no se pudo abrir" };
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return { error: "no es un archivo común" };
+    const buf = Buffer.alloc(tope + 1);
+    let n = 0;
+    for (;;) {
+      const leidos = readSync(fd, buf, n, buf.length - n, null);
+      if (leidos === 0) break;
+      n += leidos;
+      if (n > tope) return { error: "es demasiado grande" };
+    }
+    return { bytes: new Uint8Array(buf.subarray(0, n)) };
+  } catch {
+    return { error: "no se pudo leer" };
+  } finally {
+    closeSync(fd);
+  }
+}
+
 export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["archivos"] {
   // La carpeta: tiene que ser una carpeta de verdad. Un enlace o un archivo con ese nombre se rechaza;
   // `null` sólo si no existe.

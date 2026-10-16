@@ -1,11 +1,11 @@
 // Las piezas reales de src/entorno.ts que no son el archivo: el `Correr` que habla con el llavero
 // (probado con hijos inofensivos, NUNCA con `security`), las perillas de prueba y lo que se lee y se
 // escribe dentro del repo.
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ARCHIVO_QUE_NO_SE_LEE, archivosDelRepo, correrReal, entornoReal, TOPE_DEL_ARCHIVO_DEL_REPO } from "../src/entorno.ts";
+import { ARCHIVO_QUE_NO_SE_LEE, archivosDelRepo, leerArchivoChico, correrReal, entornoReal, TOPE_DEL_ARCHIVO_DEL_REPO } from "../src/entorno.ts";
 
 describe("el Correr real", () => {
   it("mata al hijo en el techo y lo dice", async () => {
@@ -132,5 +132,18 @@ describe("los archivos del repo (`.supcoflow/proyecto.json`)", () => {
     expect(statSync(ruta).mode & 0o777).toBe(0o600);
     expect(statSync(join(conf, "supcoflow")).mode & 0o777).toBe(0o700);
     expect(await e.idempotencia.claveDe("proyecto_crear", "D/R")).toBe(k);
+  });
+});
+
+describe("leerArchivoChico", () => {
+  it("común dentro del tope se lee; más grande, enlace o inexistente dan error", () => {
+    const raiz = mkdtempSync(join(tmpdir(), "supcoflow-chico-"));
+    const p = join(raiz, "l.png");
+    writeFileSync(p, "abc");
+    expect(leerArchivoChico(p, 10)).toEqual({ bytes: new Uint8Array([97, 98, 99]) });
+    expect(leerArchivoChico(p, 2)).toEqual({ error: "es demasiado grande" });
+    expect(leerArchivoChico(join(raiz, "no"), 10)).toEqual({ error: "no existe" });
+    symlinkSync(p, join(raiz, "enlace.png"));
+    expect(leerArchivoChico(join(raiz, "enlace.png"), 10)).toEqual({ error: "es un enlace" });
   });
 });
