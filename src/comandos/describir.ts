@@ -92,7 +92,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "configuracion",
-      resumen: "Muestra la configuración del proyecto del repo: chat, sitios, marca y acuerdo de datos. El acuerdo frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa.",
+      resumen: "Muestra la configuración del proyecto del repo: chat, sitios, marca, política de problemas y acuerdo de datos. El acuerdo frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa.",
       flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
       ejemplos: ["supcoflow configuracion --json"],
       codigos: [0, 1, 2, 3, 4],
@@ -160,7 +160,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "politica fijar",
-      resumen: "Fija qué hace el motor con un problema reportado: relevarlo o sólo guardarlo.",
+      resumen: "Fija qué hace el motor con un problema que llega por el chat: relevarlo en el acto (gasta) o guardarlo. Guardar frena sólo lo automático del chat: desde la consola una persona puede pedir el relevamiento, y cuesta.",
       flags: ["--modo relevar|guardar", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
       ejemplos: ["supcoflow politica fijar --modo guardar"],
       codigos: [0, 1, 2, 3, 4],

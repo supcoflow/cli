@@ -73,7 +73,7 @@ los que escriben aceptan `--dry-run`.
 | `supcoflow chat logo --archivo logo.png` | Sube el logo (.png, .jpg o .webp, hasta 200 KB). |
 | `supcoflow sitios agregar\|quitar --sitio https://app.ejemplo.com` | Sitios desde los que carga el chat. |
 | `supcoflow datos fijar --permitir usuario_id,atributo:plan` | Acuerdo de datos: frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa. |
-| `supcoflow politica fijar --modo guardar` | Qué hace el motor con un problema reportado (`relevar` o `guardar`). |
+| `supcoflow politica fijar --modo guardar` | Qué hace el motor con un problema que llega por el chat: `relevar` (gasta) o `guardar`. Guardar frena sólo lo automático del chat; una persona puede pedir el relevamiento desde la consola, y cuesta. |
 | `supcoflow claves crear --nombre ci --guardar-en ~/ci.key` | Clave de consulta para CI: el secreto queda sólo en ese archivo (0600, fuera de un repo), nunca en la salida. |
 | `supcoflow claves listar` / `claves revocar --id cla_…` | Ver y revocar claves de consulta. |
 
