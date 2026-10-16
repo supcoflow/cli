@@ -57,13 +57,13 @@ describe("el secreto en el disco de verdad", () => {
     expect(readFileSync(ruta, "utf8")).toBe(ajeno);
     expect(readdirSync(tmp)).toEqual(["ci.key"]);
   });
-  it("publicarSinPisar real: false si el destino existe, true si no", () => {
+  it("publicarSinPisar real: existe si el destino existe, publicado si no", () => {
     const t = join(tmp, "t");
     writeFileSync(t, "x");
     writeFileSync(join(tmp, "ya"), "y");
-    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "ya"))).toBe(false);
+    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "ya"))).toBe("existe");
     expect(readFileSync(join(tmp, "ya"), "utf8")).toBe("y");
-    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "nuevo"))).toBe(true);
+    expect(fsDeSecretosReal.publicarSinPisar(t, join(tmp, "nuevo"))).toBe("publicado");
     expect(readFileSync(join(tmp, "nuevo"), "utf8")).toBe("x");
   });
   it("dentro de un repo (hay .git): 3, nada escrito", () => {

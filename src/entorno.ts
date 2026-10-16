@@ -158,12 +158,17 @@ function leerSinSeguir(p: string, tope: number): LecturaSinSeguir {
 }
 // `link` es el idioma del candado (arriba): crea el nombre sólo si no existe y falla con EEXIST si sí, sin
 // ventana entre mirar y escribir. El temporal queda con dos nombres hasta que `guardar` lo borra.
-function publicarSinPisar(tmp: string, destino: string): boolean {
+// Un disco sin enlaces duros (FAT, exFAT, SMB) no da EEXIST sino EPERM, ENOTSUP/EOPNOTSUPP o ENOSYS según
+// el sistema: se informa aparte para no decirle a la persona «¿tenés permiso?» cuando el problema es el disco.
+const SIN_ENLACES = new Set(["EPERM", "ENOTSUP", "EOPNOTSUPP", "ENOSYS", "EXDEV"]);
+function publicarSinPisar(tmp: string, destino: string): "publicado" | "existe" | "sin_enlaces" {
   try {
     linkSync(tmp, destino);
-    return true;
+    return "publicado";
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "EEXIST") return false;
+    const code = (e as NodeJS.ErrnoException).code ?? "";
+    if (code === "EEXIST") return "existe";
+    if (SIN_ENLACES.has(code)) return "sin_enlaces";
     throw e;
   }
 }

@@ -25,8 +25,11 @@ export type LecturaSinSeguir = { tipo: "ausente" } | { tipo: "enlace" } | { tipo
 export type FsDeSecretos = Pick<FsMinimo, "realpath" | "existe" | "escribirExclusivo" | "renombrar" | "borrarSiExiste"> & {
   /** Abre sin seguir un enlace en el último tramo, sólo archivos comunes y con tope. */
   leerSinSeguir(p: string, tope: number): LecturaSinSeguir;
-  /** Publica `tmp` en `destino` sólo si `destino` no existe: `false` si ya hay algo; lanza ante cualquier otro error. No borra `tmp`. */
-  publicarSinPisar(tmp: string, destino: string): boolean;
+  /**
+   * Publica `tmp` en `destino` sólo si `destino` no existe. `existe` si ya hay algo; `sin_enlaces` si el disco
+   * no admite la operación (FAT, exFAT, algunos montajes de red); lanza ante cualquier otro error. No borra `tmp`.
+   */
+  publicarSinPisar(tmp: string, destino: string): "publicado" | "existe" | "sin_enlaces";
 };
 
 export type GuardaDeSecretos = {
@@ -42,6 +45,14 @@ const CLAVE = /^scf_([0-9a-f]{16})_[0-9a-f]{64}$/;
 const OCUPADO = { error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 } as const;
 
 export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
+  function borrarTemporal(tmp: string): void {
+    try {
+      fs.borrarSiExiste(tmp);
+    } catch {
+      /* best-effort */
+    }
+  }
+
   function leer(ruta: string): ReturnType<GuardaDeSecretos["leer"]> {
     const l = fs.leerSinSeguir(ruta, TOPE);
     if (l.tipo === "ausente") return { estado: "ausente" };
@@ -81,27 +92,31 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
       // El temporal en la MISMA carpeta (el `rename` sólo es atómico dentro del mismo disco), con nombre al
       // azar y en exclusiva: `wx` no atraviesa un enlace que alguien dejara con ese nombre.
       const tmp = path.join(path.dirname(destino), `.${path.basename(destino)}.${randomUUID()}.tmp`);
-      let publicado: boolean;
+      let publicado: ReturnType<FsDeSecretos["publicarSinPisar"]>;
       try {
         fs.escribirExclusivo(tmp, secreto + "\n", 0o600);
         if (hay.tipo === "ausente") {
           publicado = fs.publicarSinPisar(tmp, destino);
-          fs.borrarSiExiste(tmp);
         } else {
           fs.renombrar(tmp, destino);
-          publicado = true;
+          publicado = "publicado";
         }
       } catch {
         // El mensaje del sistema no se reenvía: podría traer la ruta del temporal o algo peor.
-        try {
-          fs.borrarSiExiste(tmp);
-        } catch {
-          /* best-effort */
-        }
+        borrarTemporal(tmp);
         return { error: "no se pudo escribir ahí (¿la carpeta existe y tenés permiso?)", codigo: 3 };
       }
+      // Después de publicar, el temporal es un nombre de más (con `link`) o ya no existe (con `rename`): no
+      // borrarlo no cambia que la clave quedó en el destino, y convertir eso en un fallo dejaría una clave
+      // guardada sin confirmar.
+      borrarTemporal(tmp);
       // Otro apareció entre la lectura y la publicación: lo suyo queda intacto y esta clave no se confirma.
-      return publicado ? "guardado" : OCUPADO;
+      if (publicado === "existe") return OCUPADO;
+      // Sin caer a `rename`: eso reabre la carrera que `link` cierra. Otro destino, en otro disco, sirve.
+      if (publicado === "sin_enlaces") {
+        return { error: "el disco de esa carpeta no admite enlaces duros (¿FAT, exFAT o una carpeta de red?), y sin ellos no puedo escribir sin riesgo de pisar otra clave; elegí un destino en otro disco", codigo: 3 };
+      }
+      return "guardado";
     },
   };
 }

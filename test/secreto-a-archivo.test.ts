@@ -28,9 +28,9 @@ function fsFalso(inicial: Record<string, Nodo> = {}) {
     },
     borrarSiExiste: (p) => void nodos.delete(p),
     publicarSinPisar(tmp, destino) {
-      if (nodos.has(destino)) return false;
+      if (nodos.has(destino)) return "existe";
       nodos.set(destino, { ...nodos.get(tmp)! });
-      return true;
+      return "publicado";
     },
     leerSinSeguir(p, tope) {
       const n = nodos.get(p);
@@ -109,6 +109,25 @@ describe("el secreto a un archivo", () => {
     expect(r).toMatchObject({ codigo: 3 });
     expect(JSON.stringify(r)).not.toContain(B);
     expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);
+    expect(f.nodos.get("/home/u/ci.key")!.contenido).toBe(A + "\n");
+  });
+  it("un disco sin enlaces duros: 3 que lo dice (no «permiso»), nada publicado, sin .tmp, y sin caer a renombrar", () => {
+    const f = fsFalso();
+    let renombres = 0;
+    f.fs.renombrar = () => { renombres++; };
+    f.fs.publicarSinPisar = () => "sin_enlaces";
+    const r = crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A);
+    expect(r).toMatchObject({ codigo: 3 });
+    expect(JSON.stringify(r)).toMatch(/enlaces duros/);
+    expect(JSON.stringify(r)).not.toMatch(/permiso/);
+    expect(renombres).toBe(0);
+    expect(f.nodos.has("/home/u/ci.key")).toBe(false);
+    expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);
+  });
+  it("publicado pero el .tmp no se puede borrar: igual es guardado", () => {
+    const f = fsFalso();
+    f.fs.borrarSiExiste = () => { throw new Error("EACCES"); };
+    expect(crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A)).toBe("guardado");
     expect(f.nodos.get("/home/u/ci.key")!.contenido).toBe(A + "\n");
   });
   it("carrera: otro `claves crear` (otro nombre, mismo destino) escribe entre la lectura y la publicación → 4, lo suyo intacto, sin .tmp", () => {
