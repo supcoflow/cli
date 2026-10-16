@@ -4,12 +4,21 @@ import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 export type Flags = {
   json: boolean; dryRun: boolean; help: boolean; start: boolean; wait: boolean;
   repo: string | null; install: string | null; test: string | null;
+  sitio: string | null; titulo: string | null; saludo: string | null; archivo: string | null; permitir: string | null;
+  modo: string | null; nombre: string | null; guardarEn: string | null; id: string | null;
+  tema: string[];
 };
 
-export const COMANDOS_COMPUESTOS = ["repo conectar", "proyecto crear", "proyecto ver"] as const;
+export const COMANDOS_COMPUESTOS = [
+  "repo conectar", "proyecto crear", "proyecto ver",
+  "chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
+  "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
+] as const;
 // Sólo estas primeras palabras admiten una segunda: cualquier otro par sigue siendo «de más».
 const PRIMERAS_PALABRAS = new Set(COMANDOS_COMPUESTOS.map((c) => c.split(" ")[0]));
-const FLAGS_CON_VALOR = ["repo", "install", "test"] as const;
+const FLAGS_CON_VALOR = [
+  "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id",
+] as const;
 
 // strict: un flag mal escrito (`--estart`) no se ignora en silencio: un asistente creería que
 // pidió algo que no pidió.
@@ -29,6 +38,16 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
         repo: { type: "string" },
         install: { type: "string" },
         test: { type: "string" },
+        sitio: { type: "string" },
+        titulo: { type: "string" },
+        saludo: { type: "string" },
+        archivo: { type: "string" },
+        permitir: { type: "string" },
+        modo: { type: "string" },
+        nombre: { type: "string" },
+        "guardar-en": { type: "string" },
+        id: { type: "string" },
+        tema: { type: "string", multiple: true },
       },
       tokens: true,
     });
@@ -60,6 +79,11 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       );
     }
   }
+  // `--tema` sí se repite (uno por clave), pero ninguno vacío: un `--tema ""` es un error de quien arma
+  // el comando, no «sin tema».
+  if ((parsed.values.tema ?? []).some((t) => t === "")) {
+    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "argumentos_invalidos", "--tema va con un valor clave=valor. Probá `supcoflow --help`.");
+  }
   // Un par desconocido (`repo borrar`) queda como la primera palabra sola: el despacho la rechaza
   // como comando desconocido, con el mismo mensaje que cualquier otra.
   const compuesto = pos.length === 2 ? `${pos[0]} ${pos[1]}` : null;
@@ -76,6 +100,16 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       repo: v.repo ?? null,
       install: v.install ?? null,
       test: v.test ?? null,
+      sitio: v.sitio ?? null,
+      titulo: v.titulo ?? null,
+      saludo: v.saludo ?? null,
+      archivo: v.archivo ?? null,
+      permitir: v.permitir ?? null,
+      modo: v.modo ?? null,
+      nombre: v.nombre ?? null,
+      guardarEn: v["guardar-en"] ?? null,
+      id: v.id ?? null,
+      tema: v.tema ?? [],
     },
   };
 }

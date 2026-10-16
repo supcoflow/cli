@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { API_DE_PRODUCCION, buscarProyecto, canjear, crearConexion, crearProyecto, leerProyecto, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
+import { API_DE_PRODUCCION, buscarProyecto, canjear, configurar, crearConexion, crearProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
 const API = new URL("http://localhost:3000");
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
@@ -128,5 +128,49 @@ describe("conexión y proyecto", () => {
       .toMatchObject({ proyecto: { id: "proj_r-1" }, github: { estado: null, verificadoEn: null } });
     await expect(leerProyecto(API, CLAVE, "proj_x", falso(404, { error: "proyecto_inexistente", message: "No existe ese proyecto." })))
       .rejects.toMatchObject({ codigo: 3, error: "proyecto_inexistente" });
+  });
+});
+
+describe("configurar (bloque 4)", () => {
+  it("configurar manda Bearer, JSON e idempotency-key si se pasa", async () => {
+    const vistos: Request[] = [];
+    const r = await configurar(API, CLAVE, "/api/proyectos/p/chat/prender", { a: 1 }, falso(200, { ok: true }, vistos), { idempotencyKey: "k-1" });
+    expect(r).toEqual({ status: 200, cuerpo: { ok: true } });
+    expect(vistos[0]!.headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+    expect(vistos[0]!.headers.get("content-type")).toBe("application/json");
+    expect(vistos[0]!.headers.get("idempotency-key")).toBe("k-1");
+    expect(await vistos[0]!.json()).toEqual({ a: 1 });
+    const sin: Request[] = [];
+    await configurar(API, CLAVE, "/x", {}, falso(200, {}, sin));
+    expect(sin[0]!.headers.get("idempotency-key")).toBeNull();
+  });
+  it("un 409 vuelve como respuesta, sin lanzar", async () => {
+    expect(await configurar(API, CLAVE, "/x", {}, falso(409, { error: "lista_cambio" }))).toEqual({ status: 409, cuerpo: { error: "lista_cambio" } });
+  });
+  it("un 403 clave_de_consulta sale FalloDeLaTerminal 4 y sin la clave", async () => {
+    const e = await configurar(API, CLAVE, "/x", {}, falso(403, { error: "clave_de_consulta", message: `no con ${CLAVE}` })).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 4, error: "clave_de_consulta" });
+    expect(String(e.message)).not.toContain(CLAVE);
+  });
+  it("subirLogo manda un FormData con el campo logo", async () => {
+    const vistos: Request[] = [];
+    await subirLogo(API, CLAVE, "p1", { bytes: new Uint8Array([1, 2, 3]), mime: "image/png", nombre: "l.png" }, falso(200, { ok: true }, vistos));
+    expect(vistos[0]!.url).toContain("/api/proyectos/p1/chat/logo");
+    const fd = await vistos[0]!.formData();
+    const f = fd.get("logo") as File;
+    expect(f.name).toBe("l.png");
+    expect(f.type).toBe("image/png");
+  });
+  it("leerCatalogo y leerConfiguracion validan la forma", async () => {
+    expect(await leerCatalogo(API, CLAVE, falso(200, { supcoflow: [] }))).toEqual({ supcoflow: [] });
+    await expect(leerCatalogo(API, CLAVE, falso(200, { otro: 1 }))).rejects.toBeDefined();
+    const c = { chat: {}, sitios: [] };
+    expect(await leerConfiguracion(API, CLAVE, "p", falso(200, c))).toEqual(c);
+    await expect(leerConfiguracion(API, CLAVE, "p", falso(200, { chat: {} }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+  });
+  it("listarClaves devuelve id, nombre y creadaEn", async () => {
+    const r = await listarClaves(API, CLAVE, "p", falso(200, { claves: [{ id: "1", nombre: "n", creada_en: "2026-10-16" }] }));
+    expect(r).toEqual([{ id: "1", nombre: "n", creadaEn: "2026-10-16" }]);
+    await expect(listarClaves(API, CLAVE, "p", falso(200, { claves: [{ id: "1" }] }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
   });
 });

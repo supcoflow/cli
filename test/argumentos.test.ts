@@ -1,10 +1,11 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { leerArgumentos } from "../src/argumentos.ts";
 
 it("lee comando y flags", () => {
   expect(leerArgumentos(["login", "--start", "--json"])).toEqual({
     comando: "login",
-    flags: { json: true, dryRun: false, help: false, start: true, wait: false, repo: null, install: null, test: null },
+    flags: { json: true, dryRun: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
+      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, tema: [] },
   });
 });
 it("sin comando es null (se muestra la ayuda)", () => {
@@ -37,4 +38,23 @@ it("tres posicionales son de más", () => {
 it("una palabra sola de un compuesto queda como comando (el despacho la rechaza)", () => {
   expect(leerArgumentos(["repo"]).comando).toBe("repo");
   expect(leerArgumentos(["repo", "borrar"]).comando).toBe("repo");
+});
+
+describe("flags de configurar", () => {
+  it("los comandos nuevos de dos palabras", () => {
+    for (const c of ["chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
+      "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar"]) {
+      expect(leerArgumentos(c.split(" ")).comando).toBe(c);
+    }
+  });
+  it("--tema se puede repetir y se junta en orden", () => {
+    expect(leerArgumentos(["chat", "marca", "--tema", "acento=#000", "--tema", "fondo=#fff"]).flags.tema).toEqual(["acento=#000", "fondo=#fff"]);
+  });
+  it("Review Focus 10: --tema vacío o --sitio repetido salen 3", () => {
+    expect(() => leerArgumentos(["chat", "marca", "--tema", ""])).toThrow(/--tema/);
+    expect(() => leerArgumentos(["sitios", "agregar", "--sitio", "https://a", "--sitio", "https://b"])).toThrow(/--sitio/);
+  });
+  it("--guardar-en llega como guardarEn", () => {
+    expect(leerArgumentos(["claves", "crear", "--guardar-en", "/tmp/k"]).flags.guardarEn).toBe("/tmp/k");
+  });
 });

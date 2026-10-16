@@ -24,16 +24,16 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.2.0); sólo identifica a la terminal
+// A mano a propósito: tiene que coincidir con package.json (0.3.0); sólo identifica a la terminal
 // en los logs del motor, no decide nada.
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
 // sólo quedaba reintentar; el sondeo no los usa, así que su tope por tramo no cambia.
 const PLAZO_DE_ALTA_MS = 30_000;
 
-type Respuesta = { status: number; cuerpo: Record<string, unknown> };
+export type Respuesta = { status: number; cuerpo: Record<string, unknown> };
 
 // Todo lo que vuelve de afuera se trata como no confiable: nunca se pega el cuerpo crudo en un
 // mensaje (una página HTML no sirve en una línea y podría traer cualquier cosa), y el mensaje del
@@ -284,4 +284,55 @@ export async function leerProyecto(
   if (r.status !== 200) throw rechazada(r);
   const g = (typeof r.cuerpo.github === "object" && r.cuerpo.github !== null ? r.cuerpo.github : {}) as Record<string, unknown>;
   return { proyecto: aProyecto(r.cuerpo.proyecto, r.status), github: { estado: texto(g.estado), verificadoEn: texto(g.verificado_en) } };
+}
+
+// ---- Configurar (bloque 4) ----
+
+const objeto = (v: unknown, status: number): Record<string, unknown> => {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw inesperada(status);
+  return v as Record<string, unknown>;
+};
+
+export async function leerCatalogo(api: URL, clave: string, f: Fetch): Promise<Record<string, unknown>> {
+  const r = await conClave(api, clave, "/api/catalogo", { method: "GET" }, f);
+  if (r.status !== 200 || !Array.isArray(r.cuerpo.supcoflow)) throw rechazada(r);
+  return r.cuerpo;
+}
+
+export async function leerConfiguracion(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Record<string, unknown>> {
+  const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/configuracion`, { method: "GET" }, f);
+  if (r.status !== 200) throw rechazada(r);
+  objeto(r.cuerpo.chat, r.status);
+  if (!Array.isArray(r.cuerpo.sitios)) throw inesperada(r.status);
+  return r.cuerpo;
+}
+
+// Las escrituras devuelven la respuesta entera: qué significa un 409 lo decide cada comando (prender sin
+// guía es «hace falta una persona»; la lista que cambió es «probá de nuevo»).
+export async function configurar(
+  api: URL, clave: string, ruta: string, cuerpo: unknown, f: Fetch, extra: { idempotencyKey?: string } = {},
+): Promise<Respuesta> {
+  const headers: Record<string, string> = { ...JSON_BODY };
+  if (extra.idempotencyKey !== undefined) headers["idempotency-key"] = extra.idempotencyKey;
+  return conClave(api, clave, ruta, { method: "POST", headers, body: JSON.stringify(cuerpo) }, f);
+}
+
+export async function subirLogo(
+  api: URL, clave: string, proyectoId: string, archivo: { bytes: Uint8Array; mime: string; nombre: string }, f: Fetch,
+): Promise<Respuesta> {
+  const form = new FormData();
+  form.set("logo", new Blob([archivo.bytes as Uint8Array<ArrayBuffer>], { type: archivo.mime }), archivo.nombre);
+  // Sin content-type a mano: `fetch` pone el multipart con su boundary.
+  return conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/chat/logo`, { method: "POST", body: form }, f);
+}
+
+export async function listarClaves(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<{ id: string; nombre: string; creadaEn: string }[]> {
+  const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/claves`, { method: "GET" }, f);
+  if (r.status !== 200 || !Array.isArray(r.cuerpo.claves)) throw rechazada(r);
+  return r.cuerpo.claves.map((x) => {
+    const o = objeto(x, r.status);
+    const [id, nombre, creadaEn] = [o.id, o.nombre, o.creada_en].map(texto);
+    if (!id || !nombre || !creadaEn) throw inesperada(r.status);
+    return { id, nombre, creadaEn };
+  });
 }
