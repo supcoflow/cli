@@ -23,7 +23,12 @@ const motor = {
   // Bloque 3: la conexión que devuelve el motor y las claves de idempotencia que le llegaron.
   conexion: "pendiente" as "pendiente" | "conectado",
   claves: [] as string[],
+  // `GET /api/proyectos?repo=`: sólo los comandos de configurar necesitan que el proyecto ya exista.
+  proyectoExiste: false,
 };
+// La clave que el motor falso devuelve al crear una de consulta: nada de lo que imprima la terminal puede contenerla.
+const CLAVE_FALSA = `scf_${"1234567890abcdef"}_${"fedcba0987654321".repeat(4)}`;
+const ID_DE_CLAVE = "cla_1234567890abcdef";
 const PROYECTO = { id: "proj_abc", slug: "r", repo: "d/r", rama: "main", install_command: "npm ci", test_command: "npm test" };
 const pedido = () => ({
   id: "cnx_0123456789abcdef", repo: "d/r", estado: motor.conexion, url: `${api}/conectar/cnx_0123456789abcdef`,
@@ -48,6 +53,21 @@ beforeAll(async () => {
       const ruta = new URL(req.url ?? "/", "http://x").pathname;
       pedidosAlMotor.push(ruta);
       const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+      const metodo = req.method ?? "GET";
+      const base = `/api/proyectos/${PROYECTO.id}`;
+      if (ruta === "/api/catalogo") return responder(res, 200, { version: 1, supcoflow: [], codigo_de_la_app: { estado: "sin_contrato", message: "" } });
+      if (ruta === "/api/proyectos" && new URL(req.url ?? "/", "http://x").searchParams.has("repo") && motor.proyectoExiste) return responder(res, 200, { proyecto: PROYECTO });
+      if (ruta === `${base}/configuracion`) return responder(res, 200, { chat: { habilitado: false }, sitios: [], marca: null, acuerdo: null });
+      if (metodo === "POST" && ruta === `${base}/chat`) return responder(res, 200, { ok: true });
+      if (metodo === "POST" && ruta === `${base}/origenes`) return responder(res, 200, { origenes: [] });
+      if (metodo === "POST" && ruta === `${base}/chat/marca`) return responder(res, 200, { marca: {} });
+      if (metodo === "POST" && ruta === `${base}/chat/logo`) return responder(res, 200, { logo_url: "https://x/logo.png" });
+      if (metodo === "POST" && ruta === `${base}/acuerdo-de-datos`) return responder(res, 200, { acuerdo: { version: 1 } });
+      if (metodo === "POST" && ruta === `${base}/politica`) return responder(res, 200, { politica: { modo: "guardar" } });
+      if (metodo === "POST" && ruta === `${base}/claves`) return responder(res, 201, { clave_id: ID_DE_CLAVE, clave: CLAVE_FALSA, estado: "pendiente" });
+      if (metodo === "GET" && ruta === `${base}/claves`) return responder(res, 200, { claves: [] });
+      if (metodo === "POST" && ruta === `${base}/claves/${ID_DE_CLAVE}/confirmar`) return responder(res, 200, { ok: true });
+      if (metodo === "POST" && ruta === `${base}/claves/revocar`) return responder(res, 200, { ok: true });
       if (/^\/api\/conexiones\/[^/]+\/proyecto$/.test(ruta)) {
         motor.claves.push(String(req.headers["idempotency-key"] ?? ""));
         return responder(res, 201, { proyecto: PROYECTO, reusado: false });
@@ -162,7 +182,7 @@ describe("supcoflow sin terminal", () => {
   it("`describir --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describir", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(7);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(20);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -283,6 +303,78 @@ describe("supcoflow sin terminal", () => {
     } finally {
       motor.conexion = "pendiente";
     }
+  });
+
+  // Bloque 4: los comandos de configurar, sin terminal y con --json, contra el motor falso.
+  describe("configurar", () => {
+    beforeAll(() => { motor.proyectoExiste = true; });
+    afterAll(() => { motor.proyectoExiste = false; });
+    const PNG = () => {
+      const f = join(tmp, "logo.png");
+      return writeFile(f, Buffer.from([0x89, 0x50, 0x4e, 0x47])).then(() => f);
+    };
+    const casos = async (): Promise<string[][]> => [
+      ["catalogo", "--json"],
+      ["configuracion", "--json", "--repo", "d/r"],
+      ["chat", "prender", "--json", "--repo", "d/r"],
+      ["chat", "apagar", "--json", "--repo", "d/r"],
+      ["chat", "marca", "--titulo", "Ayuda", "--tema", "acento=#0a7", "--json", "--repo", "d/r"],
+      ["chat", "logo", "--archivo", await PNG(), "--json", "--repo", "d/r"],
+      ["sitios", "agregar", "--sitio", "https://app.ejemplo.com", "--json", "--repo", "d/r"],
+      ["sitios", "quitar", "--sitio", "https://app.ejemplo.com", "--json", "--repo", "d/r"],
+      ["datos", "fijar", "--permitir", "usuario_id,atributo:plan", "--json", "--repo", "d/r"],
+      ["politica", "fijar", "--modo", "guardar", "--json", "--repo", "d/r"],
+      ["claves", "crear", "--nombre", "ci", "--guardar-en", join(tmp, "claves", "ci.key"), "--json", "--repo", "d/r"],
+      ["claves", "listar", "--json", "--repo", "d/r"],
+      ["claves", "revocar", "--id", ID_DE_CLAVE, "--json", "--repo", "d/r"],
+    ];
+
+    it("cada comando termina en ≤ 5 s, deja UNA línea JSON y no filtra la clave falsa del motor", async () => {
+      mkdirSync(join(tmp, "claves"), { recursive: true });
+      const lista = await casos();
+      expect(lista).toHaveLength(13);
+      for (const args of lista) {
+        const t0 = Date.now();
+        const r = await correrSinTty(args, { conClave: true });
+        const quien = args.slice(0, 2).join(" ");
+        expect(r.vencido, quien).toBe(false);
+        expect(Date.now() - t0, quien).toBeLessThan(5_000);
+        expect(r.codigo, `${quien}: ${r.stdout}`).toBe(0);
+        expect(r.stdout.trimEnd().split("\n"), quien).toHaveLength(1);
+        expect(JSON.parse(r.stdout).ok, quien).toBe(true);
+        expect(r.stdout + r.stderr, quien).not.toContain(CLAVE_FALSA);
+        expect(r.stdout + r.stderr, quien).not.toContain(CLAVE_FALSA.slice(-64));
+      }
+    }, 120_000);
+
+    it("`claves crear` deja el secreto sólo en el archivo, 0600", async () => {
+      const destino = join(tmp, "claves", "solo.key");
+      const r = await correrSinTty(["claves", "crear", "--nombre", "ci", "--guardar-en", destino, "--json", "--repo", "d/r"], { conClave: true });
+      expect(r.codigo).toBe(0);
+      expect((await readFile(destino, "utf8")).trim()).toBe(CLAVE_FALSA);
+      expect((await stat(destino)).mode & 0o777).toBe(0o600);
+    });
+
+    it("`claves crear --json` sin --guardar-en sale 3 y no crea nada en el motor", async () => {
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty(["claves", "crear", "--nombre", "ci", "--json", "--repo", "d/r"], { conClave: true });
+      expect(r.codigo).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("falta_guardar_en");
+      expect(pedidosAlMotor.filter((p) => p === `/api/proyectos/${PROYECTO.id}/claves`)).toEqual([]);
+      expect(r.stdout + r.stderr).not.toContain(CLAVE_FALSA);
+    });
+
+    it.each([
+      [["quien-soy", "--sitio", "x", "--json"]],
+      [["chat", "prender", "--tema", "a=b", "--json"]],
+      [["catalogo", "--repo", "d/r", "--json"]],
+    ])("%j sale 3 flag_no_aplica sin tocar el motor", async (args) => {
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty([...args], { conClave: true });
+      expect(r.codigo).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
+      expect(pedidosAlMotor).toEqual([]);
+    });
   });
 
   it("ningún caso tocó el llavero real: el único destino fue el archivo del HOME temporal", async () => {

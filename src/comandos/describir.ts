@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -81,6 +81,115 @@ export const DESCRIPCION: {
       resumen: "Muestra el proyecto del repo: rama, comandos y el estado de la App de GitHub; null si todavía no tiene.",
       flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
       ejemplos: ["supcoflow proyecto ver --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "catalogo",
+      resumen: "Lista lo que se puede configurar en el chat (claves y valores admitidos) y el estado del contrato de la App.",
+      flags: ["--json"],
+      ejemplos: ["supcoflow catalogo --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "configuracion",
+      resumen: "Muestra la configuración del proyecto del repo: chat, sitios, marca y acuerdo de datos. El acuerdo frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
+      ejemplos: ["supcoflow configuracion --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "chat prender",
+      resumen: "Prende el chat de soporte del proyecto. Sin skill aprobada hace falta una persona (sale 4).",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow chat prender --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "chat apagar",
+      resumen: "Apaga el chat de soporte del proyecto.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow chat apagar --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "chat marca",
+      resumen: "Cambia título, saludo y colores del chat; lo que no nombrás queda como estaba.",
+      flags: [
+        "--titulo \"…\": el título del chat",
+        "--saludo \"…\": el saludo inicial",
+        "--tema clave=valor: un color o ajuste del tema (se repite, uno por clave)",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta",
+        "--dry-run: dice qué haría sin hacerlo",
+        "--json",
+      ],
+      ejemplos: ["supcoflow chat marca --titulo \"Ayuda\" --tema acento=#0a7"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "chat logo",
+      resumen: "Sube el logo del chat (.png, .jpg o .webp, hasta 200 KB).",
+      flags: ["--archivo ruta: la imagen", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow chat logo --archivo logo.png --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "sitios agregar",
+      resumen: "Agrega un sitio desde el que el chat puede cargarse.",
+      flags: ["--sitio https://…: el sitio", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow sitios agregar --sitio https://app.ejemplo.com"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "sitios quitar",
+      resumen: "Quita un sitio de los que pueden cargar el chat.",
+      flags: ["--sitio https://…: el sitio", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow sitios quitar --sitio https://app.ejemplo.com"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "datos fijar",
+      resumen: "Fija el acuerdo de datos: qué datos pasan. Frena lo que se guarda y lo que lee la IA que releva el repo; no cubre lo que ve la IA del chat mientras conversa.",
+      flags: [
+        "--permitir lista: datos que pasan, separados por coma (usuario_id, usuario_rol, pagina_y_navegador, capturas, elementos, email, atributo:nombre) o `nada`",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta",
+        "--dry-run: dice qué haría sin hacerlo",
+        "--json",
+      ],
+      ejemplos: ["supcoflow datos fijar --permitir usuario_id,atributo:plan"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "politica fijar",
+      resumen: "Fija qué hace el motor con un problema reportado: relevarlo o sólo guardarlo.",
+      flags: ["--modo relevar|guardar", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow politica fijar --modo guardar"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "claves crear",
+      resumen: "Crea una clave de consulta (sólo lee su proyecto) y la guarda en un archivo 0600 fuera de todo repo; el secreto nunca sale por la salida.",
+      flags: [
+        "--nombre ci: para qué es la clave",
+        "--guardar-en ruta: el archivo donde queda (fuera de un repo; si ya tiene otra cosa sale 4 y no lo toca)",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta",
+        "--dry-run: dice qué haría sin hacerlo",
+        "--json",
+      ],
+      ejemplos: ["supcoflow claves crear --nombre ci --guardar-en ~/ci.key --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "claves listar",
+      resumen: "Lista las claves de consulta activas del proyecto (id, nombre, fecha; nunca el secreto).",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
+      ejemplos: ["supcoflow claves listar --json"],
+      codigos: [0, 1, 2, 3],
+    },
+    {
+      nombre: "claves revocar",
+      resumen: "Revoca una clave de consulta por su id; revocar dos veces deja lo mismo.",
+      flags: ["--id cla_…: la clave (la da `claves listar`)", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow claves revocar --id cla_0123456789abcdef --json"],
       codigos: [0, 1, 2, 3],
     },
   ],

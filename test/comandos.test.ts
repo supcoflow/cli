@@ -1,3 +1,4 @@
+import { flagQueNoAplica } from "../src/flags-por-comando.ts";
 import { describe, expect, it } from "vitest";
 import { loginInteractivo, type DepsDeLogin } from "../src/comandos/login.ts";
 import { comandoQuienSoy } from "../src/comandos/quien-soy.ts";
@@ -360,5 +361,29 @@ describe("con el llavero sin responder al leer la clave", () => {
     expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
     expect(avisos.join("\n")).toContain("otra copia");
     sinSecretos(r);
+  });
+});
+
+describe("flags que no aplican (despacho)", () => {
+  const sin = (c: string, ...f: string[]) => flagQueNoAplica(c, f);
+  it("un flag de configurar en un comando que no lo acepta no aplica", () => {
+    expect(sin("quien-soy", "sitio")).not.toBeNull();
+    expect(sin("chat prender", "tema")).not.toBeNull();
+    expect(sin("chat marca", "archivo")).not.toBeNull();
+    expect(sin("claves listar", "guardarEn")).not.toBeNull();
+    expect(sin("claves crear", "id")).not.toBeNull();
+    expect(sin("catalogo", "repo")).not.toBeNull();
+    expect(sin("login", "repo")).not.toBeNull();
+  });
+  it("los flags de cada comando de configurar sí aplican", () => {
+    expect(sin("sitios agregar", "sitio", "repo")).toBeNull();
+    expect(sin("chat marca", "titulo", "saludo", "tema", "repo")).toBeNull();
+    expect(sin("chat logo", "archivo")).toBeNull();
+    expect(sin("datos fijar", "permitir")).toBeNull();
+    expect(sin("politica fijar", "modo")).toBeNull();
+    expect(sin("claves crear", "nombre", "guardarEn")).toBeNull();
+    expect(sin("claves revocar", "id")).toBeNull();
+    expect(sin("configuracion", "repo")).toBeNull();
+    expect(sin("proyecto ver", "repo")).toBeNull();
   });
 });

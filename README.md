@@ -3,8 +3,8 @@
 La terminal de [Supcoflow](https://app.supcoflow.dev): iniciar sesión y manejar el chat de soporte
 desde la consola, o desde un asistente de código que corre comandos por vos.
 
-Por ahora trae lo básico: iniciar y cerrar sesión, ver con qué cuenta estás, conectar el repo con
-la App de GitHub y crear su proyecto.
+Trae iniciar y cerrar sesión, ver con qué cuenta estás, conectar el repo con la App de GitHub,
+crear su proyecto y configurar el chat.
 
 ## Instalar
 
@@ -57,6 +57,25 @@ supcoflow proyecto ver --json
 supcoflow quien-soy --json
 supcoflow logout --dry-run         # qué revocaría, sin revocar nada
 ```
+
+## Configurar
+
+Con el repo ya conectado y su proyecto creado, se configura el chat sin entrar a la consola (la clave
+tiene que ser de sesión, no de consulta). Todos toman el repo del `origin`, o `--repo owner/repo`, y
+los que escriben aceptan `--dry-run`.
+
+| Comando | Qué hace |
+|---|---|
+| `supcoflow catalogo` | Qué se puede configurar y con qué valores. |
+| `supcoflow configuracion` | Chat, sitios, marca y acuerdo de datos del proyecto. |
+| `supcoflow chat prender` / `chat apagar` | Prende o apaga el chat (sin skill aprobada, prender sale 4). |
+| `supcoflow chat marca --titulo "Ayuda" --tema acento=#0a7` | Título, saludo y colores; lo no nombrado queda igual. |
+| `supcoflow chat logo --archivo logo.png` | Sube el logo (.png, .jpg o .webp, hasta 200 KB). |
+| `supcoflow sitios agregar\|quitar --sitio https://app.ejemplo.com` | Sitios desde los que carga el chat. |
+| `supcoflow datos fijar --permitir usuario_id,atributo:plan` | Acuerdo de datos: frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa. |
+| `supcoflow politica fijar --modo guardar` | Qué hace el motor con un problema reportado (`relevar` o `guardar`). |
+| `supcoflow claves crear --nombre ci --guardar-en ~/ci.key` | Clave de consulta para CI: el secreto queda sólo en ese archivo (0600, fuera de un repo), nunca en la salida. |
+| `supcoflow claves listar` / `claves revocar --id cla_…` | Ver y revocar claves de consulta. |
 
 ## El contrato
 

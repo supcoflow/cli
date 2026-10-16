@@ -8,15 +8,19 @@ import {
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-  buscarProyecto, canjear, crearConexion, crearProyecto, leerProyecto, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Yo,
+  buscarProyecto, canjear, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto,
+  listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, type Yo,
 } from "./api.ts";
-import type { FsDelCandado } from "./candado.ts";
+import { crearCandados, type FsDelCandado } from "./candado.ts";
+import type { DepsDeClaves } from "./comandos/claves.ts";
+import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
+import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
 import type { Git } from "./repo-local.ts";
 import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
@@ -339,6 +343,8 @@ export type Entorno = {
   idempotencia: RegistroDeIdempotencia;
   conexion: DepsDeConexion;
   proyecto: DepsDeProyecto;
+  configurar: DepsDeCatalogo;
+  claves: DepsDeClaves;
 };
 
 export function entornoReal(env: Record<string, string | undefined> = process.env): Entorno {
@@ -374,6 +380,15 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();
+  // Los candados de `claves crear` viven al lado de las credenciales, nunca en un repo.
+  const candados = crearCandados(fsDelCandadoReal, join(dirname(rutaDelArchivo), "candados"), process.pid, procesoVivo);
+  const secretos = crearGuardaDeSecretos(fsDeSecretosReal);
+  const configurarEnElMotor = {
+    api, guardado, git: gitReal, cwd, avisar,
+    buscarProyecto: (a: URL, clave: string, repo: string) => buscarProyecto(a, clave, repo, fetch),
+    leerConfiguracion: (a: URL, clave: string, id: string) => leerConfiguracion(a, clave, id, fetch),
+    configurar: (a: URL, clave: string, ruta: string, cuerpo: unknown, extra?: { idempotencyKey?: string }) => configurar(a, clave, ruta, cuerpo, fetch, extra),
+  };
 
   return {
     env,
@@ -411,6 +426,18 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       ultimaConexion: (a, clave, repo, plazoMs) => ultimaConexion(a, clave, repo, fetch, plazoMs),
       crearProyecto: (a, clave, conexionId, cuerpo, key) => crearProyecto(a, clave, conexionId, cuerpo, key, fetch),
       leerProyecto: (a, clave, id) => leerProyecto(a, clave, id, fetch),
+    },
+    configurar: {
+      ...configurarEnElMotor,
+      subirLogo: (a, clave, id, archivo) => subirLogo(a, clave, id, archivo, fetch),
+      leerArchivoChico,
+      leerCatalogo: (a, clave) => leerCatalogo(a, clave, fetch),
+    },
+    claves: {
+      ...configurarEnElMotor,
+      listarClaves: (a, clave, id) => listarClaves(a, clave, id, fetch),
+      esClaveDeConsultaDelProyecto: (a, clave, id) => esClaveDeConsultaDelProyecto(a, clave, id, fetch),
+      idempotencia, candados, secretos,
     },
   };
 }
