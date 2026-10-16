@@ -80,6 +80,11 @@ function textoDePolitica(v: unknown): string {
   return "el motor no la informó.";
 }
 
+// Título, saludo y tema los escribe quien configura el chat y llegan tal cual: un ESC en el título movería el
+// cursor o cambiaría colores en la terminal de quien corre `configuracion`. En texto se quitan los caracteres
+// de control (C0, DEL y C1); el JSON los conserva, porque ahí van escapados.
+const limpio = (t: string) => t.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+
 // `marca` es null (nunca se fijó: el chat usa la de fábrica) o {titulo, saludo, tema, logo_url}. Del tema se
 // muestran las claves tal cual vinieron: el motor decide cuáles hay, la terminal no las reinterpreta.
 function textoDeMarca(v: unknown): string {
@@ -87,10 +92,10 @@ function textoDeMarca(v: unknown): string {
   if (v === null) return "sin fijar (el chat usa la de fábrica).";
   const m = v as { titulo?: unknown; saludo?: unknown; tema?: unknown; logo_url?: unknown };
   const partes: string[] = [];
-  if (typeof m.titulo === "string" && m.titulo !== "") partes.push(`título «${m.titulo}»`);
-  if (typeof m.saludo === "string" && m.saludo !== "") partes.push(`saludo «${m.saludo}»`);
+  if (typeof m.titulo === "string" && m.titulo !== "") partes.push(`título «${limpio(m.titulo)}»`);
+  if (typeof m.saludo === "string" && m.saludo !== "") partes.push(`saludo «${limpio(m.saludo)}»`);
   if (typeof m.tema === "object" && m.tema !== null) {
-    const colores = Object.entries(m.tema as Record<string, unknown>).filter(([, x]) => typeof x === "string").map(([k, x]) => `${k} ${x}`);
+    const colores = Object.entries(m.tema as Record<string, unknown>).filter(([, x]) => typeof x === "string").map(([k, x]) => `${limpio(k)} ${limpio(x as string)}`);
     if (colores.length > 0) partes.push(`tema ${colores.join(", ")}`);
   }
   partes.push(typeof m.logo_url === "string" && m.logo_url !== "" ? "con logo" : "sin logo");

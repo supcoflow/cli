@@ -103,6 +103,13 @@ describe("configurar", () => {
     const viejo = await comandoConfiguracion(deps({ leerConfiguracion: async () => base }).d, F);
     expect(viejo.texto).toMatch(/Política de problemas: el motor no la informó\.\nMarca: el motor no la informó\./);
   });
+  it("configuracion en texto: título, saludo y tema sin caracteres de control (ESC incluido); el JSON intacto", async () => {
+    const marca = { titulo: "Ay\u001b[31muda\u0007", saludo: "Ho\nla\u009b", tema: { "ac\u001bento": "#0a7\u001b[0m" }, logo_url: null };
+    const r = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ chat: {}, sitios: [], acuerdo: null, marca }) }).d, F);
+    expect(r.texto).toMatch(/Marca: título «Ay\[31muda», saludo «Hola», tema acento #0a7\[0m, sin logo\./);
+    expect(r.texto).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+    expect((r.json as { marca: unknown }).marca).toEqual(marca);
+  });
   it("--dry-run no escribe", async () => {
     const { d, posts } = deps();
     expect(await chatPrenderApagar(d, { ...F, dryRun: true }, true)).toMatchObject({ codigo: 0, json: { dry_run: true } });
