@@ -6,6 +6,7 @@ import { revocarPropia } from "./api.ts";
 import { leerArgumentos } from "./argumentos.ts";
 import { clavesCrear, clavesListar, clavesRevocar } from "./comandos/claves.ts";
 import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios } from "./comandos/configurar.ts";
+import { guiaPublicar, guiaRevisar, guiaUsar, guiaVer } from "./comandos/guia.ts";
 import { comandoCatalogo, datosFijar, politicaFijar } from "./comandos/datos-y-politica.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "./comandos/describir.ts";
 import { loginInteractivo, loginStart, loginWait } from "./comandos/login.ts";
@@ -40,7 +41,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       start: flags.start, wait: flags.wait, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
       sitio: flags.sitio !== null, titulo: flags.titulo !== null, saludo: flags.saludo !== null, tema: flags.tema.length > 0,
       archivo: flags.archivo !== null, permitir: flags.permitir !== null, modo: flags.modo !== null,
-      nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null,
+      nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null, origen: flags.origen !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
@@ -112,6 +113,14 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await clavesListar(e.claves, flags), json };
       case "claves revocar":
         return { r: await clavesRevocar(e.claves, flags), json };
+      case "guia revisar":
+        return { r: await guiaRevisar(e.guia, flags), json };
+      case "guia publicar":
+        return { r: await guiaPublicar(e.guia, flags), json };
+      case "guia ver":
+        return { r: await guiaVer(e.guia, flags), json };
+      case "guia usar":
+        return { r: await guiaUsar(e.guia, flags), json };
     }
     throw new Error(`comando sin despacho: ${comando}`);
   } catch (e) {

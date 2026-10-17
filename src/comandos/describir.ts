@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -190,6 +190,34 @@ export const DESCRIPCION: {
       resumen: "Revoca una clave de consulta por su id; revocar dos veces deja lo mismo.",
       flags: ["--id cla_…: la clave (la da `claves listar`)", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
       ejemplos: ["supcoflow claves revocar --id cla_0123456789abcdef --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "guia revisar",
+      resumen: "Revisa .supcoflow/guia.md (la raíz de este clon) contra el motor, sin publicar nada: dice si está bien armada y cuántas secciones tiene. Es el paso antes del commit.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué mandaría sin mandarlo", "--json"],
+      ejemplos: ["supcoflow guia revisar --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "guia publicar",
+      resumen: "Publica la guía del repo: manda la huella de .supcoflow/guia.md y el motor la compara con la de la rama principal. Si todavía no está subida a esa rama (o es otra), sale 5: subí la guía a la rama principal y volvé a correr.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice la huella y qué pediría, sin pedir nada", "--json"],
+      ejemplos: ["supcoflow guia publicar --json"],
+      codigos: [0, 1, 2, 3, 4, 5],
+    },
+    {
+      nombre: "guia ver",
+      resumen: "Muestra la guía activa del proyecto, de dónde viene y si la rama principal sigue teniendo esa versión (`al_dia` en el JSON).",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
+      ejemplos: ["supcoflow guia ver --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "guia usar",
+      resumen: "Elige cuál guía queda activa cuando hay dos: la del repo o la de nuestro agente.",
+      flags: ["--origen repo|agente: cuál queda activa (obligatorio)", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
+      ejemplos: ["supcoflow guia usar --origen repo --json"],
       codigos: [0, 1, 2, 3, 4],
     },
   ],

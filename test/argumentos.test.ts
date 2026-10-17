@@ -5,7 +5,7 @@ it("lee comando y flags", () => {
   expect(leerArgumentos(["login", "--start", "--json"])).toEqual({
     comando: "login",
     flags: { json: true, dryRun: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
-      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, tema: [] },
+      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [] },
   });
 });
 it("sin comando es null (se muestra la ayuda)", () => {
@@ -43,7 +43,8 @@ it("una palabra sola de un compuesto queda como comando (el despacho la rechaza)
 describe("flags de configurar", () => {
   it("los comandos nuevos de dos palabras", () => {
     for (const c of ["chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
-      "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar"]) {
+      "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
+      "guia revisar", "guia publicar", "guia ver", "guia usar"]) {
       expect(leerArgumentos(c.split(" ")).comando).toBe(c);
     }
   });
@@ -53,6 +54,12 @@ describe("flags de configurar", () => {
   it("Review Focus 10: --tema vacío o --sitio repetido salen 3", () => {
     expect(() => leerArgumentos(["chat", "marca", "--tema", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
     expect(() => leerArgumentos(["sitios", "agregar", "--sitio", "https://a", "--sitio", "https://b"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+  });
+  it("--origen llega como origen, y repetido o vacío sale 3", () => {
+    expect(leerArgumentos(["guia", "usar", "--origen", "repo"]).flags.origen).toBe("repo");
+    expect(leerArgumentos(["guia", "ver"]).flags.origen).toBeNull();
+    expect(() => leerArgumentos(["guia", "usar", "--origen", "repo", "--origen", "agente"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["guia", "usar", "--origen", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
   });
   it("--guardar-en llega como guardarEn", () => {
     expect(leerArgumentos(["claves", "crear", "--guardar-en", "/tmp/k"]).flags.guardarEn).toBe("/tmp/k");

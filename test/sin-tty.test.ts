@@ -25,6 +25,7 @@ const motor = {
   claves: [] as string[],
   // `GET /api/proyectos?repo=`: sólo los comandos de configurar necesitan que el proyecto ya exista.
   proyectoExiste: false,
+  guiaSubida: false,
 };
 // La clave que el motor falso devuelve al crear una de consulta: nada de lo que imprima la terminal puede contenerla.
 const CLAVE_FALSA = `scf_${"1234567890abcdef"}_${"fedcba0987654321".repeat(4)}`;
@@ -58,6 +59,15 @@ beforeAll(async () => {
       if (ruta === "/api/catalogo") return responder(res, 200, { version: 1, supcoflow: [], codigo_de_la_app: { estado: "sin_contrato", message: "" } });
       if (ruta === "/api/proyectos" && new URL(req.url ?? "/", "http://x").searchParams.has("repo") && motor.proyectoExiste) return responder(res, 200, { proyecto: PROYECTO });
       if (ruta === `${base}/configuracion`) return responder(res, 200, { chat: { habilitado: false }, sitios: [], marca: null, acuerdo: null });
+      // La guía: el motor falso contesta lo mínimo que la terminal sabe leer.
+      if (metodo === "POST" && ruta === `${base}/guia/revisar`) return responder(res, 200, { ok: true, secciones: 1 });
+      if (metodo === "POST" && ruta === `${base}/guia/publicar`) {
+        return motor.guiaSubida
+          ? responder(res, 200, { ok: true, guia: { origen: "repo", version: 1, rama: "main", commit: "a".repeat(40), secciones: 1 }, ya_publicada: false, reemplaza: null })
+          : responder(res, 409, { error: "guia_no_subida", message: "No está en la rama.", rama: "main", commit: "b".repeat(40) });
+      }
+      if (metodo === "GET" && ruta === `${base}/guia`) return responder(res, 200, { guia: null, otra: null });
+      if (metodo === "POST" && ruta === `${base}/guia/origen`) return responder(res, 409, { error: "sin_guia_publicada", message: "No hay guía del repo." });
       if (metodo === "POST" && ruta === `${base}/chat`) return responder(res, 200, { ok: true });
       if (metodo === "POST" && ruta === `${base}/origenes`) return responder(res, 200, { origenes: [] });
       if (metodo === "POST" && ruta === `${base}/chat/marca`) return responder(res, 200, { marca: {} });
@@ -182,7 +192,7 @@ describe("supcoflow sin terminal", () => {
   it("`describir --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describir", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(20);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(24);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -346,6 +356,43 @@ describe("supcoflow sin terminal", () => {
         expect(r.stdout + r.stderr, quien).not.toContain(CLAVE_FALSA.slice(-64));
       }
     }, 120_000);
+
+    // La guía vive en la raíz del clon: un repo de git con `.supcoflow/guia.md`. Sin TTY y con stdin cerrado.
+    it("los comandos de la guía terminan solos con el código que el contrato promete", async () => {
+      const repo = repoDeGit();
+      mkdirSync(join(repo, ".supcoflow"));
+      await writeFile(join(repo, ".supcoflow", "guia.md"), "## Facturas\nPara qué sirve: Ver facturas.\nQué puede hacer el usuario: Descargarlas.\n");
+      const corrida = async (args: string[]) => {
+        const r = await correrSinTty([...args, "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(r.vencido, args.join(" ")).toBe(false);
+        expect(r.stdout.trimEnd().split("\n"), args.join(" ")).toHaveLength(1);
+        return r;
+      };
+      expect((await corrida(["guia", "revisar"])).codigo).toBe(0);
+      expect((await corrida(["guia", "ver"])).codigo).toBe(0);
+      motor.guiaSubida = false;
+      const noSubida = await corrida(["guia", "publicar"]);
+      expect(noSubida.codigo).toBe(5);
+      expect(JSON.parse(noSubida.stdout).error).toBe("guia_no_subida");
+      motor.guiaSubida = true;
+      try { expect((await corrida(["guia", "publicar"])).codigo).toBe(0); } finally { motor.guiaSubida = false; }
+      const sinGuia = await corrida(["guia", "usar", "--origen", "repo"]);
+      expect(sinGuia.codigo).toBe(3);
+      expect(JSON.parse(sinGuia.stdout).error).toBe("sin_guia_publicada");
+      pedidosAlMotor.length = 0;
+      const sinOrigen = await corrida(["guia", "usar"]);
+      expect(sinOrigen.codigo).toBe(3);
+      expect(JSON.parse(sinOrigen.stdout).error).toBe("falta_origen");
+      expect(pedidosAlMotor).toEqual([]);
+    }, 60_000);
+
+    it("`--origen` fuera de `guia usar` sale 3 flag_no_aplica sin tocar el motor", async () => {
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty(["guia", "ver", "--origen", "repo", "--json"], { conClave: true });
+      expect(r.codigo).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
+      expect(pedidosAlMotor).toEqual([]);
+    });
 
     it("`claves crear` deja el secreto sólo en el archivo, 0600", async () => {
       const destino = join(tmp, "claves", "solo.key");

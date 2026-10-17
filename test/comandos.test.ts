@@ -374,6 +374,9 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("claves crear", "id")).not.toBeNull();
     expect(sin("catalogo", "repo")).not.toBeNull();
     expect(sin("login", "repo")).not.toBeNull();
+    expect(sin("guia ver", "origen")).not.toBeNull();
+    expect(sin("guia publicar", "origen")).not.toBeNull();
+    expect(sin("claves listar", "origen")).not.toBeNull();
   });
   it("los flags de cada comando de configurar sí aplican", () => {
     expect(sin("sitios agregar", "sitio", "repo")).toBeNull();
@@ -384,6 +387,8 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("claves crear", "nombre", "guardarEn")).toBeNull();
     expect(sin("claves revocar", "id")).toBeNull();
     expect(sin("configuracion", "repo")).toBeNull();
+    expect(sin("guia usar", "origen", "repo")).toBeNull();
+    expect(sin("guia revisar", "repo")).toBeNull();
     expect(sin("proyecto ver", "repo")).toBeNull();
   });
 });
