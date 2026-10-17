@@ -1,0 +1,24 @@
+{
+  "casos": [
+    {
+      "nombre": "con \\r\\n",
+      "texto": "## A\r\nPara qué sirve: x\r\n",
+      "huella": "92c70a2ccb6de7441bb0c2ca50bca1f6b66f2829f8f2155e2a2b28ef5a1119de"
+    },
+    {
+      "nombre": "con BOM",
+      "texto": "﻿## A\n",
+      "huella": "b26f416c8da4462ad6d6eb3914dd7e9da6477303615e1f2d4c0aebf0064fc845"
+    },
+    {
+      "nombre": "sin salto final",
+      "texto": "## A",
+      "huella": "be8641c446d19e235e66cf8fab33fe1d88fe510c67094e0c729af93cb070d7be"
+    },
+    {
+      "nombre": "con acentos",
+      "texto": "## Ñandú\nPara qué sirve: sí\n",
+      "huella": "cc620381787b4ad2b79a89e43b5c106a614069956fcd66bd6b0bd5968ef82699"
+    }
+  ]
+}

@@ -348,3 +348,27 @@ export async function esClaveDeConsultaDelProyecto(api: URL, clave: string, proy
   if (r.status !== 200) throw inesperada(r.status);
   return r.cuerpo.via === "clave_de_consulta" && r.cuerpo.proyecto === proyectoId;
 }
+
+// ---- La guía (bloque 5) ----
+
+// Devuelven la respuesta entera: qué significa cada 409/422 lo decide el comando (`guia_no_subida` es
+// un código de salida propio; `guia_mal_armada` lleva la lista de errores por línea).
+const rutaDeLaGuia = (proyectoId: string) => `/api/proyectos/${encodeURIComponent(proyectoId)}/guia`;
+
+export function revisarGuia(api: URL, clave: string, proyectoId: string, contenido: string, f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/revisar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ contenido }) }, f);
+}
+
+export function publicarGuia(api: URL, clave: string, proyectoId: string, huella: string, f: Fetch): Promise<Respuesta> {
+  // Detrás, el motor acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas.
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ huella }) }, f, PLAZO_DE_ALTA_MS);
+}
+
+// Siempre con `comprobar=1`: `guia ver` quiere el `al_dia` de la rama; el motor lo ignora si el origen no es el repo.
+export function leerGuia(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}?comprobar=1`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen: "repo" | "agente", f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/origen`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ origen }) }, f);
+}
