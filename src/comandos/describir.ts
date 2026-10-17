@@ -99,7 +99,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "chat prender",
-      resumen: "Prende el chat de soporte del proyecto. Sin skill aprobada hace falta una persona (sale 4).",
+      resumen: "Prende el chat de soporte del proyecto. Hace falta una guía vigente (la publicada del repo o la aprobada de nuestro agente); si no, sale 4 (skill_no_aprobada).",
       flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
       ejemplos: ["supcoflow chat prender --json"],
       codigos: [0, 1, 2, 3, 4],

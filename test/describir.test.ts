@@ -48,6 +48,9 @@ describe("describir --json", () => {
       expect(g(n).codigos, n).toContain(4);
       expect(g(n).codigos.includes(5), n).toBe(n === "guia publicar");
     }
+    const prender = DESCRIPCION.comandos.find((c) => c.nombre === "chat prender")!.resumen;
+    expect(prender).toMatch(/guía vigente/);
+    expect(prender).not.toMatch(/Sin skill aprobada/);
     expect(g("guia usar").flags.join(" ")).toContain("--origen");
     expect(g("guia publicar").resumen).toMatch(/rama principal/);
   });

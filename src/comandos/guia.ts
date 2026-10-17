@@ -128,7 +128,8 @@ export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "d
       const rem = c.reemplaza as { origen?: unknown; version?: unknown } | null | undefined;
       const reemplaza = !ya && rem && rem.origen === "agente" && typeof rem.version === "number" ? ` (reemplaza a la de nuestro agente v${rem.version})` : "";
       const base = `commit ${corto(guia.commit)} de ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
-      const texto = ya ? `Ya estaba publicada: ${base}. Sigue siendo la guía activa.` : `Guía publicada: ${base}. Es la guía activa${reemplaza}.`;
+      // Republicar re-activa la guía del repo aunque antes rigiera la de nuestro agente: «sigue siendo» mentiría en ese caso.
+      const texto = ya ? `Ya estaba publicada: ${base}. Quedó como guía activa.` : `Guía publicada: ${base}. Es la guía activa${reemplaza}.`;
       return { codigo: SALIDA.ok, json: { ok: true, guia: c.guia ?? null, ya_publicada: ya, reemplaza: c.reemplaza ?? null }, texto };
     });
   } catch (e) {

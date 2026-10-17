@@ -103,7 +103,8 @@ describe("guia publicar", () => {
     const { d } = deps({ publicar: async () => R(200, { ok: true, guia: { origen: "repo", rama: "main", commit: "abc1234def", secciones: 3 }, ya_publicada: true, reemplaza: null }) });
     const r = await guiaPublicar(d, F);
     expect(r).toMatchObject({ codigo: 0, json: { ya_publicada: true } });
-    expect(r.texto).toMatch(/^Ya estaba publicada/);
+    expect(r.texto).toBe("Ya estaba publicada: commit abc1234 de main, 3 secciones. Quedó como guía activa.");
+    expect(r.texto).not.toMatch(/Sigue siendo/);
   });
   for (const e of ["guia_no_subida", "guia_distinta"]) {
     it(`409 ${e}: 5 con rama y commit`, async () => {
