@@ -7,6 +7,8 @@ export type Flags = {
   sitio: string | null; titulo: string | null; saludo: string | null; archivo: string | null; permitir: string | null;
   modo: string | null; nombre: string | null; guardarEn: string | null; id: string | null;
   tema: string[];
+  // Opcional a propósito: C3 le suma el parseo de `--origen`; hasta entonces el parser no lo escribe.
+  origen?: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
