@@ -26,6 +26,10 @@ npx supcoflow login
 | `supcoflow repo conectar` | Conecta el repo de esta carpeta con la App de GitHub: te da un enlace, lo confirmás en la consola. Sin terminal, `--start` y después `--wait`, como `login`. |
 | `supcoflow proyecto crear` | Crea (o reusa) el proyecto del repo ya conectado y lo anota en `.supcoflow/proyecto.json`. Si el motor no deduce los comandos, `--install "…" --test "…"`. |
 | `supcoflow proyecto ver` | El proyecto del repo: rama, comandos y el estado de la App de GitHub. |
+| `supcoflow guia revisar` | Revisa `.supcoflow/guia.md` contra el motor sin publicar nada. |
+| `supcoflow guia publicar` | Publica la guía del repo: manda su huella y el motor la compara con la de la rama principal. |
+| `supcoflow guia ver` | Muestra la guía activa, de dónde viene y si la rama sigue al día. |
+| `supcoflow guia usar --origen repo\|agente` | Elige cuál guía queda activa. |
 | `supcoflow describir --json` | Todo el contrato (comandos, flags, facultades de la clave, códigos) en una línea de JSON. |
 
 `supcoflow --help` (o `supcoflow <comando> --help`) muestra la ayuda con ejemplos. Los comandos de
@@ -68,7 +72,7 @@ los que escriben aceptan `--dry-run`.
 |---|---|
 | `supcoflow catalogo` | Qué se puede configurar y con qué valores. |
 | `supcoflow configuracion` | Chat, sitios, marca y acuerdo de datos del proyecto. |
-| `supcoflow chat prender` / `chat apagar` | Prende o apaga el chat (sin skill aprobada, prender sale 4). |
+| `supcoflow chat prender` / `chat apagar` | Prende o apaga el chat (hace falta una guía: publicá la del repo con `supcoflow guia publicar` o generá y aprobá la de nuestro agente en Brain). |
 | `supcoflow chat marca --titulo "Ayuda" --tema acento=#0a7` | Título, saludo y colores; lo no nombrado queda igual. |
 | `supcoflow chat logo --archivo logo.png` | Sube el logo (.png, .jpg o .webp, hasta 200 KB). |
 | `supcoflow sitios agregar\|quitar --sitio https://app.ejemplo.com` | Sitios desde los que carga el chat. |
@@ -90,7 +94,7 @@ El flujo, en este orden:
 
 `supcoflow guia ver` muestra la guía activa y si la rama sigue al día (`al_dia` en el JSON);
 `supcoflow guia usar --origen repo|agente` elige cuál queda activa cuando hay una del repo y otra de nuestro agente.
-Todos toman el repo del `origin`, o `--repo owner/repo`; `revisar`, `publicar` y `usar` aceptan `--dry-run`.
+Todos toman el repo del `origin`, o `--repo owner/repo` (con `revisar` y `publicar`, sin clon local de ese repo sale 3 `falta_guia`: la guía se lee del archivo); `revisar`, `publicar` y `usar` aceptan `--dry-run`.
 
 El formato de `.supcoflow/guia.md`:
 
@@ -120,7 +124,7 @@ Pensado para que lo lea un programa, no sólo una persona:
 - **Sin preguntas sin terminal interactiva** (o con `--json`): si falta un dato, sale 3 diciendo qué
   flag usar. `supcoflow login` sin terminal sale 3 y te indica el camino en dos pasos.
 - **`--dry-run`** donde se puede simular (`login`, `login --start`, `logout`, `repo conectar --start`,
-  `proyecto crear`). `login --wait
+  `proyecto crear`, `guia revisar`, `guia publicar`, `guia usar`). `login --wait
   --dry-run` sale 3: sondear consume el código y no hay cómo simularlo.
 
 | Código | Quiere decir |

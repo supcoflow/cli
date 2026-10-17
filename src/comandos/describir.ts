@@ -195,14 +195,14 @@ export const DESCRIPCION: {
     {
       nombre: "guia revisar",
       resumen: "Revisa .supcoflow/guia.md (la raíz de este clon) contra el motor, sin publicar nada: dice si está bien armada y cuántas secciones tiene. Es el paso antes del commit.",
-      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué mandaría sin mandarlo", "--json"],
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin clon local sale 3 falta_guia: la guía se lee del archivo)", "--dry-run: dice qué mandaría sin mandarlo", "--json"],
       ejemplos: ["supcoflow guia revisar --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "guia publicar",
       resumen: "Publica la guía del repo: manda la huella de .supcoflow/guia.md y el motor la compara con la de la rama principal. Si todavía no está subida a esa rama (o es otra), sale 5: subí la guía a la rama principal y volvé a correr.",
-      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice la huella y qué pediría, sin pedir nada", "--json"],
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin clon local sale 3 falta_guia: la huella sale del archivo)", "--dry-run: dice la huella y qué pediría, sin pedir nada", "--json"],
       ejemplos: ["supcoflow guia publicar --json"],
       codigos: [0, 1, 2, 3, 4, 5],
     },
@@ -225,12 +225,12 @@ export const DESCRIPCION: {
   facultades: [
     {
       nombre: "consultar",
-      incluye: "Identidad y equipo, proyectos, configuración, casos, issues, runs, costos, estado de la instalación",
+      incluye: "Identidad y equipo, proyectos, configuración, casos, issues, runs, costos, estado de la instalación, leer y revisar la guía (guia revisar, guia ver)",
       con_api_key: true,
     },
     {
       nombre: "configurar",
-      incluye: "Crear/reusar proyecto, conectar o desconectar el repo, configurar y prender el chat, sitios permitidos, acuerdo de datos, política de problemas, publicar la guía, crear y revocar claves de consulta, perfiles de los agentes",
+      incluye: "Crear/reusar proyecto, conectar o desconectar el repo, configurar y prender el chat, sitios permitidos, acuerdo de datos, política de problemas, publicar la guía, elegir la guía activa (guia usar), crear y revocar claves de consulta, perfiles de los agentes",
       con_api_key: true,
     },
     { nombre: "probar", incluye: "La prueba hasta el issue (gasta, dentro de los topes)", con_api_key: true },

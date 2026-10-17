@@ -19,8 +19,10 @@ export type DepsDeGuia = DepsDelProyectoDelRepo & {
 };
 
 // Texto que viene del motor (o del repo, vía el motor) y sale a la terminal de una persona: sin secretos y sin
-// caracteres de control (C0, DEL, C1), que un ESC movería el cursor. El JSON los conserva escapados.
-const limpio = (t: string) => taparSecretos(t).replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
+// caracteres de control (C0, DEL, C1), que un ESC movería el cursor. Texto y JSON salen del mismo texto ya limpio.
+// Primero se quita el control y recién después se tapan los secretos: al revés, una clave partida por un
+// control (U+0085, por ejemplo) quedaba entera al quitarlo y se imprimía sin tapar.
+const limpio = (t: string) => taparSecretos(t.replace(/[\u0000-\u001f\u007f-\u009f]/g, ""));
 const cadena = (v: unknown): string => (typeof v === "string" ? limpio(v) : "");
 const corto = (commit: unknown) => cadena(commit).slice(0, 7);
 const secciones = (n: unknown) => (typeof n === "number" ? `${n} ${n === 1 ? "sección" : "secciones"}` : "secciones sin contar");

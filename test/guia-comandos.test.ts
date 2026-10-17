@@ -60,6 +60,17 @@ describe("guia revisar", () => {
     sinControl(r.texto);
     expect(JSON.stringify(r.json)).not.toContain(CLAVE);
   });
+  it("una clave partida por un carácter de control (U+0085) no se reconstruye al quitarlo", async () => {
+    const partida = `scf_${"a".repeat(16)}\u0085_${"b".repeat(64)}`;
+    const { d } = deps({ revisar: async () => R(422, { error: "guia_mal_armada", message: "x", errores: [{ linea: 3, motivo: `clave ${partida} fin` }] }) });
+    const r = await guiaRevisar(d, F);
+    for (const salida of [r.texto, JSON.stringify(r.json)]) {
+      expect(salida).not.toContain(CLAVE);
+      expect(salida).not.toMatch(/scf_[0-9a-f]{16}_[0-9a-f]{64}/);
+    }
+    // En el texto la clave ya no está ni partida: se quitó el control y recién ahí se tapó.
+    expect(r.texto).not.toContain("b".repeat(64));
+  });
   it("413 del motor: 3; 404: 3; 401: 2", async () => {
     expect((await guiaRevisar(deps({ revisar: async () => R(413, { error: "guia_muy_grande", message: "grande" }) }).d, F)).codigo).toBe(3);
     expect((await guiaRevisar(deps({ revisar: async () => R(404, { error: "no_encontrado", message: "no" }) }).d, F)).codigo).toBe(3);
