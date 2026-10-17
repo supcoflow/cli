@@ -41,7 +41,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       start: flags.start, wait: flags.wait, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
       sitio: flags.sitio !== null, titulo: flags.titulo !== null, saludo: flags.saludo !== null, tema: flags.tema.length > 0,
       archivo: flags.archivo !== null, permitir: flags.permitir !== null, modo: flags.modo !== null,
-      nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null, origen: flags.origen !== null,
+      nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null, origen: flags.origen !== null, desdeGithub: flags.desdeGithub,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);

@@ -235,6 +235,16 @@ export const gitReal: Git = (args, cwd) =>
     });
   });
 
+// El commit y la rama que la terminal DECLARA al subir la guía: 3 segundos (no 5) porque esto es un extra que nunca
+// debe hacer esperar a nadie, y sin salida a la terminal: lo que git imprima (avisos, errores) se descarta.
+export const gitRapido: Git = (args, cwd) =>
+  new Promise((resolve) => {
+    execFile("git", args, { cwd, timeout: 3_000, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
+      if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
+      resolve({ codigo: null, stdout: "" });
+    });
+  });
+
 // `.supcoflow/proyecto.json` vive DENTRO del repo, y el repo puede ser un clon ajeno: su contenido lo
 // decide quien lo escribió. Por eso ni la carpeta ni el archivo se siguen si son enlaces (uno hacia
 // `~/.ssh/…` haría que la terminal leyera, o escribiera, lo que el repo quiera), y se lee con tope.
@@ -459,7 +469,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     },
     guia: {
       ...configurarEnElMotor,
-      leerArchivoChico, fetch,
+      leerArchivoChico, fetch, gitDeclarado: gitRapido,
       revisar: revisarGuia, publicar: publicarGuia, ver: leerGuia, elegir: elegirOrigen,
     },
     claves: {

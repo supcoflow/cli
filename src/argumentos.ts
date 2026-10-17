@@ -8,6 +8,7 @@ export type Flags = {
   modo: string | null; nombre: string | null; guardarEn: string | null; id: string | null;
   tema: string[];
   origen: string | null;
+  desdeGithub: boolean;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -50,6 +51,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
         "guardar-en": { type: "string" },
         id: { type: "string" },
         origen: { type: "string" },
+        "desde-github": { type: "boolean" },
         tema: { type: "string", multiple: true },
       },
       tokens: true,
@@ -113,6 +115,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       guardarEn: v["guardar-en"] ?? null,
       id: v.id ?? null,
       origen: v.origen ?? null,
+      desdeGithub: v["desde-github"] === true,
       tema: v.tema ?? [],
     },
   };

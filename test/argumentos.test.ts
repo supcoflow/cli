@@ -4,7 +4,7 @@ import { leerArgumentos } from "../src/argumentos.ts";
 it("lee comando y flags", () => {
   expect(leerArgumentos(["login", "--start", "--json"])).toEqual({
     comando: "login",
-    flags: { json: true, dryRun: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
+    flags: { json: true, dryRun: false, desdeGithub: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
       sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [] },
   });
 });
@@ -54,6 +54,10 @@ describe("flags de configurar", () => {
   it("Review Focus 10: --tema vacío o --sitio repetido salen 3", () => {
     expect(() => leerArgumentos(["chat", "marca", "--tema", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
     expect(() => leerArgumentos(["sitios", "agregar", "--sitio", "https://a", "--sitio", "https://b"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+  });
+  it("--desde-github llega como desdeGithub (falso por defecto)", () => {
+    expect(leerArgumentos(["guia", "publicar", "--desde-github"]).flags.desdeGithub).toBe(true);
+    expect(leerArgumentos(["guia", "publicar"]).flags.desdeGithub).toBe(false);
   });
   it("--origen llega como origen, y repetido o vacío sale 3", () => {
     expect(leerArgumentos(["guia", "usar", "--origen", "repo"]).flags.origen).toBe("repo");

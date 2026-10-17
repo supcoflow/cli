@@ -27,7 +27,7 @@ npx supcoflow login
 | `supcoflow proyecto crear` | Crea (o reusa) el proyecto del repo ya conectado y lo anota en `.supcoflow/proyecto.json`. Si el motor no deduce los comandos, `--install "…" --test "…"`. |
 | `supcoflow proyecto ver` | El proyecto del repo: rama, comandos y el estado de la App de GitHub. |
 | `supcoflow guia revisar` | Revisa `.supcoflow/guia.md` contra el motor sin publicar nada. |
-| `supcoflow guia publicar` | Publica la guía del repo: manda su huella y el motor la compara con la de la rama principal. |
+| `supcoflow guia publicar` | Sube `.supcoflow/guia.md` directo (con el commit y la rama que declara tu clon, no verificados en GitHub). `--desde-github` verifica contra la rama principal en vez de subir el archivo. |
 | `supcoflow guia ver` | Muestra la guía activa, de dónde viene y si la rama sigue al día. |
 | `supcoflow guia usar --origen repo\|agente` | Elige cuál guía queda activa. |
 | `supcoflow describir --json` | Todo el contrato (comandos, flags, facultades de la clave, códigos) en una línea de JSON. |
@@ -84,17 +84,19 @@ los que escriben aceptan `--dry-run`.
 ## La guía
 
 La guía le cuenta al chat qué hace cada pantalla de tu producto. Vive en el repo, en
-`.supcoflow/guia.md` (en la raíz), y la publicás desde el commit que ya está en la rama principal.
-El flujo, en este orden:
+`.supcoflow/guia.md` (en la raíz). El flujo, en este orden:
 
 1. `supcoflow guia revisar`: la revisa contra el motor sin publicar nada (si está mal armada, sale 3 con la línea de cada error).
-2. Commit y push a la rama principal del repo.
-3. `supcoflow guia publicar`: manda la huella del archivo y el motor la compara con la de la rama. Si todavía no
-   está subida (o la rama tiene otra), sale 5: subí la guía a la rama principal y volvé a correr.
+2. `supcoflow guia publicar`: sube el archivo directo y queda como guía activa. Manda también el commit y la rama de tu
+   clon (`git rev-parse HEAD`, si hay git y commits; si no, va sin commit): son declarados por la terminal, no
+   verificados en GitHub, y así se muestran. Repetir con el mismo archivo no duplica.
+3. Opcional, `supcoflow guia publicar --desde-github`: no sube el archivo; manda su huella y el motor la compara con la
+   de la rama principal de GitHub (commit verificado). Si todavía no está subida (o la rama tiene otra), sale 5:
+   subí la guía a la rama principal y volvé a correr.
 
 `supcoflow guia ver` muestra la guía activa y si la rama sigue al día (`al_dia` en el JSON);
 `supcoflow guia usar --origen repo|agente` elige cuál queda activa cuando hay una del repo y otra de nuestro agente.
-Todos toman el repo del `origin`, o `--repo owner/repo` (con `revisar` y `publicar`, sin clon local de ese repo sale 3 `falta_guia`: la guía se lee del archivo); `revisar`, `publicar` y `usar` aceptan `--dry-run`.
+Todos toman el repo del `origin`, o `--repo owner/repo` (con `revisar` y `publicar`, sin clon local de ese repo sale 3 `falta_guia`: la guía se lee del archivo); `revisar`, `publicar` y `usar` aceptan `--dry-run`; `--desde-github` es sólo de `publicar`.
 
 El formato de `.supcoflow/guia.md`:
 

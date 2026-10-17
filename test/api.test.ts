@@ -214,9 +214,16 @@ describe("los pedidos de la guía (bloque 5)", () => {
     expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
     expect(await vistos[0].json()).toEqual({ contenido: "## A\n" });
   });
+  it("publicarGuia directa: manda {contenido, commit, rama}", async () => {
+    const vistos: Request[] = [];
+    await publicarGuia(API, CLAVE, ID, { contenido: "## A\n", commit: "a".repeat(40), rama: "main" }, falso(200, { ok: true }, vistos));
+    expect(new URL(vistos[0].url).pathname).toBe("/api/proyectos/p%2F1/guia/publicar");
+    expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+    expect(await vistos[0].json()).toEqual({ contenido: "## A\n", commit: "a".repeat(40), rama: "main" });
+  });
   it("publicarGuia: POST …/guia/publicar con {huella}", async () => {
     const vistos: Request[] = [];
-    await publicarGuia(API, CLAVE, ID, "h".repeat(64), falso(409, { error: "guia_no_subida" }, vistos));
+    await publicarGuia(API, CLAVE, ID, { huella: "h".repeat(64) }, falso(409, { error: "guia_no_subida" }, vistos));
     expect(vistos[0].method).toBe("POST");
     expect(new URL(vistos[0].url).pathname).toBe("/api/proyectos/p%2F1/guia/publicar");
     expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
