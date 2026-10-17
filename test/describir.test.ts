@@ -9,7 +9,7 @@ describe("describir --json", () => {
     expect(r.json.ok).toBe(true);
     const comandos = r.json.comandos as { nombre: string }[];
     expect(comandos.map((c) => c.nombre).slice(0, 7)).toEqual(["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver"]);
-    expect(comandos).toHaveLength(20);
+    expect(comandos).toHaveLength(24);
     expect(Object.keys(r.json.codigos as object)).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
     const facultades = r.json.facultades as { nombre: string; con_api_key: boolean }[];
     const sin = facultades.filter((f) => !f.con_api_key).map((f) => f.nombre);
@@ -39,9 +39,25 @@ describe("describir --json", () => {
     expect(DESCRIPCION.comandos.find((c) => c.nombre === "claves crear")!.codigos).toContain(4);
   });
 
+  it("los cuatro comandos de la guía: flags, un ejemplo, y los códigos (el 5 sólo en publicar)", () => {
+    const g = (n: string) => DESCRIPCION.comandos.find((x) => x.nombre === n)!;
+    for (const n of ["guia revisar", "guia publicar", "guia ver", "guia usar"]) {
+      expect(g(n), n).toBeDefined();
+      expect(g(n).flags.length, n).toBeGreaterThan(0);
+      expect(g(n).ejemplos, n).toHaveLength(1);
+      expect(g(n).codigos, n).toContain(4);
+      expect(g(n).codigos.includes(5), n).toBe(n === "guia publicar");
+    }
+    const prender = DESCRIPCION.comandos.find((c) => c.nombre === "chat prender")!.resumen;
+    expect(prender).toMatch(/guía vigente/);
+    expect(prender).not.toMatch(/Sin skill aprobada/);
+    expect(g("guia usar").flags.join(" ")).toContain("--origen");
+    expect(g("guia publicar").resumen).toMatch(/rama principal/);
+  });
+
   it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
     const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver", "catalogo"].includes(c.nombre));
-    expect(configurar).toHaveLength(12);
+    expect(configurar).toHaveLength(16);
     for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
   });
 
@@ -54,10 +70,10 @@ describe("describir --json", () => {
     }
   });
 
-  it("la versión es la del package.json, y es la 0.3.0", () => {
+  it("la versión es la del package.json, y es la 0.4.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.3.0");
+    expect(pkg.version).toBe("0.4.0");
   });
 
   it("cabe en una línea de JSON", () => {

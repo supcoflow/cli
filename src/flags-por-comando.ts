@@ -4,6 +4,7 @@
 const DE_CONFIGURAR_CON_REPO = [
   "configuracion", "chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
   "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
+  "guia revisar", "guia publicar", "guia ver", "guia usar",
 ] as const;
 
 export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: readonly string[]; texto: string }[] = [
@@ -19,6 +20,7 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
   { flags: ["permitir"], comandos: ["datos fijar"], texto: "--permitir es de `supcoflow datos fijar`." },
   { flags: ["modo"], comandos: ["politica fijar"], texto: "--modo es de `supcoflow politica fijar`." },
   { flags: ["nombre", "guardarEn"], comandos: ["claves crear"], texto: "--nombre y --guardar-en son de `supcoflow claves crear`." },
+  { flags: ["origen"], comandos: ["guia usar"], texto: "--origen es de `supcoflow guia usar`." },
   { flags: ["id"], comandos: ["claves revocar"], texto: "--id es de `supcoflow claves revocar`." },
 ];
 

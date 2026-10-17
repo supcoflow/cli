@@ -7,17 +7,19 @@ export type Flags = {
   sitio: string | null; titulo: string | null; saludo: string | null; archivo: string | null; permitir: string | null;
   modo: string | null; nombre: string | null; guardarEn: string | null; id: string | null;
   tema: string[];
+  origen: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
   "repo conectar", "proyecto crear", "proyecto ver",
   "chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
   "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
+  "guia revisar", "guia publicar", "guia ver", "guia usar",
 ] as const;
 // Sólo estas primeras palabras admiten una segunda: cualquier otro par sigue siendo «de más».
 const PRIMERAS_PALABRAS = new Set(COMANDOS_COMPUESTOS.map((c) => c.split(" ")[0]));
 const FLAGS_CON_VALOR = [
-  "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id",
+  "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id", "origen",
 ] as const;
 
 // strict: un flag mal escrito (`--estart`) no se ignora en silencio: un asistente creería que
@@ -47,6 +49,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
         nombre: { type: "string" },
         "guardar-en": { type: "string" },
         id: { type: "string" },
+        origen: { type: "string" },
         tema: { type: "string", multiple: true },
       },
       tokens: true,
@@ -109,6 +112,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       nombre: v.nombre ?? null,
       guardarEn: v["guardar-en"] ?? null,
       id: v.id ?? null,
+      origen: v.origen ?? null,
       tema: v.tema ?? [],
     },
   };

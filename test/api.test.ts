@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { API_DE_PRODUCCION, buscarProyecto, canjear, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
+import { API_DE_PRODUCCION, buscarProyecto, canjear, elegirOrigen, leerGuia, publicarGuia, revisarGuia, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
 const API = new URL("http://localhost:3000");
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
@@ -200,5 +200,45 @@ describe("la versión que viaja en el user-agent", () => {
     const enApi = /^const VERSION = "([^"]+)";/m.exec(fuente)?.[1];
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(enApi).toBe(pkg.version);
+  });
+});
+
+describe("los pedidos de la guía (bloque 5)", () => {
+  const ID = "p/1";
+  it("revisarGuia: POST …/guia/revisar con {contenido} y Bearer", async () => {
+    const vistos: Request[] = [];
+    const r = await revisarGuia(API, CLAVE, ID, "## A\n", falso(200, { ok: true, secciones: 1 }, vistos));
+    expect(r).toEqual({ status: 200, cuerpo: { ok: true, secciones: 1 } });
+    expect(vistos[0].method).toBe("POST");
+    expect(new URL(vistos[0].url).pathname).toBe("/api/proyectos/p%2F1/guia/revisar");
+    expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+    expect(await vistos[0].json()).toEqual({ contenido: "## A\n" });
+  });
+  it("publicarGuia: POST …/guia/publicar con {huella}", async () => {
+    const vistos: Request[] = [];
+    await publicarGuia(API, CLAVE, ID, "h".repeat(64), falso(409, { error: "guia_no_subida" }, vistos));
+    expect(vistos[0].method).toBe("POST");
+    expect(new URL(vistos[0].url).pathname).toBe("/api/proyectos/p%2F1/guia/publicar");
+    expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+    expect(await vistos[0].json()).toEqual({ huella: "h".repeat(64) });
+  });
+  it("leerGuia: GET …/guia?comprobar=1 sin cuerpo", async () => {
+    const vistos: Request[] = [];
+    await leerGuia(API, CLAVE, ID, falso(200, { guia: null, otra: null }, vistos));
+    expect(vistos[0].method).toBe("GET");
+    const u = new URL(vistos[0].url);
+    expect([u.pathname, u.search]).toEqual(["/api/proyectos/p%2F1/guia", "?comprobar=1"]);
+    expect(vistos[0].headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+  });
+  it("elegirOrigen: POST …/guia/origen con {origen}", async () => {
+    const vistos: Request[] = [];
+    await elegirOrigen(API, CLAVE, ID, "agente", falso(409, { error: "sin_guia_del_agente" }, vistos));
+    expect(vistos[0].method).toBe("POST");
+    expect(new URL(vistos[0].url).pathname).toBe("/api/proyectos/p%2F1/guia/origen");
+    expect(await vistos[0].json()).toEqual({ origen: "agente" });
+  });
+  it("una clave rota es 401 y un 5xx es motor_inalcanzable, como en los demás pedidos", async () => {
+    await expect(leerGuia(API, CLAVE, ID, falso(401, { error: "x" }))).rejects.toMatchObject({ error: "clave_invalida" });
+    await expect(revisarGuia(API, CLAVE, ID, "", falso(503, { error: "x" }))).rejects.toMatchObject({ error: "motor_inalcanzable" });
   });
 });

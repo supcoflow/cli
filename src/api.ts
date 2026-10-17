@@ -24,9 +24,9 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.3.0); sólo identifica a la terminal
+// A mano a propósito: tiene que coincidir con package.json (0.4.0); sólo identifica a la terminal
 // en los logs del motor, no decide nada.
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -347,4 +347,28 @@ export async function esClaveDeConsultaDelProyecto(api: URL, clave: string, proy
   if (r.status >= 500) throw sinServicio(r.status);
   if (r.status !== 200) throw inesperada(r.status);
   return r.cuerpo.via === "clave_de_consulta" && r.cuerpo.proyecto === proyectoId;
+}
+
+// ---- La guía (bloque 5) ----
+
+// Devuelven la respuesta entera: qué significa cada 409/422 lo decide el comando (`guia_no_subida` es
+// un código de salida propio; `guia_mal_armada` lleva la lista de errores por línea).
+const rutaDeLaGuia = (proyectoId: string) => `/api/proyectos/${encodeURIComponent(proyectoId)}/guia`;
+
+export function revisarGuia(api: URL, clave: string, proyectoId: string, contenido: string, f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/revisar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ contenido }) }, f);
+}
+
+export function publicarGuia(api: URL, clave: string, proyectoId: string, huella: string, f: Fetch): Promise<Respuesta> {
+  // Detrás, el motor acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas.
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ huella }) }, f, PLAZO_DE_ALTA_MS);
+}
+
+// Siempre con `comprobar=1`: `guia ver` quiere el `al_dia` de la rama; el motor lo ignora si el origen no es el repo.
+export function leerGuia(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}?comprobar=1`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen: "repo" | "agente", f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/origen`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ origen }) }, f);
 }

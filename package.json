@@ -1,6 +1,6 @@
 {
   "name": "supcoflow",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "La terminal de Supcoflow: iniciar sesión y manejar el chat de soporte desde la consola o un asistente.",
   "type": "module",
   "bin": { "supcoflow": "dist/cli.js" },

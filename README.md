@@ -26,6 +26,10 @@ npx supcoflow login
 | `supcoflow repo conectar` | Conecta el repo de esta carpeta con la App de GitHub: te da un enlace, lo confirmás en la consola. Sin terminal, `--start` y después `--wait`, como `login`. |
 | `supcoflow proyecto crear` | Crea (o reusa) el proyecto del repo ya conectado y lo anota en `.supcoflow/proyecto.json`. Si el motor no deduce los comandos, `--install "…" --test "…"`. |
 | `supcoflow proyecto ver` | El proyecto del repo: rama, comandos y el estado de la App de GitHub. |
+| `supcoflow guia revisar` | Revisa `.supcoflow/guia.md` contra el motor sin publicar nada. |
+| `supcoflow guia publicar` | Publica la guía del repo: manda su huella y el motor la compara con la de la rama principal. |
+| `supcoflow guia ver` | Muestra la guía activa, de dónde viene y si la rama sigue al día. |
+| `supcoflow guia usar --origen repo\|agente` | Elige cuál guía queda activa. |
 | `supcoflow describir --json` | Todo el contrato (comandos, flags, facultades de la clave, códigos) en una línea de JSON. |
 
 `supcoflow --help` (o `supcoflow <comando> --help`) muestra la ayuda con ejemplos. Los comandos de
@@ -68,7 +72,7 @@ los que escriben aceptan `--dry-run`.
 |---|---|
 | `supcoflow catalogo` | Qué se puede configurar y con qué valores. |
 | `supcoflow configuracion` | Chat, sitios, marca y acuerdo de datos del proyecto. |
-| `supcoflow chat prender` / `chat apagar` | Prende o apaga el chat (sin skill aprobada, prender sale 4). |
+| `supcoflow chat prender` / `chat apagar` | Prende o apaga el chat (hace falta una guía: publicá la del repo con `supcoflow guia publicar` o generá y aprobá la de nuestro agente en Brain). |
 | `supcoflow chat marca --titulo "Ayuda" --tema acento=#0a7` | Título, saludo y colores; lo no nombrado queda igual. |
 | `supcoflow chat logo --archivo logo.png` | Sube el logo (.png, .jpg o .webp, hasta 200 KB). |
 | `supcoflow sitios agregar\|quitar --sitio https://app.ejemplo.com` | Sitios desde los que carga el chat. |
@@ -76,6 +80,40 @@ los que escriben aceptan `--dry-run`.
 | `supcoflow politica fijar --modo guardar` | Qué hace el motor con un problema que llega por el chat: `relevar` (gasta) o `guardar`. Guardar frena sólo lo automático del chat; una persona puede pedir el relevamiento desde la consola, y cuesta. |
 | `supcoflow claves crear --nombre ci --guardar-en ~/ci.key` | Clave de consulta para CI: el secreto queda sólo en ese archivo (0600, fuera de un repo), nunca en la salida. |
 | `supcoflow claves listar` / `claves revocar --id cla_…` | Ver y revocar claves de consulta. |
+
+## La guía
+
+La guía le cuenta al chat qué hace cada pantalla de tu producto. Vive en el repo, en
+`.supcoflow/guia.md` (en la raíz), y la publicás desde el commit que ya está en la rama principal.
+El flujo, en este orden:
+
+1. `supcoflow guia revisar`: la revisa contra el motor sin publicar nada (si está mal armada, sale 3 con la línea de cada error).
+2. Commit y push a la rama principal del repo.
+3. `supcoflow guia publicar`: manda la huella del archivo y el motor la compara con la de la rama. Si todavía no
+   está subida (o la rama tiene otra), sale 5: subí la guía a la rama principal y volvé a correr.
+
+`supcoflow guia ver` muestra la guía activa y si la rama sigue al día (`al_dia` en el JSON);
+`supcoflow guia usar --origen repo|agente` elige cuál queda activa cuando hay una del repo y otra de nuestro agente.
+Todos toman el repo del `origin`, o `--repo owner/repo` (con `revisar` y `publicar`, sin clon local de ese repo sale 3 `falta_guia`: la guía se lee del archivo); `revisar`, `publicar` y `usar` aceptan `--dry-run`.
+
+El formato de `.supcoflow/guia.md`:
+
+```markdown
+# Guía de Mi App            ← opcional; se ignora
+
+## Facturas                 ← una sección por pantalla o función (1 a 60). Nombre: 1–120 caracteres
+Para qué sirve: Ver y pagar las facturas del mes.             ← obligatorio, 1–600
+Qué puede hacer el usuario: Descargar el PDF, pagar con       ← obligatorio, 1–600; puede seguir
+tarjeta y ver el historial.                                       en las líneas de abajo
+Problemas comunes:                                            ← opcional; hasta 10, cada uno 1–300
+- El botón Pagar no responde con tarjetas de débito.
+- El PDF sale en blanco en Safari.
+```
+
+- Las etiquetas se reconocen al principio de la línea, sin distinguir mayúsculas y con o sin tildes
+  («Para que sirve:» vale). Una línea que no es etiqueta continúa el campo anterior (se une con un espacio).
+- Texto antes del primer `## ` que no sea el `# ` del título → error. Una etiqueta repetida en una sección →
+  error. Una línea con `<` o `>` → error. Más de 64 KB → `guia_muy_grande`.
 
 ## El contrato
 
@@ -86,7 +124,7 @@ Pensado para que lo lea un programa, no sólo una persona:
 - **Sin preguntas sin terminal interactiva** (o con `--json`): si falta un dato, sale 3 diciendo qué
   flag usar. `supcoflow login` sin terminal sale 3 y te indica el camino en dos pasos.
 - **`--dry-run`** donde se puede simular (`login`, `login --start`, `logout`, `repo conectar --start`,
-  `proyecto crear`). `login --wait
+  `proyecto crear`, `guia revisar`, `guia publicar`, `guia usar`). `login --wait
   --dry-run` sale 3: sondear consume el código y no hay cómo simularlo.
 
 | Código | Quiere decir |

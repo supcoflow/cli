@@ -8,11 +8,12 @@ import {
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-  buscarProyecto, canjear, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto,
-  listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, type Yo,
+  buscarProyecto, canjear, configurar, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
+  listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, type Yo,
 } from "./api.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
 import type { DepsDeClaves } from "./comandos/claves.ts";
+import type { DepsDeGuia } from "./comandos/guia.ts";
 import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
@@ -366,6 +367,7 @@ export type Entorno = {
   conexion: DepsDeConexion;
   proyecto: DepsDeProyecto;
   configurar: DepsDeCatalogo;
+  guia: DepsDeGuia;
   claves: DepsDeClaves;
 };
 
@@ -454,6 +456,11 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       subirLogo: (a, clave, id, archivo) => subirLogo(a, clave, id, archivo, fetch),
       leerArchivoChico,
       leerCatalogo: (a, clave) => leerCatalogo(a, clave, fetch),
+    },
+    guia: {
+      ...configurarEnElMotor,
+      leerArchivoChico, fetch,
+      revisar: revisarGuia, publicar: publicarGuia, ver: leerGuia, elegir: elegirOrigen,
     },
     claves: {
       ...configurarEnElMotor,
