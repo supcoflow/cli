@@ -125,7 +125,8 @@ Problemas comunes:                                            ← opcional; hast
 copies a mano: un id mal copiado deja el chat invisible sin ningún error). No escribe archivos de la app:
 
 1. El paquete con su versión exacta (`npm i @supcoflow/chat@… --save-exact`, o lo mismo con tu gestor).
-2. **Next.js (App Router):** un archivo envoltorio, por ejemplo `app/chat-de-soporte.tsx`, con el contenido
+2. **Next.js (App Router):** un archivo envoltorio en la ruta que sugiere el motor
+   (`app/_supcoflow/chat-de-soporte.tsx`; si la app usa `src/app`, dentro de `src/app`), con el contenido
    tal cual. Hace falta porque el componente del chat usa hooks de React y no trae `"use client"`, y un
    `layout.tsx` es de servidor por defecto: importarlo directo ahí no anda. El envoltorio es esa directiva
    más el componente con los ids.
