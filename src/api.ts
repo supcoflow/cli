@@ -377,3 +377,39 @@ export function leerGuia(api: URL, clave: string, proyectoId: string, f: Fetch):
 export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen: "repo" | "agente", f: Fetch): Promise<Respuesta> {
   return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/origen`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ origen }) }, f);
 }
+
+// ---- El widget (bloque 6) ----
+
+export type Widget = {
+  tenant_id: string; project_id: string; backend_url: string;
+  paquete: "@supcoflow/chat"; version: string; instalar: string;
+  nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; contenido: string; uso: string };
+  script: { estado: "disponible_sin_soporte"; linea: string };
+  csp: string;
+};
+
+// Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
+// ser algo a medias. `contenido` se guarda tal cual, sin tocarlo: los ids ya vienen puestos por el motor.
+function aWidget(v: Record<string, unknown>, status: number): Widget {
+  const n = (typeof v.nextjs === "object" && v.nextjs !== null ? v.nextjs : {}) as Record<string, unknown>;
+  const s = (typeof v.script === "object" && v.script !== null ? v.script : {}) as Record<string, unknown>;
+  const [tenantId, projectId, backendUrl, version, instalar, csp] =
+    [v.tenant_id, v.project_id, v.backend_url, v.version, v.instalar, v.csp].map(texto);
+  const [archivo, contenido, uso] = [n.archivo_sugerido, n.contenido, n.uso].map(texto);
+  const linea = texto(s.linea);
+  if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
+    || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
+    || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
+  return {
+    tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, paquete: "@supcoflow/chat", version, instalar,
+    nextjs: { estado: n.estado, archivo_sugerido: archivo, contenido, uso },
+    script: { estado: "disponible_sin_soporte", linea },
+    csp,
+  };
+}
+
+export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Widget> {
+  const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/widget`, { method: "GET" }, f);
+  if (r.status !== 200) throw rechazada(r);
+  return aWidget(r.cuerpo, r.status);
+}

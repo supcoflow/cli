@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { API_DE_PRODUCCION, buscarProyecto, canjear, elegirOrigen, leerGuia, publicarGuia, revisarGuia, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
+import { API_DE_PRODUCCION, buscarProyecto, canjear, elegirOrigen, leerGuia, leerWidget, publicarGuia, revisarGuia, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
 const API = new URL("http://localhost:3000");
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
@@ -247,5 +247,35 @@ describe("los pedidos de la guía (bloque 5)", () => {
   it("una clave rota es 401 y un 5xx es motor_inalcanzable, como en los demás pedidos", async () => {
     await expect(leerGuia(API, CLAVE, ID, falso(401, { error: "x" }))).rejects.toMatchObject({ error: "clave_invalida" });
     await expect(revisarGuia(API, CLAVE, ID, "", falso(503, { error: "x" }))).rejects.toMatchObject({ error: "motor_inalcanzable" });
+  });
+});
+
+const WIDGET = {
+  tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
+  paquete: "@supcoflow/chat", version: "2.2.1", instalar: "npm i @supcoflow/chat@2.2.1 --save-exact",
+  nextjs: { estado: "probando", archivo_sugerido: "app/supcoflow-chat.tsx", contenido: '"use client";\n', uso: "<SupcoflowChat />" },
+  script: { estado: "disponible_sin_soporte", linea: "<script src=\"x\"></script>" },
+  csp: "connect-src 'self' https://chat.supcoflow.dev;",
+};
+
+describe("leerWidget", () => {
+  it("GET con Bearer a /api/proyectos/{id}/widget y devuelve la forma validada", async () => {
+    const vistos: Request[] = [];
+    expect(await leerWidget(API, CLAVE, "proj_1", falso(200, WIDGET, vistos))).toEqual(WIDGET);
+    expect(new URL(vistos[0]!.url).pathname).toBe("/api/proyectos/proj_1/widget");
+    expect(vistos[0]!.method).toBe("GET");
+    expect(vistos[0]!.headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+  });
+  it("una forma que no valida (campo faltante, estado raro, script sin linea) es respuesta_inesperada", async () => {
+    const sin = { ...WIDGET, csp: undefined };
+    await expect(leerWidget(API, CLAVE, "p", falso(200, sin))).rejects.toMatchObject({ codigo: 1, error: "respuesta_inesperada" });
+    await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, nextjs: { ...WIDGET.nextjs, estado: "raro" } }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+    await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, script: {} }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+    await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, paquete: "otro" }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+  });
+  it("404 sale como entrada inválida con el mensaje del motor tapado", async () => {
+    await expect(leerWidget(API, CLAVE, "p", falso(404, { error: "proyecto_inexistente", message: `no está ${CLAVE}` })))
+      .rejects.toSatisfy((e: { error: string; message: string; codigo: number }) =>
+        e.error === "proyecto_inexistente" && e.codigo === 3 && !e.message.includes(CLAVE));
   });
 });
