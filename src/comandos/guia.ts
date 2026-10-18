@@ -3,11 +3,11 @@
 // (`.supcoflow/guia.md`). La terminal NO decide qué es una guía buena —eso lo decide el parser del motor—;
 // lee el archivo, manda UN pedido y traduce la respuesta a los códigos de salida del contrato.
 import path from "node:path";
-import type { elegirOrigen, leerGuia, publicarGuia, Respuesta, revisarGuia, Fetch } from "../api.ts";
+import type { CuerpoDePublicar, elegirOrigen, leerGuia, publicarGuia, Respuesta, revisarGuia, Fetch } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
 import { huellaDeGuia, MAX_BYTES_DE_LA_GUIA, RUTA_DE_LA_GUIA } from "../guia.ts";
-import { repoPedido } from "../repo-local.ts";
+import { repoPedido, type Git } from "../repo-local.ts";
 import { desenlace, fallo, rutaDe } from "./configurar.ts";
 import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-repo.ts";
 
@@ -15,6 +15,9 @@ export type DepsDeGuia = DepsDelProyectoDelRepo & {
   leerArchivoChico(p: string, tope: number): { bytes: Uint8Array } | { error: string };
   // Las funciones de `api.ts` piden el `fetch`; se inyecta acá para que el test no toque la red.
   fetch: Fetch;
+  // El git de lo que la terminal DECLARA (commit y rama): aparte de `git` para poder darle un plazo corto y para que
+  // un test no lance procesos.
+  gitDeclarado: Git;
   revisar: typeof revisarGuia; publicar: typeof publicarGuia; ver: typeof leerGuia; elegir: typeof elegirOrigen;
 };
 
@@ -31,7 +34,7 @@ const NOMBRE_DEL_ORIGEN = { repo: "la del repo", agente: "la de nuestro agente" 
 // ─── El archivo local ───
 // Se busca en la raíz de ESTE clon, nunca en el cwd: parado en una subcarpeta sigue siendo la guía del repo.
 // Con `--repo` y sin clon de ese repo no hay dónde leerla (publicar lee la rama, pero la huella sale del archivo).
-async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promise<{ ok: true; texto: string } | { ok: false; resultado: Resultado }> {
+async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promise<{ ok: true; texto: string; raiz: string } | { ok: false; resultado: Resultado }> {
   let raiz: string | null;
   try {
     raiz = (await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd })).raiz;
@@ -50,7 +53,7 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
   try {
     // ignoreBOM: el BOM se CONSERVA en el texto; quitarlo es regla de la huella (`huellaDeGuia`), no de la lectura.
     // fatal: un byte inválido no se reemplaza en silencio, porque la huella de GitHub no coincidiría nunca.
-    return { ok: true, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
+    return { ok: true, raiz, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
   } catch {
     return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `${RUTA_DE_LA_GUIA} no es UTF-8 válido.`) };
   }
@@ -110,27 +113,66 @@ export async function guiaRevisar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dr
   }
 }
 
-export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun">): Promise<Resultado> {
+// Commit y rama que la terminal DECLARA: son del clon donde está el archivo, no verificados contra GitHub. Cualquier
+// falla (sin git, sin commits, HEAD suelto, plazo vencido) devuelve vacío: declarar es un extra que nunca bloquea la
+// subida ni pregunta nada, y lo que git imprima no sale a la terminal.
+async function declarado(d: DepsDeGuia, raiz: string): Promise<{ commit?: string; rama?: string }> {
+  const leer = async (args: string[]) => {
+    try {
+      const r = await d.gitDeclarado(args, raiz);
+      return r.codigo === 0 ? r.stdout.trim() : null;
+    } catch {
+      return null;
+    }
+  };
+  const commit = await leer(["rev-parse", "HEAD"]);
+  // Sin un commit de 40 hex no se manda ni la rama: una rama sin commit no dice de dónde salió la guía.
+  if (commit === null || !/^[0-9a-f]{40}$/.test(commit)) return {};
+  const rama = await leer(["rev-parse", "--abbrev-ref", "HEAD"]);
+  // «HEAD» a secas es la cabeza suelta: no es una rama.
+  return rama !== null && rama !== "" && rama !== "HEAD" ? { commit, rama } : { commit };
+}
+
+export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun"> & { desdeGithub?: boolean }): Promise<Resultado> {
   const g = await leerLaGuia(d, flags);
   if (!g.ok) return g.resultado;
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
-  // La huella es del archivo local TAL CUAL (con BOM y \r\n): normalizarla es regla de `huellaDeGuia`.
-  const huella = huellaDeGuia(g.texto);
+  const github = flags.desdeGithub === true;
+  // La vía de GitHub manda la huella del archivo local TAL CUAL (con BOM y \r\n: normalizarla es regla de
+  // `huellaDeGuia`). La directa manda el contenido crudo y el motor calcula la huella: la terminal no la necesita.
+  const huella = github ? huellaDeGuia(g.texto) : null;
+  const decl = github ? {} : await declarado(d, g.raiz);
+  const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : { contenido: g.texto, ...decl };
+  const cuando = decl.commit ? `commit ${decl.commit.slice(0, 7)}${decl.rama ? ` de ${cadena(decl.rama)}` : ""} declarado` : "sin commit";
+  // El JSON del dry-run pasa por la misma limpieza que el texto (control primero, secretos después): la rama la
+  // decide quien escribió el clon, y un ESC en ella no debe llegar a la terminal por ninguna de las dos salidas.
   if (flags.dryRun) {
-    const haria = `POST ${rutaDe(p.proyecto, "/guia/publicar")} con la huella ${huella.slice(0, 12)}…`;
-    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, huella, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
+    const haria = huella !== null
+      ? `POST ${rutaDe(p.proyecto, "/guia/publicar")} con la huella ${huella.slice(0, 12)}…`
+      : `POST ${rutaDe(p.proyecto, "/guia/publicar")} con el contenido (${new TextEncoder().encode(g.texto).length} bytes), ${cuando}`;
+    const json = huella !== null ? { ok: true, dry_run: true, huella, haria } : { ok: true, dry_run: true, commit: decl.commit ? cadena(decl.commit) : null, rama: decl.rama ? cadena(decl.rama) : null, haria };
+    return { codigo: SALIDA.ok, json, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
   }
   try {
-    return desenlaceDeGuia(await d.publicar(d.api, p.clave, p.proyecto.id, huella, d.fetch), (c) => {
+    return desenlaceDeGuia(await d.publicar(d.api, p.clave, p.proyecto.id, cuerpo, d.fetch), (c) => {
       const guia = (c.guia ?? {}) as Record<string, unknown>;
       const ya = c.ya_publicada === true;
       const rem = c.reemplaza as { origen?: unknown; version?: unknown } | null | undefined;
       const reemplaza = !ya && rem && rem.origen === "agente" && typeof rem.version === "number" ? ` (reemplaza a la de nuestro agente v${rem.version})` : "";
-      const base = `commit ${corto(guia.commit)} de ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
-      // Republicar re-activa la guía del repo aunque antes rigiera la de nuestro agente: «sigue siendo» mentiría en ese caso.
-      const texto = ya ? `Ya estaba publicada: ${base}. Quedó como guía activa.` : `Guía publicada: ${base}. Es la guía activa${reemplaza}.`;
-      return { codigo: SALIDA.ok, json: { ok: true, guia: c.guia ?? null, ya_publicada: ya, reemplaza: c.reemplaza ?? null }, texto };
+      const json = { ok: true, guia: c.guia ?? null, ya_publicada: ya, reemplaza: c.reemplaza ?? null };
+      if (github) {
+        const base = `commit ${corto(guia.commit)} de ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
+        // Republicar re-activa la guía del repo aunque antes rigiera la de nuestro agente: «sigue siendo» mentiría en ese caso.
+        const texto = ya ? `Ya estaba publicada: ${base}. Quedó como guía activa.` : `Guía publicada: ${base}. Es la guía activa${reemplaza}.`;
+        return { codigo: SALIDA.ok, json, texto };
+      }
+      // El commit se muestra como lo que es: lo que la terminal dijo, no lo que GitHub confirmó.
+      const origen = decl.commit ? `commit ${decl.commit.slice(0, 7)} declarado por la terminal (no verificado en GitHub)` : "sin commit";
+      const texto = ya
+        ? `Ya estaba subida: ${secciones(guia.secciones)}. Quedó como guía activa; ${origen}.`
+        : `Guía subida: ${secciones(guia.secciones)}. Es la guía activa${reemplaza}; ${origen}.`;
+      return { codigo: SALIDA.ok, json: { ...json, commit_declarado: decl.commit ?? null }, texto };
     });
   } catch (e) {
     return resultadoDeFallo(e);
@@ -151,10 +193,20 @@ export async function guiaVer(d: DepsDeGuia, flags: Pick<Flags, "repo">): Promis
       const lineas: string[] = [];
       if (guia.origen === "repo") {
         lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.repo} (versión ${guia.version}, ${secciones(guia.secciones)}).`);
-        lineas.push(`Procedencia: ${cadena(guia.repo)}, rama ${cadena(guia.rama)}, commit ${corto(guia.commit)}, publicada por ${cadena(guia.publicada_por)}.`);
-        if (alDia === true) lineas.push("Está al día con la rama.");
-        else if (alDia === false) lineas.push("En la rama hay otra versión: corré `supcoflow guia publicar`.");
-        else lineas.push("No pude comprobar la rama ahora.");
+        if (guia.procedencia === "terminal") {
+          // Subida desde la terminal: el motor NO comparó nada contra GitHub a propósito (al_dia null), así que "no pude
+          // comprobar la rama" sería falso. Commit y rama son lo que declaró quien subió; el id crudo de quien publicó
+          // (usr_…) no le dice nada a una persona y la terminal no resuelve nombres: queda sólo en el JSON.
+          const commit = cadena(guia.commit), rama = cadena(guia.rama);
+          const partes = [cadena(guia.repo), rama !== "" ? `rama ${rama}` : "", commit !== "" ? `commit ${corto(commit)} (declarado)` : "sin commit declarado"].filter((x) => x !== "");
+          lineas.push(`Procedencia: ${partes.join(", ")}.`);
+          lineas.push("Subida desde la terminal; el commit es declarado, no verificado en GitHub.");
+        } else {
+          lineas.push(`Procedencia: ${cadena(guia.repo)}, rama ${cadena(guia.rama)}, commit ${corto(guia.commit)}, publicada por ${cadena(guia.publicada_por)}.`);
+          if (alDia === true) lineas.push("Está al día con la rama.");
+          else if (alDia === false) lineas.push("En la rama hay otra versión: corré `supcoflow guia publicar`.");
+          else lineas.push("No pude comprobar la rama ahora.");
+        }
       } else {
         lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.agente} (v${guia.version}, ${secciones(guia.secciones)}).`);
         lineas.push("Procedencia: la escribió nuestro agente y la aprobó una persona.");

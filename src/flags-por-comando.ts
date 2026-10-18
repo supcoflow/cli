@@ -21,6 +21,7 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
   { flags: ["modo"], comandos: ["politica fijar"], texto: "--modo es de `supcoflow politica fijar`." },
   { flags: ["nombre", "guardarEn"], comandos: ["claves crear"], texto: "--nombre y --guardar-en son de `supcoflow claves crear`." },
   { flags: ["origen"], comandos: ["guia usar"], texto: "--origen es de `supcoflow guia usar`." },
+  { flags: ["desdeGithub"], comandos: ["guia publicar"], texto: "--desde-github es de `supcoflow guia publicar`." },
   { flags: ["id"], comandos: ["claves revocar"], texto: "--id es de `supcoflow claves revocar`." },
 ];
 

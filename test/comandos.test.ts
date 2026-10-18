@@ -377,6 +377,8 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("guia ver", "origen")).not.toBeNull();
     expect(sin("guia publicar", "origen")).not.toBeNull();
     expect(sin("claves listar", "origen")).not.toBeNull();
+    expect(sin("guia revisar", "desdeGithub")).not.toBeNull();
+    expect(sin("guia ver", "desdeGithub")).not.toBeNull();
   });
   it("los flags de cada comando de configurar sí aplican", () => {
     expect(sin("sitios agregar", "sitio", "repo")).toBeNull();
@@ -389,6 +391,7 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("configuracion", "repo")).toBeNull();
     expect(sin("guia usar", "origen", "repo")).toBeNull();
     expect(sin("guia revisar", "repo")).toBeNull();
+    expect(sin("guia publicar", "desdeGithub", "repo")).toBeNull();
     expect(sin("proyecto ver", "repo")).toBeNull();
   });
 });

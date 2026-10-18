@@ -52,6 +52,8 @@ describe("describir --json", () => {
     expect(prender).toMatch(/guía vigente/);
     expect(prender).not.toMatch(/Sin skill aprobada/);
     expect(g("guia usar").flags.join(" ")).toContain("--origen");
+    expect(g("guia publicar").resumen).toMatch(/directo/);
+    expect(g("guia publicar").flags.join(" ")).toContain("--desde-github");
     expect(g("guia publicar").resumen).toMatch(/rama principal/);
   });
 
@@ -70,10 +72,10 @@ describe("describir --json", () => {
     }
   });
 
-  it("la versión es la del package.json, y es la 0.4.0", () => {
+  it("la versión es la del package.json, y es la 0.5.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.4.0");
+    expect(pkg.version).toBe("0.5.0");
   });
 
   it("cabe en una línea de JSON", () => {

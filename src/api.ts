@@ -24,9 +24,9 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.4.0); sólo identifica a la terminal
+// A mano a propósito: tiene que coincidir con package.json (0.5.0); sólo identifica a la terminal
 // en los logs del motor, no decide nada.
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -359,9 +359,14 @@ export function revisarGuia(api: URL, clave: string, proyectoId: string, conteni
   return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/revisar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ contenido }) }, f);
 }
 
-export function publicarGuia(api: URL, clave: string, proyectoId: string, huella: string, f: Fetch): Promise<Respuesta> {
-  // Detrás, el motor acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas.
-  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ huella }) }, f, PLAZO_DE_ALTA_MS);
+// Dos cuerpos para una sola ruta: `{contenido, commit?, rama?}` sube el archivo directo (commit y rama son lo que la
+// terminal DECLARA; el motor no los verifica) y `{huella}` es la vía de GitHub (`--desde-github`).
+export type CuerpoDePublicar = { huella: string } | { contenido: string; commit?: string; rama?: string };
+
+export function publicarGuia(api: URL, clave: string, proyectoId: string, cuerpo: CuerpoDePublicar, f: Fetch): Promise<Respuesta> {
+  // La vía de GitHub acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas (la directa no
+  // llama a GitHub, pero comparte el plazo para no tener dos reglas).
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f, PLAZO_DE_ALTA_MS);
 }
 
 // Siempre con `comprobar=1`: `guia ver` quiere el `al_dia` de la rama; el motor lo ignora si el origen no es el repo.

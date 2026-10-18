@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -201,8 +201,8 @@ export const DESCRIPCION: {
     },
     {
       nombre: "guia publicar",
-      resumen: "Publica la guía del repo: manda la huella de .supcoflow/guia.md y el motor la compara con la de la rama principal. Si todavía no está subida a esa rama (o es otra), sale 5: subí la guía a la rama principal y volvé a correr.",
-      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin clon local sale 3 falta_guia: la huella sale del archivo)", "--dry-run: dice la huella y qué pediría, sin pedir nada", "--json"],
+      resumen: "Sube .supcoflow/guia.md directo: manda el contenido y el commit y la rama que declara este clon (si hay git y commits; si no, sin commit). El motor la revisa y la deja como guía activa; el commit queda como «declarado por la terminal, no verificado en GitHub». Con --desde-github conserva la vía anterior: manda la huella y el motor la compara con la de la rama principal; si todavía no está subida a esa rama (o es otra), sale 5.",
+      flags: ["--desde-github: no sube el archivo; verifica contra la rama principal de GitHub (sale 5 guia_no_subida / guia_distinta si no coincide)", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin clon local sale 3 falta_guia: la guía se lee del archivo)", "--dry-run: dice qué mandaría (o la huella con --desde-github), sin pedir nada", "--json"],
       ejemplos: ["supcoflow guia publicar --json"],
       codigos: [0, 1, 2, 3, 4, 5],
     },
