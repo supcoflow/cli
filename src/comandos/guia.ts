@@ -193,10 +193,20 @@ export async function guiaVer(d: DepsDeGuia, flags: Pick<Flags, "repo">): Promis
       const lineas: string[] = [];
       if (guia.origen === "repo") {
         lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.repo} (versión ${guia.version}, ${secciones(guia.secciones)}).`);
-        lineas.push(`Procedencia: ${cadena(guia.repo)}, rama ${cadena(guia.rama)}, commit ${corto(guia.commit)}, publicada por ${cadena(guia.publicada_por)}.`);
-        if (alDia === true) lineas.push("Está al día con la rama.");
-        else if (alDia === false) lineas.push("En la rama hay otra versión: corré `supcoflow guia publicar`.");
-        else lineas.push("No pude comprobar la rama ahora.");
+        if (guia.procedencia === "terminal") {
+          // Subida desde la terminal: el motor NO comparó nada contra GitHub a propósito (al_dia null), así que "no pude
+          // comprobar la rama" sería falso. Commit y rama son lo que declaró quien subió; el id crudo de quien publicó
+          // (usr_…) no le dice nada a una persona y la terminal no resuelve nombres: queda sólo en el JSON.
+          const commit = cadena(guia.commit), rama = cadena(guia.rama);
+          const partes = [cadena(guia.repo), rama !== "" ? `rama ${rama}` : "", commit !== "" ? `commit ${corto(commit)} (declarado)` : "sin commit declarado"].filter((x) => x !== "");
+          lineas.push(`Procedencia: ${partes.join(", ")}.`);
+          lineas.push("Subida desde la terminal; el commit es declarado, no verificado en GitHub.");
+        } else {
+          lineas.push(`Procedencia: ${cadena(guia.repo)}, rama ${cadena(guia.rama)}, commit ${corto(guia.commit)}, publicada por ${cadena(guia.publicada_por)}.`);
+          if (alDia === true) lineas.push("Está al día con la rama.");
+          else if (alDia === false) lineas.push("En la rama hay otra versión: corré `supcoflow guia publicar`.");
+          else lineas.push("No pude comprobar la rama ahora.");
+        }
       } else {
         lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.agente} (v${guia.version}, ${secciones(guia.secciones)}).`);
         lineas.push("Procedencia: la escribió nuestro agente y la aprobó una persona.");

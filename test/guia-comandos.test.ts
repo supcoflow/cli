@@ -287,6 +287,28 @@ describe("guia ver", () => {
   it("sin proyecto: 4", async () => {
     expect((await guiaVer(deps({ buscarProyecto: async () => null }).d, { repo: null })).codigo).toBe(4);
   });
+  describe("subida desde la terminal (commit declarado)", () => {
+    const H = "a".repeat(40);
+    const term = { origen: "repo", procedencia: "terminal", version: 2, repo: "d/r", secciones: 3, publicada_por: "usr_123abc" };
+    const ver = (guia: object) => guiaVer(deps({ ver: async () => R(200, { guia, otra: null, rama: { al_dia: null, commit: null } }) }).d, { repo: null });
+    it("con commit y rama: lo declara, sin frase de rama ni id crudo", async () => {
+      const r = await ver({ ...term, commit: H, rama: "main" });
+      expect(r.codigo).toBe(0);
+      expect(r.texto).toContain("ubida desde la terminal; el commit es declarado, no verificado en GitHub");
+      expect(r.texto).toContain("commit aaaaaaa (declarado)");
+      expect(r.texto).toContain("rama main");
+      expect(r.texto).not.toContain("No pude comprobar");
+      expect(r.texto).not.toContain("usr_123abc");
+      expect(r.json).toMatchObject({ guia: { publicada_por: "usr_123abc" }, al_dia: null });
+    });
+    it("sin commit ni rama: sin comas vacías", async () => {
+      const r = await ver({ ...term, commit: null, rama: null });
+      expect(r.texto).toContain("sin commit declarado");
+      expect(r.texto).not.toMatch(/rama ,|commit ,|, ,|,\./);
+      expect(r.texto).not.toContain("No pude comprobar");
+      expect(r.texto).not.toContain("usr_123abc");
+    });
+  });
   it("texto de la procedencia sin caracteres de control", async () => {
     const r = await guiaVer(deps({ ver: async () => R(200, { guia: { ...repo, publicada_por: "a\u001b[31mna" }, otra: null }) }).d, { repo: null });
     sinControl(r.texto);
