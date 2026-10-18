@@ -188,6 +188,15 @@ describe("guia publicar (directa, por defecto)", () => {
     const dry = await guiaPublicar(d, { repo: null, dryRun: true });
     sinControl(dry.texto);
   });
+
+  it("el JSON del --dry-run de la vía directa limpia rama y commit igual que el texto", async () => {
+    const { d } = deps({ gitDeclarado: async (a) => ({ codigo: 0, stdout: a.includes("--abbrev-ref") ? `ra\u001b[2Jma-${CLAVE}\n` : HEAD }) });
+    const dry = await guiaPublicar(d, { repo: null, dryRun: true });
+    const json = dry.json as { rama: string; commit: string };
+    expect(json.rama).not.toMatch(/[\u0000-\u001f\u007f-\u009f]/);
+    expect(json.rama).not.toContain(CLAVE);
+    expect(json.commit).toBe(HEAD);
+  });
 });
 
 const G = { ...F, desdeGithub: true };

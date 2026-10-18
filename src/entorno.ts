@@ -225,25 +225,22 @@ export const correrReal: Correr = (bin, args, stdin, techoMs) =>
   });
 
 // `git` con entorno mínimo (sólo PATH): ni GIT_DIR ni GIT_CONFIG del shell desvían la lectura, y
-// SUPCOFLOW_TOKEN no le llega. Un git ausente (ENOENT) es «sin git», no un fallo.
-export const gitReal: Git = (args, cwd) =>
+// SUPCOFLOW_TOKEN no le llega. Un git ausente (ENOENT) es «sin git», no un fallo. El plazo es parámetro para no
+// duplicar la función: lo que git imprima nunca sale a la terminal, sólo el código y el stdout.
+const gitConPlazo = (plazoMs: number): Git => (args, cwd) =>
   new Promise((resolve) => {
-    execFile("git", args, { cwd, timeout: 5_000, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
+    execFile("git", args, { cwd, timeout: plazoMs, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
       if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
       const codigo = (e as NodeJS.ErrnoException).code;
       resolve({ codigo: typeof codigo === "number" ? codigo : null, stdout: "" });
     });
   });
 
+export const gitReal: Git = gitConPlazo(5_000);
+
 // El commit y la rama que la terminal DECLARA al subir la guía: 3 segundos (no 5) porque esto es un extra que nunca
-// debe hacer esperar a nadie, y sin salida a la terminal: lo que git imprima (avisos, errores) se descarta.
-export const gitRapido: Git = (args, cwd) =>
-  new Promise((resolve) => {
-    execFile("git", args, { cwd, timeout: 3_000, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
-      if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
-      resolve({ codigo: null, stdout: "" });
-    });
-  });
+// debe hacer esperar a nadie.
+export const gitRapido: Git = gitConPlazo(3_000);
 
 // `.supcoflow/proyecto.json` vive DENTRO del repo, y el repo puede ser un clon ajeno: su contenido lo
 // decide quien lo escribió. Por eso ni la carpeta ni el archivo se siguen si son enlaces (uno hacia

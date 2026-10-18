@@ -145,11 +145,13 @@ export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "d
   const decl = github ? {} : await declarado(d, g.raiz);
   const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : { contenido: g.texto, ...decl };
   const cuando = decl.commit ? `commit ${decl.commit.slice(0, 7)}${decl.rama ? ` de ${cadena(decl.rama)}` : ""} declarado` : "sin commit";
+  // El JSON del dry-run pasa por la misma limpieza que el texto (control primero, secretos después): la rama la
+  // decide quien escribió el clon, y un ESC en ella no debe llegar a la terminal por ninguna de las dos salidas.
   if (flags.dryRun) {
     const haria = huella !== null
       ? `POST ${rutaDe(p.proyecto, "/guia/publicar")} con la huella ${huella.slice(0, 12)}…`
       : `POST ${rutaDe(p.proyecto, "/guia/publicar")} con el contenido (${new TextEncoder().encode(g.texto).length} bytes), ${cuando}`;
-    const json = huella !== null ? { ok: true, dry_run: true, huella, haria } : { ok: true, dry_run: true, commit: decl.commit ?? null, rama: decl.rama ?? null, haria };
+    const json = huella !== null ? { ok: true, dry_run: true, huella, haria } : { ok: true, dry_run: true, commit: decl.commit ? cadena(decl.commit) : null, rama: decl.rama ? cadena(decl.rama) : null, haria };
     return { codigo: SALIDA.ok, json, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
   }
   try {
