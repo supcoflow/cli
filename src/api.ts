@@ -24,9 +24,9 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.5.0); sólo identifica a la terminal
+// A mano a propósito: tiene que coincidir con package.json (0.6.0); sólo identifica a la terminal
 // en los logs del motor, no decide nada.
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y

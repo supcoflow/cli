@@ -4,7 +4,7 @@ La terminal de [Supcoflow](https://app.supcoflow.dev): iniciar sesión y manejar
 desde la consola, o desde un asistente de código que corre comandos por vos.
 
 Trae iniciar y cerrar sesión, ver con qué cuenta estás, conectar el repo con la App de GitHub,
-crear su proyecto y configurar el chat.
+crear su proyecto, configurar el chat y ponerlo en la app.
 
 ## Instalar
 
@@ -30,6 +30,8 @@ npx supcoflow login
 | `supcoflow guia publicar` | Sube `.supcoflow/guia.md` directo (con el commit y la rama que declara tu clon, no verificados en GitHub). `--desde-github` verifica contra la rama principal en vez de subir el archivo. |
 | `supcoflow guia ver` | Muestra la guía activa, de dónde viene y si la rama sigue al día. |
 | `supcoflow guia usar --origen repo\|agente` | Elige cuál guía queda activa. |
+| `supcoflow widget` | Lo que hay que pegar en la app para tener el chat (ver «Poner el chat en la app»). |
+| `supcoflow instalacion anotar --skill 0.1.0` | Anota en `.supcoflow/instalacion.json` con qué versiones se instaló el chat. |
 | `supcoflow describir --json` | Todo el contrato (comandos, flags, facultades de la clave, códigos) en una línea de JSON. |
 
 `supcoflow --help` (o `supcoflow <comando> --help`) muestra la ayuda con ejemplos. Los comandos de
@@ -117,6 +119,40 @@ Problemas comunes:                                            ← opcional; hast
 - Texto antes del primer `## ` que no sea el `# ` del título → error. Una etiqueta repetida en una sección →
   error. Una línea con `<` o `>` → error. Más de 64 KB → `guia_muy_grande`.
 
+## Poner el chat en la app
+
+`supcoflow widget` muestra lo que hay que pegar, armado por el motor con los ids de tu proyecto (no los
+copies a mano: un id mal copiado deja el chat invisible sin ningún error). No escribe archivos de la app:
+
+1. El paquete con su versión exacta (`npm i @supcoflow/chat@… --save-exact`, o lo mismo con tu gestor).
+2. **Next.js (App Router):** un archivo envoltorio, por ejemplo `app/chat-de-soporte.tsx`, con el contenido
+   tal cual. Hace falta porque el componente del chat usa hooks de React y no trae `"use client"`, y un
+   `layout.tsx` es de servidor por defecto: importarlo directo ahí no anda. El envoltorio es esa directiva
+   más el componente con los ids.
+3. Usar el envoltorio en el layout que cubre las pantallas donde se traban tus usuarios.
+4. Si la app tiene una política de contenido (CSP) con `connect-src`, agregarle el origen del chat
+   conservando lo que ya tiene (una segunda `connect-src` se ignora).
+
+La línea de `<script>` que también muestra está disponible pero no probada en una app real, y no es
+para Next.js. `supcoflow widget --json` devuelve el objeto del motor tal cual.
+
+Después, `supcoflow instalacion anotar --skill <versión> [--app <carpeta>]` deja en
+`.supcoflow/instalacion.json` (para commitear) con qué versiones quedó: la skill, la terminal, el chat
+declarado e instalado, y la configuración del proyecto. Nunca lleva un secreto ni una fecha; repetirlo
+sin cambios no lo toca, y si el archivo tiene cambios sin commit sale 4 y no lo pisa.
+
+## Con un asistente
+
+Si usás un asistente de código como Claude Code, la skill de Supcoflow hace todo el camino
+por vos: sesión, proyecto, configuración, guía, el chat en la app y el resumen.
+
+```bash
+npx skills add supcoflow/skills
+```
+
+Y en el asistente: `/supcoflow go`. Las decisiones sobre los datos de tus usuarios y qué pasa con cada
+problema te las pregunta siempre; no sube nada a GitHub.
+
 ## El contrato
 
 Pensado para que lo lea un programa, no sólo una persona:
@@ -126,7 +162,7 @@ Pensado para que lo lea un programa, no sólo una persona:
 - **Sin preguntas sin terminal interactiva** (o con `--json`): si falta un dato, sale 3 diciendo qué
   flag usar. `supcoflow login` sin terminal sale 3 y te indica el camino en dos pasos.
 - **`--dry-run`** donde se puede simular (`login`, `login --start`, `logout`, `repo conectar --start`,
-  `proyecto crear`, `guia revisar`, `guia publicar`, `guia usar`). `login --wait
+  `proyecto crear`, `guia revisar`, `guia publicar`, `guia usar`, `instalacion anotar`). `login --wait
   --dry-run` sale 3: sondear consume el código y no hay cómo simularlo.
 
 | Código | Quiere decir |

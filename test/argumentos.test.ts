@@ -5,7 +5,7 @@ it("lee comando y flags", () => {
   expect(leerArgumentos(["login", "--start", "--json"])).toEqual({
     comando: "login",
     flags: { json: true, dryRun: false, desdeGithub: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
-      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [] },
+      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [], skill: null, app: null },
   });
 });
 it("sin comando es null (se muestra la ayuda)", () => {
@@ -64,6 +64,16 @@ describe("flags de configurar", () => {
     expect(leerArgumentos(["guia", "ver"]).flags.origen).toBeNull();
     expect(() => leerArgumentos(["guia", "usar", "--origen", "repo", "--origen", "agente"])).toThrowError(expect.objectContaining({ codigo: 3 }));
     expect(() => leerArgumentos(["guia", "usar", "--origen", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
+  });
+  it("bloque 6: `widget` es simple, `instalacion anotar` compuesto; --skill y --app llevan valor, una sola vez", () => {
+    expect(leerArgumentos(["widget", "--json"]).comando).toBe("widget");
+    const a = leerArgumentos(["instalacion", "anotar", "--skill", "0.1.0", "--app", "web"]);
+    expect(a.comando).toBe("instalacion anotar");
+    expect(a.flags).toMatchObject({ skill: "0.1.0", app: "web" });
+    expect(leerArgumentos(["instalacion", "anotar"]).flags).toMatchObject({ skill: null, app: null });
+    expect(() => leerArgumentos(["instalacion", "anotar", "--skill", "0.1.0", "--skill", "0.2.0"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["instalacion", "anotar", "--app", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["widget", "ver"])).toThrowError(expect.objectContaining({ codigo: 3 }));
   });
   it("--guardar-en llega como guardarEn", () => {
     expect(leerArgumentos(["claves", "crear", "--guardar-en", "/tmp/k"]).flags.guardarEn).toBe("/tmp/k");

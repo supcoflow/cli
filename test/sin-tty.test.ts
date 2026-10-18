@@ -35,6 +35,14 @@ const pedido = () => ({
   id: "cnx_0123456789abcdef", repo: "d/r", estado: motor.conexion, url: `${api}/conectar/cnx_0123456789abcdef`,
   vence_en: new Date(Date.now() + 1_800_000).toISOString(), repo_canonico: motor.conexion === "conectado" ? "d/r" : null, fallo: null,
 });
+// Lo que arma el motor para pegar en la app (bloque 6); la terminal lo devuelve tal cual.
+const WIDGET = {
+  tenant_id: "tnt_1", project_id: PROYECTO.id, backend_url: "https://chat.supcoflow.dev", paquete: "@supcoflow/chat", version: "2.2.1",
+  instalar: "npm i @supcoflow/chat@2.2.1 --save-exact",
+  nextjs: { estado: "probando", archivo_sugerido: "app/chat-de-soporte.tsx", contenido: "\"use client\";\nexport {};\n", uso: "<ChatDeSoporte />" },
+  script: { estado: "disponible_sin_soporte", linea: "<script src=\"https://chat.supcoflow.dev/w.js\"></script>" },
+  csp: "connect-src 'self' https://chat.supcoflow.dev;",
+};
 const pedidosAlMotor: string[] = [];
 let servidor: Server;
 let api: string;
@@ -58,7 +66,10 @@ beforeAll(async () => {
       const base = `/api/proyectos/${PROYECTO.id}`;
       if (ruta === "/api/catalogo") return responder(res, 200, { version: 1, supcoflow: [], codigo_de_la_app: { estado: "sin_contrato", message: "" } });
       if (ruta === "/api/proyectos" && new URL(req.url ?? "/", "http://x").searchParams.has("repo") && motor.proyectoExiste) return responder(res, 200, { proyecto: PROYECTO });
-      if (ruta === `${base}/configuracion`) return responder(res, 200, { chat: { habilitado: false }, sitios: [], marca: null, acuerdo: null });
+      if (ruta === `${base}/configuracion`) {
+        return responder(res, 200, { chat: { habilitado: false }, sitios: [], marca: null, acuerdo: null, politica: { modo: "relevar" }, guia: null });
+      }
+      if (metodo === "GET" && ruta === `${base}/widget`) return responder(res, 200, WIDGET);
       // La guía: el motor falso contesta lo mínimo que la terminal sabe leer.
       if (metodo === "POST" && ruta === `${base}/guia/revisar`) return responder(res, 200, { ok: true, secciones: 1 });
       if (metodo === "POST" && ruta === `${base}/guia/publicar`) {
@@ -192,7 +203,7 @@ describe("supcoflow sin terminal", () => {
   it("`describir --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describir", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(24);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(26);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -415,6 +426,70 @@ describe("supcoflow sin terminal", () => {
       [["quien-soy", "--sitio", "x", "--json"]],
       [["chat", "prender", "--tema", "a=b", "--json"]],
       [["catalogo", "--repo", "d/r", "--json"]],
+    ])("%j sale 3 flag_no_aplica sin tocar el motor", async (args) => {
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty([...args], { conClave: true });
+      expect(r.codigo).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
+      expect(pedidosAlMotor).toEqual([]);
+    });
+  });
+
+  // Bloque 6, R2: los dos comandos nuevos, como los corre la skill: sin terminal, stdin cerrado y --json.
+  describe("widget e instalacion anotar", () => {
+    beforeAll(() => { motor.proyectoExiste = true; });
+    afterAll(() => { motor.proyectoExiste = false; });
+
+    it("`widget --json` termina solo y devuelve lo del motor tal cual, en una línea", async () => {
+      const r = await correrSinTty(["widget", "--json", "--repo", "d/r"], { conClave: true });
+      expect(r.vencido).toBe(false);
+      expect(r.codigo).toBe(0);
+      expect(r.stdout.trimEnd().split("\n")).toHaveLength(1);
+      expect(JSON.parse(r.stdout)).toEqual({ ok: true, ...WIDGET });
+    });
+
+    it("`widget` sin proyecto en el repo sale 4 sin_proyecto", async () => {
+      motor.proyectoExiste = false;
+      try {
+        const r = await correrSinTty(["widget", "--json", "--repo", "d/r"], { conClave: true });
+        expect(r.codigo).toBe(4);
+        expect(JSON.parse(r.stdout).error).toBe("sin_proyecto");
+      } finally {
+        motor.proyectoExiste = true;
+      }
+    });
+
+    it("`instalacion anotar` sin --skill sale 3 falta_skill sin tocar el motor", async () => {
+      const repo = repoDeGit();
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty(["instalacion", "anotar", "--json"], { conClave: true, cwd: repo });
+      expect(r.vencido).toBe(false);
+      expect(r.codigo).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("falta_skill");
+      expect(pedidosAlMotor).toEqual([]);
+      expect(existsSync(join(repo, ".supcoflow"))).toBe(false);
+    });
+
+    it("`instalacion anotar --skill` deja .supcoflow/instalacion.json con la versión de esta terminal", async () => {
+      const repo = repoDeGit();
+      const r = await correrSinTty(["instalacion", "anotar", "--skill", "0.1.0", "--json"], { conClave: true, cwd: repo });
+      expect(r.vencido).toBe(false);
+      expect(r.codigo, r.stdout).toBe(0);
+      expect(r.stdout.trimEnd().split("\n")).toHaveLength(1);
+      const anotado = JSON.parse(await readFile(join(repo, ".supcoflow", "instalacion.json"), "utf8"));
+      const pkg = JSON.parse(await readFile(join(RAIZ, "package.json"), "utf8")) as { version: string };
+      expect(anotado).toMatchObject({ version: 1, skill: "0.1.0", terminal: pkg.version, chat: { declarado: null, instalado: null } });
+      expect(anotado.configuracion).toEqual({ acuerdo_version: null, politica: "relevar", guia: null });
+      expect(r.stdout + r.stderr).not.toMatch(/scf_[0-9a-f]{16}_/);
+      // Repetir sin cambios no toca nada.
+      const otra = await correrSinTty(["instalacion", "anotar", "--skill", "0.1.0", "--json"], { conClave: true, cwd: repo });
+      expect(otra.codigo).toBe(0);
+      expect(JSON.parse(otra.stdout).sin_cambios).toBe(true);
+    });
+
+    it.each([
+      [["widget", "--skill", "0.1.0", "--json"]],
+      [["guia", "ver", "--app", "web", "--json"]],
     ])("%j sale 3 flag_no_aplica sin tocar el motor", async (args) => {
       pedidosAlMotor.length = 0;
       const r = await correrSinTty([...args], { conClave: true });
