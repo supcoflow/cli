@@ -7,7 +7,7 @@
 // (decisión 11): se reescribe sólo si git ya guarda el anterior. El control se hace ANTES de escribir; si la
 // persona edita el archivo entre el control y el `rename`, su cambio se pierde. Esa carrera se acepta: es una
 // persona instalando, y el archivo lo escribe sólo este comando.
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
@@ -21,6 +21,7 @@ export type DepsDeInstalacion = DepsDelProyectoDelRepo & {
   leerArchivoChico(p: string, tope: number): { bytes: Uint8Array } | { error: string };
   // La ruta real (enlaces resueltos) o null si no existe; un enlace roto tampoco existe, como para Node.
   rutaReal(p: string): string | null;
+  esCarpeta(p: string): boolean;
   // Temporal + rename en una carpeta común (`archivosDelRepo(...).escribir`, el mismo de `proyecto crear`).
   escribir(p: string, s: string): void;
   avisar(s: string): void;
@@ -28,6 +29,14 @@ export type DepsDeInstalacion = DepsDelProyectoDelRepo & {
 };
 
 export type FlagsDeInstalacion = Pick<Flags, "repo" | "dryRun"> & { skill: string | null; app: string | null };
+
+export function esCarpetaReal(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 export function rutaRealOEnNada(p: string): string | null {
   try {
@@ -82,9 +91,11 @@ function paqueteInstalado(d: DepsDeInstalacion, raiz: string, app: string, aviso
 }
 
 // ─── El estado del archivo en git (revisión externa, hallazgo 3) ───
-// `ls-files` dice si está en el índice; un `status` vacío solo no prueba que esté en un commit (un archivo nuevo
-// ignorado tampoco sale). `--ignored` hace que uno ignorado salga como `!!`, aunque acá basta con «no versionado y
-// existe». Un versionado que se borró sin commit NO se recrea: el borrado puede ser a propósito.
+// El `status` va SIEMPRE y primero: un borrado con `git rm` (en el índice, sin commit) ya no sale en `ls-files`,
+// y mirar sólo `ls-files` lo trataba como «no versionado y no existe» y recreaba un archivo borrado a propósito.
+// Cualquier línea que no sea `??`/`!!` (` D`, `D `, `M `, `A `…) es un cambio sin commit. `--ignored` hace que
+// uno ignorado salga como `!!`. Sin salida, `ls-files` desempata: un `status` vacío solo no prueba que el archivo
+// esté en un commit.
 type Estado = "escribir" | "cambios_sin_commit" | "archivo_no_versionado";
 async function estadoDelArchivo(d: DepsDeInstalacion, raizGit: string, existe: boolean): Promise<Estado> {
   const git = async (args: string[]) => {
@@ -92,10 +103,11 @@ async function estadoDelArchivo(d: DepsDeInstalacion, raizGit: string, existe: b
     if (r.codigo !== 0) throw new Error(`git ${args[0]} falló; no escribo ${RUTA_DE_LA_INSTALACION} sin saber si tiene cambios.`);
     return r.stdout;
   };
+  const lineas = (await git(["status", "--porcelain", "--ignored", "--", RUTA_DE_LA_INSTALACION])).split("\n").filter((l) => l.trim() !== "");
+  if (lineas.some((l) => !l.startsWith("??") && !l.startsWith("!!"))) return "cambios_sin_commit";
+  if (lineas.length > 0) return "archivo_no_versionado";
   const versionado = (await git(["ls-files", "--", RUTA_DE_LA_INSTALACION])).trim() !== "";
-  if (!versionado) return existe ? "archivo_no_versionado" : "escribir";
-  const estado = await git(["status", "--porcelain", "--ignored", "--", RUTA_DE_LA_INSTALACION]);
-  return estado.trim() === "" ? "escribir" : "cambios_sin_commit";
+  return versionado || !existe ? "escribir" : "archivo_no_versionado";
 }
 
 // Un diff de líneas (LCS) para el texto: los dos lados son chicos. El anterior lo escribió quien sea, así que
@@ -138,6 +150,8 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
   const app = d.rutaReal(path.resolve(raiz, flags.app ?? "."));
   if (app === null) return fallo(SALIDA.entradaInvalida, "app_inexistente", "La carpeta de --app no existe (va relativa a la raíz del repo).");
   if (!adentro(raiz, app)) return fallo(SALIDA.entradaInvalida, "app_fuera_del_repo", "--app tiene que ser una carpeta dentro del repo (relativa a su raíz).");
+  // Un archivo no es una app: sin esto, leer `<archivo>/package.json` daba ENOTDIR y salía `paquete_ilegible`.
+  if (!d.esCarpeta(app)) return fallo(SALIDA.entradaInvalida, "app_inexistente", "--app tiene que ser una carpeta (la de la app), no un archivo.");
 
   // ─── Proyecto → configuración → package.json de la app → paquete instalado → armar ───
   const p = await proyectoDelRepo(d, flags);
@@ -170,7 +184,7 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
   const existe = !("error" in actual) || actual.error !== "no existe";
   const json = { ok: true, ruta: RUTA_DE_LA_INSTALACION, instalacion: x, ...(avisos.length > 0 ? { avisos } : {}) };
   if ("bytes" in actual && Buffer.from(actual.bytes).equals(Buffer.from(nuevo, "utf8"))) {
-    return { codigo: SALIDA.ok, json: { ...json, sin_cambios: true }, texto: `${RUTA_DE_LA_INSTALACION} ya dice eso (${resumen(x)}); no lo toqué.` };
+    return { codigo: SALIDA.ok, json: { ...json, ...(flags.dryRun ? { dry_run: true } : {}), sin_cambios: true }, texto: `${RUTA_DE_LA_INSTALACION} ya dice eso (${resumen(x)}); no lo toqué.` };
   }
   let estado: Estado;
   try {

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { instalacionAnotar, rutaRealOEnNada, type DepsDeInstalacion } from "../src/comandos/instalacion.ts";
+import { esCarpetaReal, instalacionAnotar, rutaRealOEnNada, type DepsDeInstalacion } from "../src/comandos/instalacion.ts";
 import { archivosDelRepo, gitReal, leerArchivoChico } from "../src/entorno.ts";
 import { armarInstalacion, RUTA_DE_LA_INSTALACION, serializar, type Instalacion } from "../src/instalacion.ts";
 
@@ -61,6 +61,7 @@ function deps(m: Mundo, o: Partial<DepsDeInstalacion> = {}): DepsDeInstalacion {
       return t === undefined ? { error: "no existe" } : { bytes: new TextEncoder().encode(t) };
     },
     rutaReal: (p) => m.enlaces.get(p) ?? (m.archivos.has(p) || m.dirs.has(p) ? p : null),
+    esCarpeta: (p) => m.dirs.has(p),
     escribir: (p, s) => { m.escritos.push(p); m.archivos.set(p, s); },
     avisar: (s) => void m.avisos.push(s),
     terminal: "0.6.0",
@@ -148,6 +149,12 @@ describe("supcoflow instalacion anotar", () => {
     const m = mundo();
     expect(await instalacionAnotar(deps(m), { ...F, app: "apps/nada" })).toMatchObject({ codigo: 3, json: { error: "app_inexistente" } });
   });
+  it("--app que es un archivo: 3 app_inexistente, sin pedido", async () => {
+    const m = mundo();
+    const r = await instalacionAnotar(deps(m), { ...F, app: "package.json" });
+    expect(r).toMatchObject({ codigo: 3, json: { error: "app_inexistente" } });
+    expect(m.pedidos).toEqual([]);
+  });
   it("--repo sin clon local: 3 sin_clon", async () => {
     const m = mundo();
     expect(await instalacionAnotar(deps(m), { ...F, repo: "otro/repo" })).toMatchObject({ codigo: 3, json: { error: "sin_clon" } });
@@ -206,6 +213,16 @@ describe("supcoflow instalacion anotar", () => {
     const r = await instalacionAnotar(deps(m), { ...F, dryRun: true });
     expect(r).toMatchObject({ codigo: 0, json: { ok: true, dry_run: true, sin_cambios: false, instalacion: ESPERADA } });
     expect(r.texto).toContain('+   "skill": "0.1.0",');
+    expect(m.escritos).toEqual([]);
+  });
+  it("--dry-run con el archivo igual: 0 sin_cambios true y dry_run true", async () => {
+    const m = mundo({ versionado: true });
+    m.archivos.set(ARCHIVO, serializar(ESPERADA));
+    expect(await instalacionAnotar(deps(m), { ...F, dryRun: true })).toMatchObject({ codigo: 0, json: { ok: true, dry_run: true, sin_cambios: true } });
+  });
+  it("borrado con git rm (en el índice): ls-files no lo ve, igual 4 cambios_sin_commit y no lo recrea", async () => {
+    const m = mundo({ versionado: false, estado: `D  ${RUTA_DE_LA_INSTALACION}\n` });
+    expect(await instalacionAnotar(deps(m), F)).toMatchObject({ codigo: 4, json: { error: "cambios_sin_commit" } });
     expect(m.escritos).toEqual([]);
   });
   it("--dry-run igual respeta la tabla: 4 si hay cambios sin commit", async () => {
@@ -297,7 +314,7 @@ describe("instalacion anotar sobre un repo de git real", () => {
   const depsReales = (): { d: DepsDeInstalacion; avisos: string[] } => {
     const avisos: string[] = [];
     const d = deps(mundo(), {
-      git: gitReal, cwd: raiz, leerArchivoChico, rutaReal: rutaRealOEnNada,
+      git: gitReal, cwd: raiz, leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal, 
       escribir: archivosDelRepo(() => {}).escribir, avisar: (s) => void avisos.push(s),
     });
     return { d, avisos };
@@ -354,6 +371,17 @@ describe("instalacion anotar sobre un repo de git real", () => {
     unlinkSync(archivo());
     expect(await instalacionAnotar(depsReales().d, F)).toMatchObject({ codigo: 4, json: { error: "cambios_sin_commit" } });
     expect(existsSync(archivo())).toBe(false);
+  });
+  it("borrado con git rm sin commit: 4 cambios_sin_commit y no lo recrea", async () => {
+    await instalacionAnotar(depsReales().d, F);
+    g("add", RUTA_DE_LA_INSTALACION);
+    g("commit", "-q", "-m", "instalacion");
+    g("rm", "-q", RUTA_DE_LA_INSTALACION);
+    expect(await instalacionAnotar(depsReales().d, F)).toMatchObject({ codigo: 4, json: { error: "cambios_sin_commit" } });
+    expect(existsSync(archivo())).toBe(false);
+  });
+  it("--app que es un archivo: 3 app_inexistente", async () => {
+    expect(await instalacionAnotar(depsReales().d, { ...F, app: "package.json" })).toMatchObject({ codigo: 3, json: { error: "app_inexistente" } });
   });
   it("ignorado por git y existente: 4 archivo_no_versionado", async () => {
     writeFileSync(join(raiz, ".gitignore"), "node_modules\n.supcoflow/\n");
