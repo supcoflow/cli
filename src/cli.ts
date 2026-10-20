@@ -12,6 +12,7 @@ import { comandoCatalogo, datosFijar, politicaFijar } from "./comandos/datos-y-p
 import { ayuda, comandoDescribir, DESCRIPCION } from "./comandos/describir.ts";
 import { loginInteractivo, loginStart, loginWait } from "./comandos/login.ts";
 import { comandoLogout } from "./comandos/logout.ts";
+import { diagnosticar, probar } from "./comandos/probar.ts";
 import { proyectoCrear, proyectoVer } from "./comandos/proyecto.ts";
 import { comandoQuienSoy } from "./comandos/quien-soy.ts";
 import { repoConectarInteractivo, repoConectarStart, repoConectarWait } from "./comandos/repo-conectar.ts";
@@ -45,6 +46,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       archivo: flags.archivo !== null, permitir: flags.permitir !== null, modo: flags.modo !== null,
       nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null, origen: flags.origen !== null, desdeGithub: flags.desdeGithub,
       skill: flags.skill !== null, app: flags.app !== null,
+      autorizoGasto: flags.autorizoGasto, mensaje: flags.mensaje !== null, prueba: flags.prueba !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
@@ -128,6 +130,10 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await widget(e.widget, flags), json };
       case "instalacion anotar":
         return { r: await instalacionAnotar(e.instalacion, flags), json };
+      case "diagnosticar":
+        return { r: await diagnosticar(e.prueba, flags), json };
+      case "probar":
+        return { r: await probar(e.prueba, flags), json };
     }
     throw new Error(`comando sin despacho: ${comando}`);
   } catch (e) {

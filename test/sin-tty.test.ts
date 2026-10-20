@@ -26,6 +26,11 @@ const motor = {
   // `GET /api/proyectos?repo=`: sólo los comandos de configurar necesitan que el proyecto ya exista.
   proyectoExiste: false,
   guiaSubida: false,
+  // Bloque 7: la prueba. Cada POST con su Idempotency-Key; la misma clave devuelve la misma prueba.
+  pruebaPierde: false,
+  pruebasPorClave: new Map<string, string>(),
+  clavesDePrueba: [] as string[],
+  estadoDePrueba: "issue_creado",
 };
 // La clave que el motor falso devuelve al crear una de consulta: nada de lo que imprima la terminal puede contenerla.
 const CLAVE_FALSA = `scf_${"1234567890abcdef"}_${"fedcba0987654321".repeat(4)}`;
@@ -89,6 +94,28 @@ beforeAll(async () => {
       if (metodo === "GET" && ruta === `${base}/claves`) return responder(res, 200, { claves: [] });
       if (metodo === "POST" && ruta === `${base}/claves/${ID_DE_CLAVE}/confirmar`) return responder(res, 200, { ok: true });
       if (metodo === "POST" && ruta === `${base}/claves/revocar`) return responder(res, 200, { ok: true });
+      if (metodo === "GET" && ruta === `${base}/diagnostico`) {
+        return responder(res, 200, {
+          listo: true, puntos: [{ punto: "chat", ok: true, mensaje: "El chat está prendido." }], politica: "relevar",
+          techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, prueba_abierta: null,
+        });
+      }
+      if (metodo === "POST" && ruta === `${base}/pruebas`) {
+        const key = String(req.headers["idempotency-key"] ?? "");
+        motor.clavesDePrueba.push(key);
+        if (!motor.pruebasPorClave.has(key)) motor.pruebasPorClave.set(key, `prb_${String(motor.pruebasPorClave.size + 1).padStart(16, "0")}`);
+        // La respuesta perdida de verdad: el motor creó la prueba y la conexión se corta antes de contestar.
+        if (motor.pruebaPierde) { motor.pruebaPierde = false; req.socket.destroy(); return; }
+        return responder(res, 202, { prueba_id: motor.pruebasPorClave.get(key), reporte_id: "rep_1", estado: "creada" });
+      }
+      if (metodo === "GET" && ruta.startsWith(`${base}/pruebas/`)) {
+        return responder(res, 200, {
+          prueba_id: ruta.split("/").pop(), estado: motor.estadoDePrueba, abierta: motor.estadoDePrueba === "en_curso", mensaje: "m",
+          reporte: { id: "rep_1", url: `${api}/proyectos/r/reportes/rep_1` }, run: { id: "run_1", status: "completed", motivo: null },
+          issue: motor.estadoDePrueba === "issue_creado" ? { numero: 42, url: "https://github.com/d/r/issues/42" } : null,
+          cobro: { estado: "pendiente", usd: null, techo_usd: 2 },
+        });
+      }
       if (/^\/api\/conexiones\/[^/]+\/proyecto$/.test(ruta)) {
         motor.claves.push(String(req.headers["idempotency-key"] ?? ""));
         return responder(res, 201, { proyecto: PROYECTO, reusado: false });
@@ -203,7 +230,7 @@ describe("supcoflow sin terminal", () => {
   it("`describir --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describir", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(26);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(28);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -495,6 +522,83 @@ describe("supcoflow sin terminal", () => {
       const r = await correrSinTty([...args], { conClave: true });
       expect(r.codigo).toBe(3);
       expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
+      expect(pedidosAlMotor).toEqual([]);
+    });
+  });
+
+  // Bloque 7, R2: diagnosticar y probar como los corre un asistente: stdin cerrado, --json, sin preguntar nada.
+  describe("diagnosticar y probar", () => {
+    beforeAll(() => { motor.proyectoExiste = true; });
+    afterAll(() => { motor.proyectoExiste = false; });
+    const pruebas = () => join(dirname(archivo), "pruebas.json");
+    const POST_PRUEBA = `/api/proyectos/${PROYECTO.id}/pruebas`;
+
+    it("R2: los cuatro terminan solos con stdin cerrado, una línea JSON, sin POST salvo con --autorizo-gasto", async () => {
+      rmSync(pruebas(), { force: true });
+      const casos: [string[], number][] = [
+        [["diagnosticar", "--json"], 0],
+        [["probar", "--json"], 4],
+        [["probar", "--dry-run", "--autorizo-gasto", "--json"], 0],
+      ];
+      for (const [args, codigo] of casos) {
+        pedidosAlMotor.length = 0;
+        const r = await correrSinTty([...args, "--repo", "d/r"], { conClave: true });
+        expect(r.vencido, args.join(" ")).toBe(false);
+        expect(r.codigo, `${args.join(" ")}: ${r.stdout}`).toBe(codigo);
+        expect(r.stdout.trimEnd().split("\n"), args.join(" ")).toHaveLength(1);
+        expect(pedidosAlMotor.filter((p) => p === POST_PRUEBA), args.join(" ")).toEqual([]);
+      }
+      // R6 por el binario: el 4 trae los números del diagnóstico y no deja nada guardado.
+      const sin = await correrSinTty(["probar", "--json", "--repo", "d/r"], { conClave: true });
+      expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5 });
+      expect(existsSync(pruebas())).toBe(false);
+    }, 60_000);
+
+    it("R2: `probar --wait` termina solo: 5 en curso (dentro del tramo) y 0 con el issue y el cobro pendiente", async () => {
+      rmSync(pruebas(), { force: true });
+      const pide = await correrSinTty(["probar", "--autorizo-gasto", "--json", "--repo", "d/r"], { conClave: true });
+      expect(pide.codigo, pide.stdout).toBe(5);
+      motor.estadoDePrueba = "en_curso";
+      const t0 = Date.now();
+      const enCurso = await correrSinTty(["probar", "--wait", "--json", "--repo", "d/r"], { conClave: true });
+      expect(enCurso.vencido).toBe(false);
+      expect(enCurso.codigo).toBe(5);
+      expect(Date.now() - t0).toBeLessThan(90_000);
+      motor.estadoDePrueba = "issue_creado";
+      const fin = await correrSinTty(["probar", "--wait", "--json", "--repo", "d/r"], { conClave: true });
+      expect(fin.codigo).toBe(0);
+      expect(fin.stdout.trimEnd().split("\n")).toHaveLength(1);
+      expect(JSON.parse(fin.stdout)).toMatchObject({ estado: "issue_creado", issue: { numero: 42 }, cobro: { estado: "pendiente", usd: null } });
+    }, 60_000);
+
+    it("R14c por el binario: la conexión se corta tras crear; el próximo manda la MISMA clave y guarda esa prueba (0600, fuera del repo)", async () => {
+      rmSync(pruebas(), { force: true });
+      motor.clavesDePrueba.length = 0;
+      motor.pruebasPorClave.clear();
+      motor.pruebaPierde = true;
+      const primero = await correrSinTty(["probar", "--autorizo-gasto", "--mensaje", "Mi caso", "--json", "--repo", "d/r"], { conClave: true });
+      expect(primero.codigo, primero.stdout).toBe(1);
+      expect(JSON.parse(primero.stdout)).toMatchObject({ intento_pendiente: true });
+      const segundo = await correrSinTty(["probar", "--autorizo-gasto", "--json", "--repo", "d/r"], { conClave: true });
+      expect(segundo.codigo, segundo.stdout).toBe(5);
+      expect(motor.clavesDePrueba).toHaveLength(2);
+      expect(motor.clavesDePrueba[1]).toBe(motor.clavesDePrueba[0]);
+      expect(motor.pruebasPorClave.size).toBe(1);
+      const guardado = JSON.parse(await readFile(pruebas(), "utf8")) as Record<string, { valor: string }>;
+      const valor = JSON.parse(Object.values(guardado)[0]!.valor);
+      expect(valor).toEqual({ intento: null, ultima: "prb_0000000000000001" });
+      expect((await stat(pruebas())).mode & 0o777).toBe(0o600);
+    }, 60_000);
+
+    it.each([
+      [["probar", "--wait", "--autorizo-gasto", "--json"]],
+      [["probar", "--prueba", "prb_0123456789abcdef", "--json"]],
+      [["diagnosticar", "--mensaje", "x", "--json"]],
+      [["probar", "--start", "--json"]],
+    ])("%j sale 3 sin tocar el motor", async (args) => {
+      pedidosAlMotor.length = 0;
+      const r = await correrSinTty([...args], { conClave: true });
+      expect(r.codigo).toBe(3);
       expect(pedidosAlMotor).toEqual([]);
     });
   });

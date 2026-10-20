@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -239,6 +239,28 @@ export const DESCRIPCION: {
       ],
       ejemplos: ["supcoflow instalacion anotar --skill 0.1.0 --app web --json"],
       codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "diagnosticar",
+      resumen: "Dice, gratis y sin escribir nada, si una prueba del proyecto entraría y hasta dónde llegaría: instalación de GitHub, sitios, chat, guía, política, saldo del mes contra el techo de la prueba, pruebas abiertas y lo que el motor sume. Sale 0 si está todo listo y 4 si algo hay que arreglar (no_listo), con cada punto.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json"],
+      ejemplos: ["supcoflow diagnosticar --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "probar",
+      resumen: "Prueba la instalación de punta a punta: un problema entra por la misma puerta que el chat y termina en un issue. Gasta un relevamiento (hasta el techo que dice el motor; con la política guardar llega hasta el caso guardado y no gasta). Sin --autorizo-gasto no manda nada: sale 4 falta_autorizacion con techo_usd, saldo_usd, tope_usd y comprometido_usd. Con --autorizo-gasto pide la prueba y sale 5 con prueba_id; después --wait la sigue. Otros: 4 prueba_en_curso (con su id), techo_distinto, chat_deshabilitado, requiere_api_key, intento_pendiente; 6 tope_mensual; 1 con intento_pendiente: true si la respuesta no llegó (repetir retoma la misma prueba).",
+      flags: [
+        "--autorizo-gasto: autoriza el gasto de UNA prueba, hasta el techo que mostró el motor; sin él no se manda nada que escriba",
+        "--mensaje \"…\": el texto del problema de la prueba (por defecto, uno fijo del motor); con un pedido sin confirmar, otro --mensaje sale 4 intento_pendiente",
+        "--wait: sigue la última prueba hasta 90 s; sale 5 mientras corre, 0 con el issue (o guardado), 4 si hace falta mirarla (con el enlace a la bandeja); el cobro sale como esté (pendiente nunca es 0)",
+        "--prueba prb_…: con --wait, sigue esa prueba en vez de la última guardada",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta",
+        "--dry-run: dice qué haría (proyecto, techo, saldo, política) sin pedir nada que escriba",
+        "--json",
+      ],
+      ejemplos: ["supcoflow probar --json", "supcoflow probar --autorizo-gasto --json", "supcoflow probar --wait --json", "supcoflow probar --dry-run --autorizo-gasto --json"],
+      codigos: [0, 1, 2, 3, 4, 5, 6],
     },
   ],
   flags_globales: ["--json: el resultado en una línea de JSON por stdout; los avisos van por stderr", "--help, -h: la ayuda con ejemplos"],

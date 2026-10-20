@@ -9,7 +9,7 @@ describe("describir --json", () => {
     expect(r.json.ok).toBe(true);
     const comandos = r.json.comandos as { nombre: string }[];
     expect(comandos.map((c) => c.nombre).slice(0, 7)).toEqual(["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver"]);
-    expect(comandos).toHaveLength(26);
+    expect(comandos).toHaveLength(28);
     expect(Object.keys(r.json.codigos as object)).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
     const facultades = r.json.facultades as { nombre: string; con_api_key: boolean }[];
     const sin = facultades.filter((f) => !f.con_api_key).map((f) => f.nombre);
@@ -58,7 +58,7 @@ describe("describir --json", () => {
   });
 
   it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
-    const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver", "catalogo"].includes(c.nombre));
+    const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "quien-soy", "describir", "repo conectar", "proyecto crear", "proyecto ver", "catalogo", "diagnosticar", "probar"].includes(c.nombre));
     expect(configurar).toHaveLength(18);
     for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
   });
@@ -101,10 +101,34 @@ describe("describir --json", () => {
     }
   });
 
-  it("la versión es la del package.json, y es la 0.6.0", () => {
+  it("la versión es la del package.json, y es la 0.7.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.6.0");
+    expect(pkg.version).toBe("0.7.0");
+    // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
+    expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
+  });
+
+  it("R1, bloque 7: `diagnosticar` y `probar` con sus flags, ejemplos y códigos; los de los bloques 2 a 6 siguen", () => {
+    const g = (n: string) => DESCRIPCION.comandos.find((x) => x.nombre === n)!;
+    const dg = g("diagnosticar");
+    expect(dg).toBeDefined();
+    expect(dg.codigos).toEqual([0, 1, 2, 3, 4]);
+    expect(dg.ejemplos).toContain("supcoflow diagnosticar --json");
+    const pr = g("probar");
+    expect(pr).toBeDefined();
+    const flags = pr.flags.join(" ");
+    for (const f of ["--autorizo-gasto", "--wait", "--prueba", "--mensaje", "--dry-run", "--repo", "--json"]) expect(flags, f).toContain(f);
+    expect(pr.codigos).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(pr.ejemplos).toEqual(expect.arrayContaining(["supcoflow probar --json", "supcoflow probar --autorizo-gasto --json", "supcoflow probar --wait --json"]));
+    // Lo que gasta se dice: sin el flag no se manda nada, y el techo lo pone el motor.
+    expect(`${pr.resumen} ${flags}`).toMatch(/gasta/);
+    for (const e of ["intento_pendiente", "prueba_en_curso", "tope_mensual", "falta_autorizacion"]) expect(`${pr.resumen} ${flags}`, e).toContain(e);
+    for (const n of ["login", "repo conectar", "proyecto crear", "chat prender", "guia publicar", "widget", "instalacion anotar"]) expect(g(n), n).toBeDefined();
+    // Sólo `probar` nombra --autorizo-gasto, --mensaje y --prueba.
+    for (const c of DESCRIPCION.comandos.filter((x) => x.nombre !== "probar")) {
+      expect(c.flags.join(" "), c.nombre).not.toMatch(/--autorizo-gasto|--mensaje|--prueba/);
+    }
   });
 
   it("cabe en una línea de JSON", () => {

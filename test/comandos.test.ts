@@ -403,4 +403,17 @@ describe("flags que no aplican (despacho)", () => {
     }
     expect(sin("instalacion anotar", "sitio")).not.toBeNull();
   });
+  it("bloque 7: --autorizo-gasto, --mensaje y --prueba sólo en `probar`; --wait también en `probar`; --repo en los dos", () => {
+    expect(sin("probar", "autorizoGasto", "mensaje", "repo")).toBeNull();
+    expect(sin("probar", "wait", "prueba")).toBeNull();
+    expect(sin("diagnosticar", "repo")).toBeNull();
+    for (const c of ["diagnosticar", "widget", "quien-soy", "login"]) {
+      expect(sin(c, "autorizoGasto"), c).toMatch(/probar/);
+      expect(sin(c, "mensaje"), c).toMatch(/probar/);
+      expect(sin(c, "prueba"), c).toMatch(/probar/);
+    }
+    expect(sin("diagnosticar", "wait")).not.toBeNull();
+    expect(sin("probar", "start")).not.toBeNull();
+    expect(sin("login", "wait")).toBeNull();
+  });
 });

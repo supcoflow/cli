@@ -10,6 +10,7 @@ export type Flags = {
   origen: string | null;
   desdeGithub: boolean;
   skill: string | null; app: string | null;
+  autorizoGasto: boolean; mensaje: string | null; prueba: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -23,6 +24,7 @@ export const COMANDOS_COMPUESTOS = [
 const PRIMERAS_PALABRAS = new Set(COMANDOS_COMPUESTOS.map((c) => c.split(" ")[0]));
 const FLAGS_CON_VALOR = [
   "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id", "origen", "skill", "app",
+  "mensaje", "prueba",
 ] as const;
 
 // strict: un flag mal escrito (`--estart`) no se ignora en silencio: un asistente creería que
@@ -56,6 +58,9 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
         "desde-github": { type: "boolean" },
         skill: { type: "string" },
         app: { type: "string" },
+        "autorizo-gasto": { type: "boolean" },
+        mensaje: { type: "string" },
+        prueba: { type: "string" },
         tema: { type: "string", multiple: true },
       },
       tokens: true,
@@ -122,6 +127,9 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       desdeGithub: v["desde-github"] === true,
       skill: v.skill ?? null,
       app: v.app ?? null,
+      autorizoGasto: v["autorizo-gasto"] === true,
+      mensaje: v.mensaje ?? null,
+      prueba: v.prueba ?? null,
       tema: v.tema ?? [],
     },
   };

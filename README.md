@@ -4,7 +4,7 @@ La terminal de [Supcoflow](https://app.supcoflow.dev): iniciar sesión y manejar
 desde la consola, o desde un asistente de código que corre comandos por vos.
 
 Trae iniciar y cerrar sesión, ver con qué cuenta estás, conectar el repo con la App de GitHub,
-crear su proyecto, configurar el chat y ponerlo en la app.
+crear su proyecto, configurar el chat, ponerlo en la app y probar que un problema llega hasta un issue.
 
 ## Instalar
 
@@ -141,6 +141,25 @@ Después, `supcoflow instalacion anotar --skill <versión> [--app <carpeta>]` de
 `.supcoflow/instalacion.json` (para commitear) con qué versiones quedó: la skill, la terminal, el chat
 declarado e instalado, y la configuración del proyecto. Nunca lleva un secreto ni una fecha; repetirlo
 sin cambios no lo toca, y si el archivo tiene cambios sin commit sale 4 y no lo pisa.
+
+## Probar la instalación
+
+Con el chat puesto, dos comandos dicen si un problema que entra por el chat llega hasta un issue. Los dos
+toman el repo del `origin`, o `--repo owner/repo`.
+
+| Comando | Qué hace |
+|---|---|
+| `supcoflow diagnosticar` | Gratis y sin escribir nada: revisa instalación de GitHub, sitios, chat, guía, política, saldo del mes y pruebas abiertas. Sale 0 si está todo listo, 4 si algo hay que arreglar (con cada punto). |
+| `supcoflow probar` | Sin `--autorizo-gasto` no manda nada: sale 4 con el techo de la prueba, el saldo, el tope y lo comprometido del mes. |
+| `supcoflow probar --autorizo-gasto` | Pide la prueba: el problema entra por la misma puerta que el chat y corre un relevamiento que **gasta** hasta el techo que mostró el motor (con la política `guardar` llega hasta el caso guardado y no gasta). Sale 5 con el id. `--mensaje "…"` usa un texto propio. |
+| `supcoflow probar --wait` | Sigue la última prueba hasta 90 s: 5 mientras corre (volvé a llamarlo), 0 con el issue, 4 si hay que mirarla en la consola (trae el enlace). El cobro se muestra como esté: `pendiente` justo al cerrar, nunca 0. `--prueba prb_…` sigue otra. |
+| `supcoflow probar --dry-run --autorizo-gasto` | Lo que haría (proyecto, techo, saldo, política), sin pedir nada. |
+
+Si la respuesta del motor no llega, el pedido queda guardado en esta máquina (fuera del repo, junto a las
+credenciales): repetir `supcoflow probar --autorizo-gasto` retoma **la misma** prueba en vez de pedir otra.
+Mientras haya un pedido sin confirmar, otro `--mensaje` sale 4 `intento_pendiente`. La prueba va con la clave
+personal de `supcoflow login`; una clave de consulta no puede pedirla. Una sola prueba abierta por proyecto: otra
+sale 4 `prueba_en_curso` con el id de la abierta. El issue de una prueba queda abierto y rotulado como prueba.
 
 ## Con un asistente
 

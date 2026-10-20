@@ -8,7 +8,7 @@ import {
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-  buscarProyecto, canjear, configurar, leerWidget, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
+  buscarProyecto, canjear, configurar, leerDiagnostico, leerPrueba, leerWidget, pedirPrueba, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
   listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, type Yo,
 } from "./api.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
@@ -19,6 +19,7 @@ import { DESCRIPCION } from "./comandos/describir.ts";
 import type { DepsDeWidget } from "./comandos/widget.ts";
 import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
+import type { DepsDePrueba } from "./comandos/probar.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
@@ -26,6 +27,7 @@ import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts"
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
+import { crearRegistroDePruebas } from "./pruebas-guardadas.ts";
 import type { Git } from "./repo-local.ts";
 import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
@@ -381,6 +383,7 @@ export type Entorno = {
   claves: DepsDeClaves;
   widget: DepsDeWidget;
   instalacion: DepsDeInstalacion;
+  prueba: DepsDePrueba;
 };
 
 export function entornoReal(env: Record<string, string | undefined> = process.env): Entorno {
@@ -413,6 +416,11 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     generar: randomUUID,
     ahora: Date.now,
     avisar,
+  });
+  // El pedido de `probar` (intento + última prueba), con el mismo almacén y la misma regla: fuera de un repo.
+  const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
+  const pruebas = crearRegistroDePruebas({
+    origen: api.origin, almacen: almacenDeArchivo(rutaDePruebas, fsReal), rutaDelArchivo: rutaDePruebas, fs: fsReal, ahora: Date.now, avisar,
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();
@@ -492,6 +500,13 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal,
       escribir: archivosDelRepo(avisar).escribir,
       terminal: DESCRIPCION.version,
+    },
+    prueba: {
+      api, guardado, git: gitReal, cwd, avisar, pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
+      buscarProyecto: configurarEnElMotor.buscarProyecto,
+      leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
+      pedirPrueba: (a, clave, id, intento) => pedirPrueba(a, clave, id, intento, fetch),
+      leerPrueba: (a, clave, id, pruebaId, plazoMs) => leerPrueba(a, clave, id, pruebaId, fetch, plazoMs),
     },
   };
 }

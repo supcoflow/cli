@@ -5,7 +5,8 @@ it("lee comando y flags", () => {
   expect(leerArgumentos(["login", "--start", "--json"])).toEqual({
     comando: "login",
     flags: { json: true, dryRun: false, desdeGithub: false, help: false, start: true, wait: false, repo: null, install: null, test: null,
-      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [], skill: null, app: null },
+      sitio: null, titulo: null, saludo: null, archivo: null, permitir: null, modo: null, nombre: null, guardarEn: null, id: null, origen: null, tema: [], skill: null, app: null,
+      autorizoGasto: false, mensaje: null, prueba: null },
   });
 });
 it("sin comando es null (se muestra la ayuda)", () => {
@@ -78,4 +79,10 @@ describe("flags de configurar", () => {
   it("--guardar-en llega como guardarEn", () => {
     expect(leerArgumentos(["claves", "crear", "--guardar-en", "/tmp/k"]).flags.guardarEn).toBe("/tmp/k");
   });
+});
+it("bloque 7: --autorizo-gasto, --mensaje y --prueba; --mensaje y --prueba no se repiten ni van vacíos", () => {
+  expect(leerArgumentos(["probar", "--autorizo-gasto", "--mensaje", "hola", "--json"]).flags).toMatchObject({ autorizoGasto: true, mensaje: "hola", prueba: null });
+  expect(leerArgumentos(["probar", "--wait", "--prueba", "prb_0123456789abcdef"]).flags).toMatchObject({ wait: true, prueba: "prb_0123456789abcdef" });
+  expect(() => leerArgumentos(["probar", "--mensaje", "a", "--mensaje", "b"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+  expect(() => leerArgumentos(["probar", "--prueba", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
 });
