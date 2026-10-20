@@ -8,10 +8,11 @@ const DE_CONFIGURAR_CON_REPO = [
 ] as const;
 
 export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: readonly string[]; texto: string }[] = [
-  { flags: ["start", "wait"], comandos: ["login", "repo conectar"], texto: "--start y --wait son de `supcoflow login` y `supcoflow repo conectar`." },
+  { flags: ["start"], comandos: ["login", "repo conectar"], texto: "--start es de `supcoflow login` y `supcoflow repo conectar`." },
+  { flags: ["wait"], comandos: ["login", "repo conectar", "probar"], texto: "--wait es de `supcoflow login`, `supcoflow repo conectar` y `supcoflow probar`." },
   {
-    flags: ["repo"], comandos: ["repo conectar", "proyecto crear", "proyecto ver", ...DE_CONFIGURAR_CON_REPO, "widget", "instalacion anotar"],
-    texto: "--repo es de `supcoflow repo conectar`, `proyecto crear|ver`, `widget`, `instalacion anotar` y los comandos que configuran un proyecto (no de `catalogo`).",
+    flags: ["repo"], comandos: ["repo conectar", "proyecto crear", "proyecto ver", ...DE_CONFIGURAR_CON_REPO, "widget", "instalacion anotar", "diagnosticar", "probar"],
+    texto: "--repo es de `supcoflow repo conectar`, `proyecto crear|ver`, `widget`, `instalacion anotar`, `diagnosticar`, `probar` y los comandos que configuran un proyecto (no de `catalogo`).",
   },
   { flags: ["install", "test"], comandos: ["proyecto crear"], texto: "--install y --test son de `supcoflow proyecto crear`." },
   { flags: ["sitio"], comandos: ["sitios agregar", "sitios quitar"], texto: "--sitio es de `supcoflow sitios agregar|quitar`." },
@@ -23,6 +24,7 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
   { flags: ["origen"], comandos: ["guia usar"], texto: "--origen es de `supcoflow guia usar`." },
   { flags: ["desdeGithub"], comandos: ["guia publicar"], texto: "--desde-github es de `supcoflow guia publicar`." },
   { flags: ["id"], comandos: ["claves revocar"], texto: "--id es de `supcoflow claves revocar`." },
+  { flags: ["autorizoGasto", "mensaje", "prueba"], comandos: ["probar"], texto: "--autorizo-gasto, --mensaje y --prueba son de `supcoflow probar`." },
   { flags: ["skill", "app"], comandos: ["instalacion anotar"], texto: "--skill y --app son de `supcoflow instalacion anotar`." },
 ];
 

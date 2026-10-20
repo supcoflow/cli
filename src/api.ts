@@ -24,9 +24,9 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
 
 export type Fetch = typeof fetch;
 
-// A mano a propósito: tiene que coincidir con package.json (0.6.0); sólo identifica a la terminal
-// en los logs del motor, no decide nada.
-const VERSION = "0.6.0";
+// A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
+// identifica a la terminal en los logs del motor, no decide nada.
+const VERSION = "0.7.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -412,4 +412,118 @@ export async function leerWidget(api: URL, clave: string, proyectoId: string, f:
   const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/widget`, { method: "GET" }, f);
   if (r.status !== 200) throw rechazada(r);
   return aWidget(r.cuerpo, r.status);
+}
+
+// ---- La prueba (bloque 7) ----
+
+const rutaDelProyecto = (proyectoId: string) => `/api/proyectos/${encodeURIComponent(proyectoId)}`;
+const numeroONull = (v: unknown): number | null | undefined => (v === null ? null : typeof v === "number" && Number.isFinite(v) ? v : undefined);
+
+export type Diagnostico = {
+  listo: boolean;
+  // Sin lista fija de nombres: el motor suma puntos (la pausa de despachos, el run en vuelo, el acuerdo)
+  // y la terminal los muestra todos; lo que decide es `listo`.
+  puntos: { punto: string; ok: boolean; mensaje: string }[];
+  politica: string;
+  techoUsd: number;
+  saldoUsd: number | null;
+  topeUsd: number | null;
+  comprometidoUsd: number | null;
+  pruebaAbierta: string | null;
+};
+
+export async function leerDiagnostico(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Diagnostico> {
+  const r = await conClave(api, clave, `${rutaDelProyecto(proyectoId)}/diagnostico`, { method: "GET" }, f);
+  if (r.status !== 200) throw rechazada(r);
+  const c = r.cuerpo;
+  const puntos = Array.isArray(c.puntos) ? c.puntos.map((x) => objeto(x, r.status)) : null;
+  const [saldo, tope, comprometido] = [c.saldo_usd, c.tope_usd, c.comprometido_usd].map(numeroONull);
+  if (typeof c.listo !== "boolean" || puntos === null || !texto(c.politica) || typeof c.techo_usd !== "number"
+    || saldo === undefined || tope === undefined || comprometido === undefined
+    || (c.prueba_abierta !== null && !texto(c.prueba_abierta))
+    || puntos.some((p) => !texto(p.punto) || typeof p.ok !== "boolean" || typeof p.mensaje !== "string")) throw inesperada(r.status);
+  return {
+    listo: c.listo,
+    puntos: puntos.map((p) => ({ punto: p.punto as string, ok: p.ok as boolean, mensaje: taparSecretos(p.mensaje as string) })),
+    politica: c.politica as string,
+    techoUsd: c.techo_usd,
+    saldoUsd: saldo, topeUsd: tope, comprometidoUsd: comprometido,
+    pruebaAbierta: texto(c.prueba_abierta),
+  };
+}
+
+export type IntentoDePrueba = { clave: string; mensaje: string | null; techoUsd: number };
+
+// Tres desenlaces y no excepciones, porque cada uno hace algo distinto con el intento guardado:
+// `aceptada` lo confirma, `rechazo` lo cierra (el motor no creó nada con esa clave) y `ambigua` lo
+// conserva (puede haber creado la prueba y la respuesta no llegó).
+export type RespuestaDePrueba =
+  | { tipo: "aceptada"; pruebaId: string; reporteId: string; estado: string }
+  | { tipo: "rechazo"; status: number; error: string; message: string; cuerpo: Record<string, unknown> }
+  | { tipo: "ambigua"; error: string; message: string };
+
+// Sin `conClave`: su 401/403/5xx lanzan, y acá cada uno tiene que decidir qué pasa con el intento.
+// `idempotency_en_curso` es ambigua: otro intento con la misma clave sigue corriendo y puede crearla.
+// Un 503 de la pausa de despachos (D10) también: el motor no guardó nada, pero conservar el intento no
+// cuesta (el reintento con la misma clave crea la prueba una sola vez) y un 503 genérico no se distingue.
+export async function pedirPrueba(api: URL, clave: string, proyectoId: string, intento: IntentoDePrueba, f: Fetch): Promise<RespuestaDePrueba> {
+  const cuerpo: Record<string, unknown> = { techo_usd: intento.techoUsd };
+  if (intento.mensaje !== null) cuerpo.mensaje = intento.mensaje;
+  let r: Respuesta;
+  try {
+    r = await pedir(api, `${rutaDelProyecto(proyectoId)}/pruebas`, {
+      method: "POST", headers: { ...JSON_BODY, ...bearer(clave), "idempotency-key": intento.clave }, body: JSON.stringify(cuerpo),
+    }, f, PLAZO_DE_ALTA_MS);
+  } catch (e) {
+    const fallo = e instanceof FalloDeLaTerminal ? e : new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "No pude comunicarme con el motor.");
+    return { tipo: "ambigua", error: fallo.error, message: fallo.message };
+  }
+  const error = texto(r.cuerpo.error);
+  const message = taparSecretos(texto(r.cuerpo.message) ?? `El motor respondió ${r.status}.`);
+  if (r.status === 202 || r.status === 200 || r.status === 201) {
+    const [pruebaId, reporteId, estado] = [r.cuerpo.prueba_id, r.cuerpo.reporte_id, r.cuerpo.estado].map(texto);
+    if (pruebaId && /^prb_[0-9a-f]{16}$/.test(pruebaId) && reporteId && estado) return { tipo: "aceptada", pruebaId, reporteId, estado };
+    return { tipo: "ambigua", error: "respuesta_inesperada", message: `El motor respondió ${r.status} sin la prueba.` };
+  }
+  if (r.status >= 500 || (r.status === 409 && error === "idempotency_en_curso")) {
+    return { tipo: "ambigua", error: error ?? "motor_inalcanzable", message };
+  }
+  if (r.status >= 400) return { tipo: "rechazo", status: r.status, error: error ?? "rechazado", message, cuerpo: r.cuerpo };
+  return { tipo: "ambigua", error: "respuesta_inesperada", message: `El motor respondió ${r.status} con algo que no esperaba.` };
+}
+
+export type Seguimiento = {
+  pruebaId: string;
+  estado: string;
+  abierta: boolean | null;
+  mensaje: string | null;
+  reporte: { id: string; url: string } | null;
+  run: { id: string; status: string; motivo: string | null } | null;
+  issue: { numero: number; url: string } | null;
+  // Tal cual lo manda el motor: `usd` es null salvo con `leido` (pendiente y perdido nunca son cero).
+  cobro: { estado: string | null; usd: number | null; techo_usd: number };
+};
+
+export async function leerPrueba(api: URL, clave: string, proyectoId: string, pruebaId: string, f: Fetch, plazoMs?: number): Promise<Seguimiento> {
+  const r = await conClave(api, clave, `${rutaDelProyecto(proyectoId)}/pruebas/${encodeURIComponent(pruebaId)}`, { method: "GET" }, f, plazoMs);
+  if (r.status !== 200) throw rechazada(r);
+  const c = r.cuerpo;
+  const cobro = objeto(c.cobro, r.status);
+  const usd = numeroONull(cobro.usd);
+  if (!texto(c.prueba_id) || !texto(c.estado) || typeof cobro.techo_usd !== "number" || usd === undefined
+    || (cobro.estado !== null && !texto(cobro.estado))) throw inesperada(r.status);
+  const rep = c.reporte === null || c.reporte === undefined ? null : objeto(c.reporte, r.status);
+  const run = c.run === null || c.run === undefined ? null : objeto(c.run, r.status);
+  const issue = c.issue === null || c.issue === undefined ? null : objeto(c.issue, r.status);
+  if (issue !== null && (typeof issue.numero !== "number" || !texto(issue.url))) throw inesperada(r.status);
+  return {
+    pruebaId: c.prueba_id as string,
+    estado: c.estado as string,
+    abierta: typeof c.abierta === "boolean" ? c.abierta : null,
+    mensaje: texto(c.mensaje) === null ? null : taparSecretos(c.mensaje as string),
+    reporte: rep === null || !texto(rep.id) || !texto(rep.url) ? null : { id: rep.id as string, url: rep.url as string },
+    run: run === null ? null : { id: String(run.id), status: String(run.status), motivo: texto(run.motivo) },
+    issue: issue === null ? null : { numero: issue.numero as number, url: issue.url as string },
+    cobro: { estado: texto(cobro.estado), usd, techo_usd: cobro.techo_usd },
+  };
 }
