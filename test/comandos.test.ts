@@ -394,4 +394,13 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("guia publicar", "desdeGithub", "repo")).toBeNull();
     expect(sin("proyecto ver", "repo")).toBeNull();
   });
+  it("bloque 6: --skill y --app sólo en `instalacion anotar`; `widget` toma --repo", () => {
+    expect(sin("instalacion anotar", "skill", "app", "repo")).toBeNull();
+    expect(sin("widget", "repo")).toBeNull();
+    for (const c of ["widget", "guia publicar", "proyecto crear", "configuracion", "quien-soy"]) {
+      expect(sin(c, "skill"), c).toMatch(/instalacion anotar/);
+      expect(sin(c, "app"), c).toMatch(/instalacion anotar/);
+    }
+    expect(sin("instalacion anotar", "sitio")).not.toBeNull();
+  });
 });

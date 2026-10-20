@@ -9,6 +9,7 @@ export type Flags = {
   tema: string[];
   origen: string | null;
   desdeGithub: boolean;
+  skill: string | null; app: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -16,11 +17,12 @@ export const COMANDOS_COMPUESTOS = [
   "chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
   "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
   "guia revisar", "guia publicar", "guia ver", "guia usar",
+  "instalacion anotar",
 ] as const;
 // Sólo estas primeras palabras admiten una segunda: cualquier otro par sigue siendo «de más».
 const PRIMERAS_PALABRAS = new Set(COMANDOS_COMPUESTOS.map((c) => c.split(" ")[0]));
 const FLAGS_CON_VALOR = [
-  "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id", "origen",
+  "repo", "install", "test", "sitio", "titulo", "saludo", "archivo", "permitir", "modo", "nombre", "guardar-en", "id", "origen", "skill", "app",
 ] as const;
 
 // strict: un flag mal escrito (`--estart`) no se ignora en silencio: un asistente creería que
@@ -52,6 +54,8 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
         id: { type: "string" },
         origen: { type: "string" },
         "desde-github": { type: "boolean" },
+        skill: { type: "string" },
+        app: { type: "string" },
         tema: { type: "string", multiple: true },
       },
       tokens: true,
@@ -116,6 +120,8 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       id: v.id ?? null,
       origen: v.origen ?? null,
       desdeGithub: v["desde-github"] === true,
+      skill: v.skill ?? null,
+      app: v.app ?? null,
       tema: v.tema ?? [],
     },
   };

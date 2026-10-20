@@ -8,12 +8,15 @@ import {
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-  buscarProyecto, canjear, configurar, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
+  buscarProyecto, canjear, configurar, leerWidget, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
   listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, type Yo,
 } from "./api.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
 import type { DepsDeClaves } from "./comandos/claves.ts";
 import type { DepsDeGuia } from "./comandos/guia.ts";
+import { esCarpetaReal, rutaRealOEnNada, type DepsDeInstalacion } from "./comandos/instalacion.ts";
+import { DESCRIPCION } from "./comandos/describir.ts";
+import type { DepsDeWidget } from "./comandos/widget.ts";
 import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
@@ -376,6 +379,8 @@ export type Entorno = {
   configurar: DepsDeCatalogo;
   guia: DepsDeGuia;
   claves: DepsDeClaves;
+  widget: DepsDeWidget;
+  instalacion: DepsDeInstalacion;
 };
 
 export function entornoReal(env: Record<string, string | undefined> = process.env): Entorno {
@@ -474,6 +479,19 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       listarClaves: (a, clave, id) => listarClaves(a, clave, id, fetch),
       esClaveDeConsultaDelProyecto: (a, clave, id) => esClaveDeConsultaDelProyecto(a, clave, id, fetch),
       idempotencia, candados, secretos,
+    },
+    widget: {
+      api, guardado, git: gitReal, cwd,
+      buscarProyecto: configurarEnElMotor.buscarProyecto,
+      leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch),
+    },
+    // La versión que se anota es la de `describir` (pinzada contra package.json por test): una sola fuente
+    // para lo que la terminal dice de sí misma.
+    instalacion: {
+      ...configurarEnElMotor,
+      leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal,
+      escribir: archivosDelRepo(avisar).escribir,
+      terminal: DESCRIPCION.version,
     },
   };
 }

@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -218,6 +218,26 @@ export const DESCRIPCION: {
       resumen: "Elige cuál guía queda activa cuando hay dos: la del repo o la de nuestro agente.",
       flags: ["--origen repo|agente: cuál queda activa (obligatorio)", "--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--dry-run: dice qué haría sin hacerlo", "--json"],
       ejemplos: ["supcoflow guia usar --origen repo --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "widget",
+      resumen: "Muestra lo que hay que pegar en la app para tener el chat, armado por el motor con los ids del proyecto: el paquete y su versión exacta, el archivo envoltorio de Next.js (`nextjs.contenido`, tal cual, sin reescribir los ids), cómo usarlo, la línea de CSP y la de <script> (no para Next.js). No escribe archivos. Sale 4 sin_proyecto si el repo no tiene proyecto; 1 respuesta_inesperada si el motor manda algo a medias.",
+      flags: ["--repo owner/repo: el repo, si no es el «origin» de esta carpeta", "--json: el objeto del motor tal cual"],
+      ejemplos: ["supcoflow widget --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "instalacion anotar",
+      resumen: "Anota en .supcoflow/instalacion.json (la raíz de este clon) con qué versiones se instaló el chat: la skill, esta terminal, el paquete del chat (declarado en el package.json de la app e instalado en node_modules) y la configuración del proyecto; nunca un secreto ni una fecha. Repetir sin cambios no lo toca (sin_cambios: true). Lo reescribe sólo si git ya guarda el anterior: si tiene cambios sin commit (o está borrado sin commit) sale 4 cambios_sin_commit; si existe sin estar versionado (o ignorado), 4 archivo_no_versionado. Otros: 3 falta_skill / skill_invalida / app_fuera_del_repo / app_inexistente / sin_clon; 4 sin_proyecto / acuerdo_ilegible; 1 paquete_ilegible / configuracion_inesperada / archivo_no_escrito.",
+      flags: [
+        "--skill versión: la metadata.version de la skill que instala (semver, obligatorio; sin él sale 3 falta_skill sin pedir nada)",
+        "--app carpeta: la carpeta de la app, relativa a la raíz del repo (por defecto la raíz; fuera del repo sale 3 app_fuera_del_repo)",
+        "--repo owner/repo: el repo, si no es el «origin» de esta carpeta (sin clon local sale 3 sin_clon: el archivo va en el clon)",
+        "--dry-run: muestra el archivo y la diferencia sin escribir nada",
+        "--json",
+      ],
+      ejemplos: ["supcoflow instalacion anotar --skill 0.1.0 --app web --json"],
       codigos: [0, 1, 2, 3, 4],
     },
   ],

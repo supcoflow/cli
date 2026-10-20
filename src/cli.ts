@@ -7,6 +7,7 @@ import { leerArgumentos } from "./argumentos.ts";
 import { clavesCrear, clavesListar, clavesRevocar } from "./comandos/claves.ts";
 import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios } from "./comandos/configurar.ts";
 import { guiaPublicar, guiaRevisar, guiaUsar, guiaVer } from "./comandos/guia.ts";
+import { instalacionAnotar } from "./comandos/instalacion.ts";
 import { comandoCatalogo, datosFijar, politicaFijar } from "./comandos/datos-y-politica.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "./comandos/describir.ts";
 import { loginInteractivo, loginStart, loginWait } from "./comandos/login.ts";
@@ -14,6 +15,7 @@ import { comandoLogout } from "./comandos/logout.ts";
 import { proyectoCrear, proyectoVer } from "./comandos/proyecto.ts";
 import { comandoQuienSoy } from "./comandos/quien-soy.ts";
 import { repoConectarInteractivo, repoConectarStart, repoConectarWait } from "./comandos/repo-conectar.ts";
+import { widget } from "./comandos/widget.ts";
 import { emitir, FalloDeLaTerminal, resultadoDeFallo, SALIDA, type Resultado } from "./contrato.ts";
 import { entornoReal } from "./entorno.ts";
 import { flagQueNoAplica } from "./flags-por-comando.ts";
@@ -42,6 +44,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       sitio: flags.sitio !== null, titulo: flags.titulo !== null, saludo: flags.saludo !== null, tema: flags.tema.length > 0,
       archivo: flags.archivo !== null, permitir: flags.permitir !== null, modo: flags.modo !== null,
       nombre: flags.nombre !== null, guardarEn: flags.guardarEn !== null, id: flags.id !== null, origen: flags.origen !== null, desdeGithub: flags.desdeGithub,
+      skill: flags.skill !== null, app: flags.app !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
@@ -121,6 +124,10 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await guiaVer(e.guia, flags), json };
       case "guia usar":
         return { r: await guiaUsar(e.guia, flags), json };
+      case "widget":
+        return { r: await widget(e.widget, flags), json };
+      case "instalacion anotar":
+        return { r: await instalacionAnotar(e.instalacion, flags), json };
     }
     throw new Error(`comando sin despacho: ${comando}`);
   } catch (e) {
