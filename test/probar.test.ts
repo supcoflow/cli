@@ -435,7 +435,7 @@ describe("probar --wait (R25)", () => {
     expect((await probar(d, W)).codigo).toBe(codigo);
   });
 
-  it("un estado que esta terminal no conoce sale 1 respuesta_inesperada, con el estado", async () => {
+  it("un estado que esta terminal no conoce sale 1 estado_desconocido, con el estado", async () => {
     const m = motor();
     const { d } = await conPrueba(m);
     m.seguimientos = [seg("algo_nuevo")];
@@ -485,6 +485,24 @@ describe("probar --wait (R25)", () => {
     expect(r.codigo).toBe(4);
     expect(r.json.error).toBe("intento_pendiente");
     expect(m.gets).toEqual([]);
+  });
+
+  it("con una última ya cerrada y un pedido nuevo sin confirmar, --wait sale 4 intento_pendiente sin seguir la vieja; --prueba explícito sí la sigue", async () => {
+    const m = motor();
+    const { d } = deps(m, undefined, tramoCorto);
+    await probar(d, AUT); // prb_…1 confirmada como última
+    desenlace(m);
+    m.guion = ["pierde"];
+    await probar(d, AUT); // el pedido nuevo pierde la respuesta: intento abierto, última = prb_…1
+    expect(await d.pruebas.leer(PROY.id)).toMatchObject({ ultima: "prb_0000000000000001", intento: { clave: "clave-2" } });
+    m.seguimientos = [seg("issue_creado", { issue: { numero: 1, url: "https://github.com/d/r/issues/1" } })];
+    const r = await probar(d, W);
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json.error).toBe("intento_pendiente");
+    expect(m.gets).toEqual([]);
+    const explicita = await probar(d, { ...W, prueba: "prb_0000000000000001" });
+    expect(explicita.codigo).toBe(SALIDA.ok);
+    expect(m.gets).toEqual(["prb_0000000000000001"]);
   });
 
   it("--wait no se combina con --autorizo-gasto ni con --mensaje; --prueba es sólo de --wait (3, sin pedir nada)", async () => {

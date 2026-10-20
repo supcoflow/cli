@@ -275,8 +275,10 @@ async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegid
   if (pruebaId === null) {
     try {
       const g = await d.pruebas.leer(proyectoId);
+      // Un pedido sin confirmar gana sobre la última: seguir la anterior y salir 0 con SU issue se leería
+      // como el desenlace de la prueba recién pedida. Con `--prueba` explícito no se llega acá.
       pruebaId = g.ultima;
-      if (pruebaId === null && g.intento !== null) {
+      if (g.intento !== null) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
           "Hay una prueba pedida sin confirmar; repetí `supcoflow probar --autorizo-gasto` sin `--mensaje` para recuperarla, y después `--wait`.");
       }
