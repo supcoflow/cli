@@ -73,8 +73,8 @@ describe("lo guardado de las pruebas (intento + última, por origen y proyecto)"
     m.datos.set("http://localhost:3000#prueba#proj_3", { valor: JSON.stringify({ intento: { clave: "k-9", mensaje: null, techo_usd: 2, politica_esperada: "otra" }, ultima: null }), escritoEn: 1 });
     await expect(r.leer("proj_3")).rejects.toMatchObject({ error: "prueba_no_guardada" });
   });
-
   it("un archivo que no se lee no es «no hay intento»: lanza", async () => {
+    await expect(armar(memoria({ leerLanza: true })).leer("proj_1")).rejects.toMatchObject({ error: "prueba_no_guardada", message: expect.stringMatching(/^I couldn.t read \/h\/.config\/supcoflow\/pruebas.json; without that, a retry could ask for another test/) });
     await expect(armar(memoria({ leerLanza: true })).leer("proj_1")).rejects.toMatchObject({ error: "prueba_no_guardada" });
   });
 

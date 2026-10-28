@@ -11,7 +11,7 @@ export function urlDeLaApi(env: Record<string, string | undefined>): URL {
   const crudo = env.SUPCOFLOW_API_URL;
   if (crudo === undefined || crudo === "") return new URL(API_DE_PRODUCCION);
   const invalida = () =>
-    new FalloDeLaTerminal(SALIDA.entradaInvalida, "api_url_invalida", "SUPCOFLOW_API_URL tiene que ser https, o http contra localhost.");
+    new FalloDeLaTerminal(SALIDA.entradaInvalida, "api_url_invalida", "SUPCOFLOW_API_URL must be https, or http against localhost.");
   let u: URL;
   try {
     u = new URL(crudo);
@@ -54,7 +54,7 @@ async function pedir(api: URL, ruta: string, init: RequestInit, f: Fetch, plazoM
     });
     texto = await res.text();
   } catch {
-    throw new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "No pude comunicarme con el motor (red caída o demora).");
+    throw new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "I couldn't reach the engine (the network is down or it took too long).");
   }
   let cuerpo: unknown;
   try {
@@ -63,16 +63,16 @@ async function pedir(api: URL, ruta: string, init: RequestInit, f: Fetch, plazoM
     cuerpo = undefined;
   }
   if (typeof cuerpo !== "object" || cuerpo === null || Array.isArray(cuerpo)) {
-    throw new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", `El motor respondió ${res.status} sin JSON.`);
+    throw new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", `The engine answered ${res.status} without JSON.`);
   }
   return { status: res.status, cuerpo: cuerpo as Record<string, unknown> };
 }
 
 function sinServicio(status: number): FalloDeLaTerminal {
-  return new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", `El motor respondió ${status}; probá en unos minutos.`);
+  return new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", `The engine answered ${status}; try again in a few minutes.`);
 }
 function inesperada(status: number): FalloDeLaTerminal {
-  return new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", `El motor respondió ${status} con algo que no esperaba.`);
+  return new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", `The engine answered ${status} with something I didn't expect.`);
 }
 const texto = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
@@ -92,7 +92,7 @@ export async function pedirCodigo(api: URL, maquina: string, f: Fetch): Promise<
   if (status === 429 || status === 503) {
     throw new FalloDeLaTerminal(
       SALIDA.inesperado, texto(c.error) ?? "demasiados_pedidos",
-      "El motor no acepta más pedidos ahora; probá en unos minutos.",
+      "The engine isn't accepting more requests right now; try again in a few minutes.",
     );
   }
   if (status >= 500) throw sinServicio(status);
@@ -141,7 +141,7 @@ const bearer = (clave: string) => ({ authorization: `Bearer ${clave}` });
 export async function quienSoy(api: URL, clave: string, f: Fetch): Promise<Yo> {
   const { status, cuerpo: c } = await pedir(api, "/api/yo", { method: "GET", headers: bearer(clave) }, f);
   if (status === 401) {
-    throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", texto(c.message) ?? "La clave ya no vale: iniciá sesión de nuevo.");
+    throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", texto(c.message) ?? "The key is no longer valid: log in again.");
   }
   if (status >= 500) throw sinServicio(status);
   const u = c.usuario as Record<string, unknown> | null | undefined;
@@ -175,16 +175,16 @@ async function conClave(
   const error = texto(r.cuerpo.error) ?? "respuesta_inesperada";
   const message = (porDefecto: string) => taparSecretos(texto(r.cuerpo.message) ?? porDefecto);
   if (r.status === 401) {
-    throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", message("La clave ya no vale: iniciá sesión de nuevo."));
+    throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", message("The key is no longer valid: log in again."));
   }
   if (r.status === 403 && (error === "requiere_persona" || error === "clave_de_consulta")) {
-    throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, error, message("Esto lo tiene que hacer una persona con sesión."));
+    throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, error, message("A person who is logged in has to do this."));
   }
   if (r.status === 422 && error === "cuenta_sin_github") {
-    throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, error, message("Tu cuenta no tiene GitHub asociado."));
+    throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, error, message("Your account has no GitHub linked."));
   }
   if (r.status === 400 && error === "repo_invalido") {
-    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, error, message("El repo tiene que ser owner/repo."));
+    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, error, message("The repo must be owner/repo."));
   }
   if (r.status >= 500) throw sinServicio(r.status);
   return r;
@@ -220,7 +220,7 @@ function aProyecto(v: unknown, status: number): Proyecto {
 function rechazada(r: Respuesta): FalloDeLaTerminal {
   const error = texto(r.cuerpo.error);
   if (r.status >= 400 && r.status < 500 && error) {
-    return new FalloDeLaTerminal(SALIDA.entradaInvalida, error, taparSecretos(texto(r.cuerpo.message) ?? `El motor rechazó el pedido (${r.status}).`));
+    return new FalloDeLaTerminal(SALIDA.entradaInvalida, error, taparSecretos(texto(r.cuerpo.message) ?? `The engine rejected the request (${r.status}).`));
   }
   return inesperada(r.status);
 }
@@ -505,21 +505,21 @@ export async function pedirPrueba(api: URL, clave: string, proyectoId: string, i
       method: "POST", headers: { ...JSON_BODY, ...bearer(clave), "idempotency-key": intento.clave }, body: JSON.stringify(cuerpo),
     }, f, PLAZO_DE_ALTA_MS);
   } catch (e) {
-    const fallo = e instanceof FalloDeLaTerminal ? e : new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "No pude comunicarme con el motor.");
+    const fallo = e instanceof FalloDeLaTerminal ? e : new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "I couldn't reach the engine.");
     return { tipo: "ambigua", error: fallo.error, message: fallo.message };
   }
   const error = texto(r.cuerpo.error);
-  const message = taparSecretos(texto(r.cuerpo.message) ?? `El motor respondió ${r.status}.`);
+  const message = taparSecretos(texto(r.cuerpo.message) ?? `The engine answered ${r.status}.`);
   if (r.status === 202 || r.status === 200 || r.status === 201) {
     const [pruebaId, reporteId, estado] = [r.cuerpo.prueba_id, r.cuerpo.reporte_id, r.cuerpo.estado].map(texto);
     if (pruebaId && /^prb_[0-9a-f]{16}$/.test(pruebaId) && reporteId && estado) return { tipo: "aceptada", pruebaId, reporteId, estado };
-    return { tipo: "ambigua", error: "respuesta_inesperada", message: `El motor respondió ${r.status} sin la prueba.` };
+    return { tipo: "ambigua", error: "respuesta_inesperada", message: `The engine answered ${r.status} without the test.` };
   }
   if (r.status >= 500 || (r.status === 409 && error === "idempotency_en_curso")) {
     return { tipo: "ambigua", error: error ?? "motor_inalcanzable", message };
   }
   if (r.status >= 400) return { tipo: "rechazo", status: r.status, error: error ?? "rechazado", message, cuerpo: r.cuerpo };
-  return { tipo: "ambigua", error: "respuesta_inesperada", message: `El motor respondió ${r.status} con algo que no esperaba.` };
+  return { tipo: "ambigua", error: "respuesta_inesperada", message: `The engine answered ${r.status} with something I didn't expect.` };
 }
 
 export type Seguimiento = {

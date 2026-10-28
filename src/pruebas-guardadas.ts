@@ -58,7 +58,7 @@ export function crearRegistroDePruebas(d: {
   const cuenta = (proyectoId: string) => `${d.origen}#prueba#${proyectoId}`;
   const noGuardada = (que: string) => new FalloDeLaTerminal(
     SALIDA.inesperado, "prueba_no_guardada",
-    `No pude ${que} ${d.rutaDelArchivo}; sin eso, un reintento podría pedir otra prueba (y gastar dos veces). Revisá ese archivo (no puede estar dentro de un repo) y probá de nuevo.`,
+    `I couldn't ${que} ${d.rutaDelArchivo}; without that, a retry could ask for another test (and spend twice). Check that file (it can't be inside a repo) and try again.`,
   );
 
   async function leer(proyectoId: string): Promise<LoGuardado> {
@@ -66,19 +66,19 @@ export function crearRegistroDePruebas(d: {
     try {
       crudo = (await d.almacen.leer(cuenta(proyectoId)))?.valor ?? null;
     } catch {
-      throw noGuardada("leer");
+      throw noGuardada("read");
     }
     if (crudo === null) return { intento: null, ultima: null };
     let v: unknown;
     try {
       v = JSON.parse(crudo);
     } catch {
-      throw noGuardada("entender");
+      throw noGuardada("understand");
     }
     const o = (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
     const intentoOk = o.intento === null || esIntento(o.intento);
     const ultimaOk = o.ultima === null || typeof o.ultima === "string";
-    if (!intentoOk || !ultimaOk) throw noGuardada("entender");
+    if (!intentoOk || !ultimaOk) throw noGuardada("understand");
     const i = o.intento as IntentoGuardado | null;
     return {
       intento: i === null ? null : { clave: i.clave, mensaje: i.mensaje, techoUsd: i.techo_usd, politicaEsperada: i.politica_esperada ?? null },
@@ -93,11 +93,11 @@ export function crearRegistroDePruebas(d: {
     try {
       raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
     } catch {
-      throw noGuardada("resolver la ruta de");
+      throw noGuardada("resolve the path of");
     }
     if (raiz !== null) {
       throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
-        `No guardo el pedido de la prueba dentro de un repo de git (${raiz}); sin guardarlo no lo mando. Apuntá XDG_CONFIG_HOME fuera de un repo.`);
+        `I'm not saving the test request inside a git repo (${raiz}); without saving it I won't send it. Point XDG_CONFIG_HOME outside a repo.`);
     }
     const valor = JSON.stringify({
       intento: g.intento === null
@@ -108,7 +108,7 @@ export function crearRegistroDePruebas(d: {
     try {
       await d.almacen.escribir(cuenta(proyectoId), { valor, escritoEn: d.ahora() });
     } catch {
-      throw noGuardada("guardar en");
+      throw noGuardada("save to");
     }
   }
 

@@ -18,6 +18,10 @@ export interface Almacen {
 }
 
 export type Fuente = "env" | "llavero" | "archivo";
+// Cómo se nombra cada fuente en un texto para la persona; el valor `fuente` del JSON sigue siendo el de arriba.
+export const NOMBRE_DE_LA_FUENTE: Record<Fuente, string> = {
+  llavero: "the system keychain", archivo: "the credentials file", env: "SUPCOFLOW_TOKEN",
+};
 // `completa = false`: un almacén PRESENTE no contestó (o no se entendió). Lo leído, si hay, puede no
 // ser lo más nuevo; y sin nada leído, no es «no hay clave»: es «no sé».
 export type Lectura<F> = { valor: { clave: string; fuente: F } | null; completa: boolean };
@@ -116,8 +120,8 @@ export function crearGuardado(d: {
   const leerCuenta = async (cuenta: string, queda: Queda) => (await leerCuentaCompleta(cuenta, queda)).mejor;
 
   const errorDeBorrado = (fallidos: Almacen["nombre"][]) => {
-    const donde = fallidos.map((n) => (n === "llavero" ? "del llavero del sistema" : `de ${d.rutaDelArchivo}`)).join(" ni ");
-    return new FalloDeLaTerminal(SALIDA.inesperado, "no_se_pudo_borrar", `No pude borrar la clave guardada ${donde}.`);
+    const donde = fallidos.map((n) => (n === "llavero" ? NOMBRE_DE_LA_FUENTE.llavero : d.rutaDelArchivo)).join(" or from ");
+    return new FalloDeLaTerminal(SALIDA.inesperado, "no_se_pudo_borrar", `I couldn't delete the saved key from ${donde}.`);
   };
 
   // El chequeo del repo va ANTES de escribir (Review Focus 1): una vez escrita, la clave ya está a
@@ -129,11 +133,11 @@ export function crearGuardado(d: {
     if (raiz !== null) {
       throw new FalloDeLaTerminal(
         SALIDA.inesperado, "destino_dentro_de_un_repo",
-        `No guardo ${que} dentro de un repo de git (${raiz}). Usá el llavero del sistema o exportá SUPCOFLOW_TOKEN.`,
+        `I won't save ${que} inside a git repo (${raiz}). Use the system keychain or export SUPCOFLOW_TOKEN.`,
       );
     }
     await d.archivo.escribir(cuenta, r);
-    d.avisar(`No hay llavero del sistema: guardé ${que} en ${d.rutaDelArchivo} con permisos 0600.`);
+    d.avisar(`There is no system keychain: I saved ${que} in ${d.rutaDelArchivo} with 0600 permissions.`);
   }
 
   async function escribirCuenta(cuenta: string, valor: string, que: string, techoMs?: number): Promise<"llavero" | "archivo"> {
@@ -193,7 +197,7 @@ export function crearGuardado(d: {
       return { valor: mejor === null ? null : { clave: mejor.r.valor, fuente: mejor.fuente }, completa };
     },
     async guardarClave(origen, clave, techoMs) {
-      return { donde: await escribirCuenta(cuentaDeClave(origen), clave, "la clave", techoMs) };
+      return { donde: await escribirCuenta(cuentaDeClave(origen), clave, "the key", techoMs) };
     },
     async borrarClave(origen) {
       // Un borrado a medias de una clave no se informa como hecho: la que quedó sigue sirviendo.
@@ -219,7 +223,7 @@ export function crearGuardado(d: {
       }
     },
     async guardarPendiente(origen, p, techoMs) {
-      await escribirCuenta(cuentaDePendiente(origen), JSON.stringify(p), "el inicio de sesión en curso", techoMs);
+      await escribirCuenta(cuentaDePendiente(origen), JSON.stringify(p), "the login in progress", techoMs);
     },
     async borrarPendiente(origen, techoMs) {
       // Nunca lanza: un pendiente viejo es inofensivo (su device_code ya se consumió o vence en
@@ -257,7 +261,7 @@ export function crearGuardado(d: {
         const r: Registro = { valor: JSON.stringify([...l.valor, clave]), escritoEn: d.ahora() };
         if (a.nombre === "archivo") {
           try {
-            await escribirEnArchivo(cuenta, r, "las claves por revocar");
+            await escribirEnArchivo(cuenta, r, "the keys to revoke");
             return;
           } catch (e) {
             if (e instanceof FalloDeLaTerminal) throw e;
@@ -268,7 +272,7 @@ export function crearGuardado(d: {
       }
       throw new FalloDeLaTerminal(
         SALIDA.inesperado, "no_se_pudo_anotar",
-        "No pude anotar la clave anterior como «por revocar» ni en el llavero ni en el archivo.",
+        "I couldn't note down the previous key as \"to revoke\" in either the keychain or the file.",
       );
     },
     // Quitar sólo achica la lista, así que no pasa por el control del repo: no agrega ningún secreto.

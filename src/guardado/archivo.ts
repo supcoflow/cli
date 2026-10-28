@@ -34,7 +34,7 @@ export function almacenDeArchivo(ruta: string, fs: FsMinimo): Almacen {
       v = undefined;
     }
     if (typeof v !== "object" || v === null || Array.isArray(v)) {
-      throw new Error(`No entiendo el archivo de credenciales ${ruta}; borralo y volvé a iniciar sesión.`);
+      throw new Error(`I don't understand the credentials file ${ruta}; delete it and log in again.`);
     }
     return v as Record<string, Registro>;
   }
@@ -57,7 +57,7 @@ export function almacenDeArchivo(ruta: string, fs: FsMinimo): Almacen {
       const t = todo();
       if (!Object.hasOwn(t, cuenta)) return null;
       const r = t[cuenta];
-      if (!esRegistro(r)) throw new Error(`No entiendo el archivo de credenciales ${ruta}; borralo y volvé a iniciar sesión.`);
+      if (!esRegistro(r)) throw new Error(`I don't understand the credentials file ${ruta}; delete it and log in again.`);
       return { valor: r.valor, escritoEn: r.escritoEn };
     },
     async escribir(cuenta, r) {

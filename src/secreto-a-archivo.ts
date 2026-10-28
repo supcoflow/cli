@@ -42,7 +42,7 @@ export type GuardaDeSecretos = {
 // Una clave ocupa 85 caracteres: 4 KB es de sobra, y algo más grande ya no es una clave.
 const TOPE = 4 * 1024;
 const CLAVE = /^scf_([0-9a-f]{16})_[0-9a-f]{64}$/;
-const OCUPADO = { error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 } as const;
+const OCUPADO = { error: "the file already has something else; delete it or pick another destination", codigo: 4 } as const;
 
 export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
   function borrarTemporal(tmp: string): void {
@@ -69,9 +69,9 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
     try {
       raiz = dentroDeUnWorkingTree(path.dirname(destino), fs);
     } catch {
-      return { error: "no pude resolver la ruta real de la carpeta (¿un enlace roto?)", codigo: 3 };
+      return { error: "I couldn't resolve the folder's real path (a broken link?)", codigo: 3 };
     }
-    if (raiz !== null) return { error: `cae dentro del repo de git ${raiz}, y una clave en un repo termina commiteada; elegí un destino fuera`, codigo: 3 };
+    if (raiz !== null) return { error: `it falls inside the git repo ${raiz}, and a key in a repo ends up committed; pick a destination outside it`, codigo: 3 };
     return null;
   }
 
@@ -84,7 +84,7 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
       const invalido = validarDestino(destino);
       if (invalido !== null) return invalido;
       const hay = fs.leerSinSeguir(destino, TOPE);
-      if (hay.tipo === "enlace") return { error: "el destino es un enlace; elegí un archivo común", codigo: 3 };
+      if (hay.tipo === "enlace") return { error: "the destination is a symlink; pick a regular file", codigo: 3 };
       if (hay.tipo !== "ausente") {
         const actual = leer(destino);
         if (actual.estado !== "clave" || actual.claveId !== claveId) return OCUPADO;
@@ -104,7 +104,7 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
       } catch {
         // El mensaje del sistema no se reenvía: podría traer la ruta del temporal o algo peor.
         borrarTemporal(tmp);
-        return { error: "no se pudo escribir ahí (¿la carpeta existe y tenés permiso?)", codigo: 3 };
+        return { error: "it couldn't be written there (does the folder exist, and do you have permission?)", codigo: 3 };
       }
       // Después de publicar, el temporal es un nombre de más (con `link`) o ya no existe (con `rename`): no
       // borrarlo no cambia que la clave quedó en el destino, y convertir eso en un fallo dejaría una clave
@@ -114,7 +114,7 @@ export function crearGuardaDeSecretos(fs: FsDeSecretos): GuardaDeSecretos {
       if (publicado === "existe") return OCUPADO;
       // Sin caer a `rename`: eso reabre la carrera que `link` cierra. Otro destino, en otro disco, sirve.
       if (publicado === "sin_enlaces") {
-        return { error: "el disco de esa carpeta no admite enlaces duros (¿FAT, exFAT o una carpeta de red?), y sin ellos no puedo escribir sin riesgo de pisar otra clave; elegí un destino en otro disco", codigo: 3 };
+        return { error: "that folder's disk doesn't support hard links (FAT, exFAT or a network folder?), and without them I can't write without risking overwriting another key; pick a destination on another disk", codigo: 3 };
       }
       return "guardado";
     },

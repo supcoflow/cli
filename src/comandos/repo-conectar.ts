@@ -44,21 +44,21 @@ function resultadoDelPedido(repo: string, p: Pedido, avisar: (s: string) => void
       return {
         codigo: SALIDA.ok,
         json: { ok: true, estado: "conectado", repo, repo_canonico: p.repoCanonico, pedido },
-        texto: `${p.repoCanonico ?? repo} está conectado.`,
+        texto: `${p.repoCanonico ?? repo} is connected.`,
       };
     case "repo_fuera_de_alcance": {
-      const message = `La App está instalada pero no alcanza a ${repo}: sumalo en GitHub y volvé a tocar Confirmar (${p.url}).`;
+      const message = `The App is installed but doesn't have access to ${repo}: add it in GitHub and click Confirm again (${p.url}).`;
       return fallo(SALIDA.haceFaltaUnaPersona, "repo_fuera_de_alcance", message, { repo, url: p.url, pedido });
     }
     case "vencido":
-      return fallo(SALIDA.haceFaltaUnaPersona, "pedido_vencido", "El pedido venció. Pedí otro con `supcoflow repo conectar --start`.", { repo, pedido });
+      return fallo(SALIDA.haceFaltaUnaPersona, "pedido_vencido", "The request has expired. Ask for a new one with `supcoflow repo connect --start`.", { repo, pedido });
     case "pendiente": {
       // Un motivo anotado no cierra el pedido: la persona puede reintentar desde la misma página.
-      if (p.fallo !== null) avisar(`La última confirmación falló: ${p.fallo}.`);
+      if (p.fallo !== null) avisar(`The last confirmation failed: ${p.fallo}.`);
       return {
         codigo: SALIDA.esperandoAUnaPersona,
         json: { ok: false, esperando: "persona", repo, url: p.url, pedido, ...(p.fallo !== null ? { fallo: p.fallo } : {}) },
-        texto: `Abrí ${p.url}, instalá la App en GitHub si hace falta y tocá Confirmar.`,
+        texto: `Open ${p.url}, install the App on GitHub if needed, and click Confirm.`,
       };
     }
   }
@@ -75,7 +75,7 @@ export async function repoConectarStart(d: DepsDeConexion, flags: Pick<Flags, "r
     return {
       codigo: SALIDA.ok,
       json: { ok: true, dry_run: true, repo, haria: "POST /api/conexiones" },
-      texto: `Con --dry-run no hago nada; sin él, pediría conectar ${repo} (POST /api/conexiones).`,
+      texto: `With --dry-run I do nothing; without it: ask to connect ${repo} (POST /api/conexiones).`,
     };
   }
   const leida = await claveVigente(d.guardado, d.api.origin);
@@ -114,7 +114,7 @@ export async function repoConectarWait(d: DepsDeConexion, flags: Pick<Flags, "re
       return resultadoDeFallo(e);
     }
     if (p === null) {
-      return fallo(SALIDA.entradaInvalida, "sin_conexion_en_curso", `No hay una conexión en curso para ${repo}: empezá con \`supcoflow repo conectar --start\`.`, { repo });
+      return fallo(SALIDA.entradaInvalida, "sin_conexion_en_curso", `There is no connection in progress for ${repo}: start with \`supcoflow repo connect --start\`.`, { repo });
     }
     ultimo = p;
     if (p.estado !== "pendiente") break;
@@ -135,11 +135,11 @@ export async function repoConectarInteractivo(
 ): Promise<Resultado> {
   if (!d.esTty || flags.json) {
     return fallo(SALIDA.entradaInvalida, "hace_falta_tty",
-      "Sin terminal interactiva usá `supcoflow repo conectar --start --json` y después `supcoflow repo conectar --wait --json`.");
+      "Without an interactive terminal, use `supcoflow repo connect --start --json` and then `supcoflow repo connect --wait --json`.");
   }
   const inicio = await repoConectarStart(d, flags);
   if (inicio.codigo !== SALIDA.esperandoAUnaPersona) return inicio;
-  d.mostrar(`${inicio.texto} Espero acá…`);
+  d.mostrar(`${inicio.texto} I'll wait here...`);
   let r: Resultado;
   do {
     r = await repoConectarWait(d, flags);

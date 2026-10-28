@@ -64,7 +64,7 @@ export const fsReal: FsMinimo = {
     try {
       return realpathSync(p);
     } catch {
-      throw new Error(`No puedo resolver la ruta real de ${p} (¿un enlace roto?); no guardo nada ahí.`);
+      throw new Error(`I can't resolve the real path of ${p} (a broken symlink?); I'm not saving anything there.`);
     }
   },
   // `lstat` y no `existsSync`: éste sigue el enlace y ante uno roto dice «no existe», y el control
@@ -255,7 +255,7 @@ export const TOPE_DEL_ARCHIVO_DEL_REPO = 64 * 1024;
 // Lo que devuelve `leer` cuando hay ALGO ahí que no se lee (un enlace, una carpeta, algo enorme, sin
 // permiso). No es JSON a propósito: `proyecto crear` lo trata como un archivo distinto (sale 4, «no lo
 // toqué») sin que nada de lo que hay ahí llegue a la salida.
-export const ARCHIVO_QUE_NO_SE_LEE = "\u0000(no se lee)";
+export const ARCHIVO_QUE_NO_SE_LEE = "\u0000(unreadable)";
 
 // Un archivo que la persona nombra (el logo) con las mismas defensas que los del repo: sin seguir
 // enlaces, sin FIFOs que cuelguen, sólo archivos comunes y con tope (se lee tope + 1 por si crece).
@@ -297,7 +297,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
     }
   };
   const noSeLee = (p: string, porque: string) => {
-    avisar(`No leo ${p}: ${porque}.`);
+    avisar(`I can't read ${p}: ${porque}.`);
     return ARCHIVO_QUE_NO_SE_LEE;
   };
 
@@ -305,7 +305,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
     leer(p) {
       const carpeta = carpetaPropia(dirname(p));
       if (carpeta === "ausente") return null;
-      if (carpeta === "ajena") return noSeLee(p, `${basename(dirname(p))} no es una carpeta común (¿un enlace?)`);
+      if (carpeta === "ajena") return noSeLee(p, `${basename(dirname(p))} isn't a regular folder (a symlink?)`);
       let fd: number;
       try {
         // O_NOFOLLOW: un enlace en el último tramo falla (ELOOP) en vez de abrir su destino.
@@ -314,11 +314,11 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
       } catch (e) {
         const code = (e as NodeJS.ErrnoException).code;
         if (code === "ENOENT") return null;
-        return noSeLee(p, code === "ELOOP" ? "es un enlace" : "no se pudo abrir");
+        return noSeLee(p, code === "ELOOP" ? NO_LEIDO.esUnEnlace : NO_LEIDO.noSePudoAbrir);
       }
       try {
         const st = fstatSync(fd);
-        if (!st.isFile()) return noSeLee(p, "no es un archivo común");
+        if (!st.isFile()) return noSeLee(p, NO_LEIDO.noEsComun);
         if (st.size > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, NO_LEIDO.demasiadoGrande);
         // Se lee hasta el tope + 1 y no `st.size`: el archivo puede crecer entre el fstat y la lectura.
         const buf = Buffer.alloc(TOPE_DEL_ARCHIVO_DEL_REPO + 1);
@@ -331,7 +331,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
         }
         return buf.subarray(0, n).toString("utf8");
       } catch {
-        return noSeLee(p, "no se pudo leer");
+        return noSeLee(p, NO_LEIDO.noSePudoLeer);
       } finally {
         closeSync(fd);
       }
@@ -343,7 +343,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
     escribir(p, s) {
       const dir = dirname(p);
       mkdirSync(dir, { recursive: true });
-      if (carpetaPropia(dir) !== "propia") throw new Error(`${dir} no es una carpeta común`);
+      if (carpetaPropia(dir) !== "propia") throw new Error(`${dir} isn't a regular folder`);
       const tmp = join(dir, `.${basename(p)}.${randomUUID()}.tmp`);
       try {
         const fd = openSync(tmp, "wx", 0o644);

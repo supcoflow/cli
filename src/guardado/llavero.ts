@@ -16,7 +16,7 @@ export type Correr = (
 // nada que borrar en él; uno que está y falla puede tener datos adentro.
 export class LlaveroAusente extends Error {
   constructor(bin: string) {
-    super(`No hay llavero del sistema (falta ${bin}).`);
+    super(`There is no system keychain (${bin} is missing).`);
     this.name = "LlaveroAusente";
   }
 }
@@ -33,14 +33,14 @@ function decodificar(s: string): Registro {
   } catch {
     v = undefined;
   }
-  if (!esRegistro(v)) throw new Error("El llavero devolvió algo que no entiendo.");
+  if (!esRegistro(v)) throw new Error("The keychain returned something I don't understand.");
   return { valor: v.valor, escritoEn: v.escritoEn };
 }
 
 // La cuenta viaja en una línea de `security -i`, que también parte por espacios y entiende comillas:
 // una cuenta con algo de eso se leería distinta de lo que se escribió. Un origen nunca lo tiene.
 function cuentaSegura(cuenta: string): string {
-  if (!/^[A-Za-z0-9:/.\[\]#_-]+$/.test(cuenta)) throw new Error("Cuenta del llavero inválida.");
+  if (!/^[A-Za-z0-9:/.\[\]#_-]+$/.test(cuenta)) throw new Error("Invalid keychain account.");
   return cuenta;
 }
 
@@ -97,10 +97,10 @@ export function almacenDeLlavero(
     if (bin === undefined) throw new LlaveroAusente(c!.bins[0]!);
     const r = await correr(bin, args, stdin, techoMs);
     if (r.ausente) throw new LlaveroAusente(bin);
-    if (r.vencido) throw new Error(`El llavero no contestó en ${Math.round(techoMs / 1000)} s.`);
+    if (r.vencido) throw new Error(`The keychain did not respond within ${Math.round(techoMs / 1000)} s.`);
     return r;
   }
-  const fallo = (codigo: number | null) => new Error(`El llavero falló (código ${codigo}).`);
+  const fallo = (codigo: number | null) => new Error(`The keychain failed (code ${codigo}).`);
 
   return {
     nombre: "llavero",

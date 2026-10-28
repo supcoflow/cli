@@ -90,7 +90,8 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
 
 // El aviso del nombre viaja en el JSON (`aviso`) y como última línea del texto, en lo que salió bien.
 function conAviso(r: Resultado, aviso: AvisoDelNombre | null): Resultado {
-  if (aviso === null || r.codigo !== SALIDA.ok) return r;
+  // Si el motor ya dijo el suyo (por GitHub lee el repo él mismo, en un SHA), manda ése.
+  if (aviso === null || r.codigo !== SALIDA.ok || "aviso" in r.json) return r;
   return { ...r, json: { ...r.json, aviso }, texto: `${r.texto}\n${AVISOS_DEL_NOMBRE[aviso]}` };
 }
 
@@ -208,7 +209,10 @@ export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "d
         const base = `commit ${corto(guia.commit)} of ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
         // Republicar re-activa la guía del repo aunque antes rigiera la de nuestro agente: «sigue siendo» mentiría en ese caso.
         const texto = ya ? `It was already published: ${base}. It stayed as the active guide.${nota}` : `Guide published: ${base}. It's the active guide${reemplaza}.${nota}`;
-        return { codigo: SALIDA.ok, json, texto };
+        const delMotor = typeof c.aviso === "string" && c.aviso in AVISOS_DEL_NOMBRE ? (c.aviso as AvisoDelNombre) : null;
+        return delMotor === null
+          ? { codigo: SALIDA.ok, json, texto }
+          : { codigo: SALIDA.ok, json: { ...json, aviso: delMotor }, texto: `${texto}\n${AVISOS_DEL_NOMBRE[delMotor]}` };
       }
       // El commit se muestra como lo que es: lo que la terminal dijo, no lo que GitHub confirmó.
       const origen = decl.commit ? `commit ${decl.commit.slice(0, 7)} declared by the terminal (not verified in GitHub)` : "no commit";

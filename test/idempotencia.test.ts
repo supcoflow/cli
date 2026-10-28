@@ -43,6 +43,7 @@ it("M2: si resolver la ruta lanza (un enlace roto en ~/.config), avisa y devuelv
   });
   expect(await r.claveDe("proyecto_crear", "d/r")).toBe("k-roto");
   expect(avisos).toHaveLength(1);
+  expect(avisos[0]).toMatch(/^I couldn.t resolve the path of \/h\/.config\/supcoflow\/idempotencia.json: I.m going on with an idempotency key that isn.t saved\.$/);
   expect(almacen.datos.size).toBe(0);
 });
 

@@ -11,11 +11,11 @@ export async function claveVigente(guardado: Guardado, origen: string): Promise<
   // «Iniciá sesión» con la clave guardada en un llavero que no contestó invita a un login que la
   // pisaría: no es «sin sesión», es «no pude mirar» (Review Focus 12).
   if (vigente === null && !lectura.completa) {
-    const message = "No pude leer la clave guardada (el llavero no respondió). Desbloquealo y probá de nuevo.";
+    const message = "I couldn't read the saved key (the keychain didn't respond). Unlock it and try again.";
     return { ok: false, resultado: { codigo: SALIDA.inesperado, json: { ok: false, error: "llavero_no_responde", message }, texto: message } };
   }
   if (vigente === null) {
-    const message = "Iniciá sesión con `supcoflow login`.";
+    const message = "Log in with `supcoflow login`.";
     return { ok: false, resultado: { codigo: SALIDA.faltaLogin, json: { ok: false, error: "sin_sesion", message }, texto: message } };
   }
   return { ok: true, vigente: { clave: vigente.clave, fuente: vigente.fuente, completa: lectura.completa } };
