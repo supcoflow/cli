@@ -1,16 +1,22 @@
-// `supcoflow diagnosticar` y `supcoflow probar` (bloque 7, la prueba): ¿un problema que entra por el
+// `supcoflow diagnose` y `supcoflow test` (bloque 7, la prueba): ¿un problema que entra por el
 // chat llega hasta un issue? El diagnóstico es gratis y sólo lee. La prueba gasta un relevamiento (techo
-// del motor, hoy US$ 2): sin `--autorizo-gasto` no se manda nada que escriba (R6).
+// del motor, hoy US$ 2): sin `--authorize-spend` no se manda nada que escriba (R6).
+//
+// Lo que la persona vio es lo que viaja (R5, 0.8.0): `--authorize-spend` exige `--ceiling` (el número que se le
+// mostró) y `--expect-policy` (la política con la que se le ofreció) y manda esos dos valores; no relee el
+// diagnóstico para elegirlos. El motor los compara con los de ahora: `techo_distinto` / `politica_distinta` salen
+// 4 con los valores nuevos y sin reintentar, y la persona decide de nuevo. El alias viejo `probar --autorizo-gasto`
+// exige también `--ceiling` (un alias no puede ampliar lo autorizado) pero no `--expect-policy`.
 //
 // El ciclo de la clave (hallazgo 5), en el orden en que se lee abajo:
 //   1. Sin intento guardado: clave nueva, y el intento ENTERO guardado antes del POST (estricto).
-//   2. Con intento guardado: es un reintento; misma clave, mismo mensaje, mismo techo. Otro `--mensaje`
-//      sale 4 `intento_pendiente` sin mandar nada.
+//   2. Con intento guardado: es un reintento; misma clave, mismo mensaje, mismo techo, misma política. Otro
+//      `--message`, otro `--ceiling` u otra `--expect-policy` sale 4 `intento_pendiente` sin mandar nada.
 //   3. 202: la última prueba = la del motor y el intento cerrado, en una escritura (src/pruebas-guardadas.ts).
 //      Si falla, sale 1 con el id y el intento sigue abierto: el próximo recibe la misma prueba.
 //   4. Ambigua (sin respuesta, 5xx, pausa, otro intento en curso): el intento se conserva. Rechazo
 //      definitivo: se cierra, el motor no creó nada con esa clave.
-//   5. Una prueba nueva es `probar --autorizo-gasto` sin intento abierto: clave nueva aunque el mensaje
+//   5. Una prueba nueva es `test --authorize-spend` sin intento abierto: clave nueva aunque el mensaje
 //      sea el mismo.
 //
 // `--wait` sigue la prueba por tramos (≤ 90 s el comando entero, como `login --wait`): el estado lo deriva
@@ -18,7 +24,9 @@
 import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
-import type { RegistroDePruebas } from "../pruebas-guardadas.ts";
+import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeSesion, puntoDelRepo, TOTAL_DE_INSTALACION, type Punto } from "../diagnostico.ts";
+import type { PoliticaEsperada, RegistroDePruebas } from "../pruebas-guardadas.ts";
+import { leerRepoLocal } from "../repo-local.ts";
 import { PLAZO_MINIMO_DE_SONDEO_MS, TRAMO_MAXIMO_MS } from "../sondeo.ts";
 import { fallo, rutaDe } from "./configurar.ts";
 import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-repo.ts";
@@ -35,12 +43,15 @@ export type DepsDePrueba = DepsDelProyectoDelRepo & {
   tramoMs?: number;
 };
 
-type FlagsDeProbar = Pick<Flags, "repo" | "dryRun" | "wait" | "autorizoGasto" | "mensaje" | "prueba">;
+// `viejo` es true si el pedido llegó por `probar` o por `--autorizo-gasto`: ese alias no puede ampliar lo autorizado
+// (exige `--ceiling`) pero tampoco exige la política, como la 0.7.0.
+type FlagsDeProbar = Pick<Flags, "repo" | "dryRun" | "wait" | "authorizeSpend" | "message" | "testId" | "ceiling" | "expectPolicy"> & { viejo?: boolean };
 
 // Las cotas de `BugReportSchema` del motor (D2): el mensaje es el cuerpo del reporte. Se mira acá para no
 // gastar un pedido (ni guardar un intento que el motor va a rechazar); la regla de verdad es la del motor.
 const MAX_MENSAJE = 20_000;
 const ID_DE_PRUEBA = /^prb_[0-9a-f]{16}$/;
+const TECHO = /^\d+(?:\.\d{1,4})?$/;
 const INTERVALO_DE_SEGUIMIENTO_MS = 5_000;
 const PLAZO_MAXIMO_DE_SONDEO_MS = 15_000;
 
@@ -53,7 +64,17 @@ const PIDEN_UNA_PERSONA = new Set([
 ]);
 
 const usd = (n: number) => `US$ ${n.toFixed(2)}`;
-const usdONull = (n: number | null) => (n === null ? "sin medir" : usd(n));
+const usdONull = (n: number | null) => (n === null ? "unmeasured" : usd(n));
+
+// La política como se dice en inglés; a la API siempre viaja la suya (`relevar` / `guardar`).
+const POLITICA_EN_INGLES: Record<string, string> = { relevar: "investigate", guardar: "save" };
+const enInglesLaPolitica = (p: string | null) => (p === null ? "none" : (POLITICA_EN_INGLES[p] ?? p));
+const aLaPoliticaDeLaApi = (p: string): PoliticaEsperada | null =>
+  p === "investigate" || p === "relevar" ? "relevar" : p === "save" || p === "guardar" ? "guardar" : null;
+
+// El comando exacto para retomar un pedido guardado: con lo que se autorizó, no con lo que haya ahora.
+const comandoDeReintento = (i: IntentoDePrueba) =>
+  `supcoflow test --authorize-spend --ceiling ${i.techoUsd}${i.politicaEsperada !== null ? ` --expect-policy ${enInglesLaPolitica(i.politicaEsperada)}` : ""}`;
 
 function datosDelDiagnostico(g: Diagnostico) {
   return {
@@ -68,7 +89,7 @@ function datosDelDiagnostico(g: Diagnostico) {
   };
 }
 
-const lineasDePuntos = (g: Diagnostico) => g.puntos.map((p) => `  [${p.ok ? "ok" : "falta"}] ${p.punto}: ${p.mensaje}`);
+const lineasDePuntos = (puntos: Punto[], nombre = (p: string) => p) => puntos.map((p) => `  [${p.ok ? "ok" : "missing"}] ${nombre(p.punto)}: ${p.mensaje}`);
 
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
@@ -79,35 +100,87 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   } catch (e) {
     return resultadoDeFallo(e);
   }
-  const datos = { proyecto: { id: p.proyecto.id, repo: p.proyecto.repo }, ...datosDelDiagnostico(g) };
-  const resumen = `Saldo del mes ${usdONull(g.saldoUsd)} de ${usdONull(g.topeUsd)}; una prueba autoriza hasta ${usd(g.techoUsd)}. Política: ${g.politica}.`;
-  if (g.listo) {
-    return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto: [`Todo listo para probar ${p.proyecto.repo}.`, ...lineasDePuntos(g), resumen].join("\n") };
+  // Los dos puntos que sólo la terminal puede ver: la llamada de arriba autenticó (si no, no se llega acá) y el
+  // `origin` de esta carpeta es el repo del proyecto. Sin git o sin origin no se adivina: el punto sale no ok.
+  let local: Awaited<ReturnType<typeof leerRepoLocal>>;
+  try {
+    local = await leerRepoLocal(d.git, d.cwd);
+  } catch {
+    local = { repo: null, raiz: null, motivo: "sin_git" };
   }
-  const message = `Hay algo para arreglar antes de probar ${p.proyecto.repo}.`;
-  return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "no_listo", message, ...datos }, texto: [message, ...lineasDePuntos(g), resumen].join("\n") };
+  const { instalacion, prueba } = agruparPuntos(g, [puntoDeSesion(), puntoDelRepo(local, p.proyecto.repo)]);
+  const buenos = contarBuenos(instalacion);
+  const listo = g.listo && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
+  const datos = {
+    proyecto: { id: p.proyecto.id, repo: p.proyecto.repo },
+    ...datosDelDiagnostico(g),
+    listo,
+    puntos: [...instalacion, ...prueba],
+    instalacion: { ok: buenos, total: TOTAL_DE_INSTALACION, puntos: instalacion },
+    prueba: { listo: g.listo, puntos: prueba },
+  };
+  const resumen = `Monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}; a test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
+  const motivos = [
+    ...prueba.filter((x) => !x.ok).map((x) => x.mensaje),
+    ...(buenos < TOTAL_DE_INSTALACION ? [`the installation isn't complete (${buenos} of ${TOTAL_DE_INSTALACION})`] : []),
+  ];
+  const listaParaProbar = listo ? "Ready for a test: yes." : `Ready for a test: no, because ${motivos.join("; ") || "the engine says it isn't ready"}`;
+  const cuerpo = [
+    lineaDeLoRevisado(buenos),
+    ...lineasDePuntos(instalacion, nombreDelPunto),
+    listaParaProbar,
+    ...lineasDePuntos(prueba),
+    resumen,
+  ];
+  if (listo) return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto: cuerpo.join("\n") };
+  const message = `Something needs fixing before testing ${p.proyecto.repo}.`;
+  return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "no_listo", message, ...datos }, texto: [message, ...cuerpo].join("\n") };
 }
 
 export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Resultado> {
   // El reloj del tramo arranca con el comando: los 90 s son del comando entero, no sólo de los sondeos.
   const inicio = d.ahora();
   // Todo lo que se puede rechazar sin mirar nada, antes de tocar el motor o lo guardado.
-  if (flags.wait && (flags.autorizoGasto || flags.mensaje !== null)) {
+  if (flags.wait && (flags.authorizeSpend || flags.message !== null || flags.ceiling !== null || flags.expectPolicy !== null)) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles",
-      "`probar --wait` sólo sigue una prueba: sin --autorizo-gasto ni --mensaje. Primero `supcoflow probar --autorizo-gasto` y después `supcoflow probar --wait`.");
+      "`test --wait` only follows a test: no --authorize-spend, --ceiling, --expect-policy or --message. First `supcoflow test --authorize-spend --ceiling <usd> --expect-policy <policy>`, then `supcoflow test --wait`.");
   }
-  if (!flags.wait && flags.prueba !== null) {
-    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--prueba va con --wait: `supcoflow probar --wait --prueba prb_…`.");
+  if (!flags.wait && flags.testId !== null) {
+    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--test-id goes with --wait: `supcoflow test --wait --test-id prb_…`.");
   }
-  if (flags.prueba !== null && !ID_DE_PRUEBA.test(flags.prueba)) {
-    return fallo(SALIDA.entradaInvalida, "prueba_invalida", "--prueba es el id que dio `supcoflow probar` (prb_ y 16 caracteres).");
+  if (!flags.authorizeSpend && !flags.wait && (flags.ceiling !== null || flags.expectPolicy !== null)) {
+    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--ceiling and --expect-policy go with --authorize-spend: they say what you authorize.");
+  }
+  if (flags.testId !== null && !ID_DE_PRUEBA.test(flags.testId)) {
+    return fallo(SALIDA.entradaInvalida, "prueba_invalida", "--test-id is the id `supcoflow test` printed (prb_ and 16 characters).");
   }
   let mensaje: string | null = null;
-  if (flags.mensaje !== null) {
-    mensaje = flags.mensaje.trim();
+  if (flags.message !== null) {
+    mensaje = flags.message.trim();
     if (mensaje.length === 0 || mensaje.length > MAX_MENSAJE) {
-      return fallo(SALIDA.entradaInvalida, "mensaje_invalido", `--mensaje va con texto, hasta ${MAX_MENSAJE} caracteres.`);
+      return fallo(SALIDA.entradaInvalida, "mensaje_invalido", `--message goes with text, up to ${MAX_MENSAJE} characters.`);
     }
+  }
+  // Lo que la persona autorizó: el techo y la política que vio. Sin eso no hay pedido que valga (R5).
+  let autorizado: { techoUsd: number; politicaEsperada: PoliticaEsperada | null } | null = null;
+  if (flags.authorizeSpend) {
+    if (flags.ceiling === null) {
+      const comoSeEscribe = "`supcoflow test --authorize-spend --ceiling <usd> --expect-policy investigate|save`";
+      return fallo(SALIDA.entradaInvalida, "falta_techo", flags.viejo === true
+        ? `\`probar --autorizo-gasto\` now needs --ceiling <usd>, the number you were shown: an alias can't widen what you authorized. Use ${comoSeEscribe}. (The old behaviour is in supcoflow 0.7.0.)`
+        : `--authorize-spend needs --ceiling <usd>, the number you were shown: ${comoSeEscribe}.`);
+    }
+    if (!TECHO.test(flags.ceiling) || !(Number(flags.ceiling) > 0)) {
+      return fallo(SALIDA.entradaInvalida, "techo_invalido", "--ceiling is a positive number of US dollars, for example 2 or 2.50.");
+    }
+    let politicaEsperada: PoliticaEsperada | null = null;
+    if (flags.expectPolicy !== null) {
+      politicaEsperada = aLaPoliticaDeLaApi(flags.expectPolicy);
+      if (politicaEsperada === null) return fallo(SALIDA.entradaInvalida, "politica_invalida", "--expect-policy is `investigate` or `save`.");
+    } else if (flags.viejo !== true) {
+      return fallo(SALIDA.entradaInvalida, "falta_politica", "--authorize-spend needs --expect-policy investigate|save: the policy you were offered, so a yes to a test that won't investigate can't turn into a paid one.");
+    }
+    autorizado = { techoUsd: Number(flags.ceiling), politicaEsperada };
   }
 
   const p = await proyectoDelRepo(d, flags);
@@ -115,10 +188,10 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   const proyecto = p.proyecto;
   const clave = p.clave;
 
-  if (flags.wait) return seguir(d, clave, proyecto.id, flags.prueba, inicio);
+  if (flags.wait) return seguir(d, clave, proyecto.id, flags.testId, inicio);
 
   // ── Sin el flag, o con --dry-run: sólo el diagnóstico (gratis). Nada que escriba, ni acá ni en el motor.
-  if (!flags.autorizoGasto || flags.dryRun) {
+  if (autorizado === null || flags.dryRun) {
     let g: Diagnostico;
     try {
       g = await d.leerDiagnostico(d.api, clave, proyecto.id);
@@ -127,8 +200,8 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     }
     const datos = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g) };
     const gasto = g.politica === "guardar"
-      ? `Con la política \`guardar\` la prueba llega hasta el caso guardado y no gasta; el techo que se autoriza igual es ${usd(g.techoUsd)}.`
-      : `Una prueba corre un relevamiento que gasta hasta ${usd(g.techoUsd)} (saldo del mes ${usdONull(g.saldoUsd)} de ${usdONull(g.topeUsd)}).`;
+      ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
+      : `A test runs an investigation that spends up to ${usd(g.techoUsd)} (monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}).`;
     if (flags.dryRun) {
       // Lo guardado se mira sólo para decir qué haría; si no se puede leer, el dry-run igual contesta.
       let pendiente: boolean | null = null;
@@ -138,36 +211,41 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
         pendiente = null;
       }
       const ruta = rutaDe(proyecto, "/pruebas");
+      const cuerpo = autorizado === null ? `techo_usd: ${g.techoUsd}` : `techo_usd: ${autorizado.techoUsd}${autorizado.politicaEsperada !== null ? `, politica_esperada: ${autorizado.politicaEsperada}` : ""}`;
       const haria = pendiente
-        ? `reenviaría el pedido guardado sin confirmar (POST ${ruta}, la misma Idempotency-Key)`
-        : `POST ${ruta} {techo_usd: ${g.techoUsd}${mensaje !== null ? ", mensaje" : ""}} con una Idempotency-Key nueva`;
+        ? `would resend the saved request that was never confirmed (POST ${ruta}, the same Idempotency-Key)`
+        : `would send POST ${ruta} {${cuerpo}${mensaje !== null ? ", mensaje" : ""}} with a new Idempotency-Key`;
       return {
         codigo: SALIDA.ok,
-        json: { ok: true, dry_run: true, autorizado: flags.autorizoGasto, intento_pendiente: pendiente, haria, ...datos },
-        texto: `Con --dry-run no hago nada. ${flags.autorizoGasto ? "Sin --dry-run" : "Con --autorizo-gasto y sin --dry-run"}: ${haria} (proyecto ${proyecto.repo}, política ${g.politica}). ${gasto}`,
+        json: { ok: true, dry_run: true, autorizado: flags.authorizeSpend, intento_pendiente: pendiente, haria, ...datos },
+        texto: `With --dry-run I do nothing. ${flags.authorizeSpend ? "Without --dry-run, I" : "With --authorize-spend and without --dry-run, I"}${haria.replace(/^would/, "")} (project ${proyecto.repo}, policy ${enInglesLaPolitica(g.politica)}). ${gasto}`,
       };
     }
-    const message = `${gasto} Para lanzarla: \`supcoflow probar --autorizo-gasto\`. Antes, \`supcoflow diagnosticar\` dice si está todo listo.`;
+    const lanzar = `supcoflow test --authorize-spend --ceiling ${g.techoUsd} --expect-policy ${enInglesLaPolitica(g.politica)}`;
+    const message = `${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.`;
     return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "falta_autorizacion", message, ...datos }, texto: message };
   }
 
-  // ── Con --autorizo-gasto: el ciclo de la clave.
+  // ── Con --authorize-spend: el ciclo de la clave.
   let intento: IntentoDePrueba;
   try {
     const guardado = await d.pruebas.leer(proyecto.id);
     if (guardado.intento !== null) {
-      if (mensaje !== null && mensaje !== guardado.intento.mensaje) {
+      const previo = guardado.intento;
+      const igual = Math.abs(previo.techoUsd - autorizado.techoUsd) < 1e-9 && previo.politicaEsperada === autorizado.politicaEsperada;
+      if (mensaje !== null && mensaje !== previo.mensaje) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
-          "Hay una prueba pedida sin confirmar; repetí `supcoflow probar --autorizo-gasto` sin `--mensaje` para recuperarla.");
+          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(previo)}\` without --message to recover it.`);
       }
-      intento = guardado.intento;
+      if (!igual) {
+        return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
+          `There's a test request waiting for confirmation, authorized with a ceiling of ${usd(previo.techoUsd)}; repeat it with exactly that to recover it: \`${comandoDeReintento(previo)}\`.`);
+      }
+      intento = previo;
     } else {
-      // El techo que se autoriza es el que dice el motor ahora (D6), no uno escrito en la terminal.
-      const g = await d.leerDiagnostico(d.api, clave, proyecto.id);
-      if (g.pruebaAbierta !== null) return enCurso(g.pruebaAbierta);
-      // No frena (el motor decide lo que acepta), pero quien autorizó tiene que ver lo que falta.
-      for (const punto of g.puntos.filter((x) => !x.ok)) d.avisar(`Aviso (${punto.punto}): ${punto.mensaje}`);
-      intento = { clave: d.generar(), mensaje, techoUsd: g.techoUsd };
+      // Lo que se manda es lo que la persona vio (R5): no se relee el diagnóstico para elegirlo. El motor compara
+      // el techo y la política con los de ahora y rechaza si cambiaron.
+      intento = { clave: d.generar(), mensaje, techoUsd: autorizado.techoUsd, politicaEsperada: autorizado.politicaEsperada };
       await d.pruebas.abrir(proyecto.id, intento);
     }
   } catch (e) {
@@ -179,17 +257,17 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     try {
       await d.pruebas.confirmar(proyecto.id, r.pruebaId);
     } catch {
-      const message = `El motor aceptó la prueba ${r.pruebaId}, pero no pude guardarla en esta máquina. Repetí \`supcoflow probar --autorizo-gasto\` (recupera la misma) o seguila con \`supcoflow probar --wait --prueba ${r.pruebaId}\`.`;
+      const message = `The engine accepted test ${r.pruebaId}, but I couldn't save it on this machine. Repeat \`${comandoDeReintento(intento)}\` (it recovers the same one) or follow it with \`supcoflow test --wait --test-id ${r.pruebaId}\`.`;
       return { codigo: SALIDA.inesperado, json: { ok: false, error: "prueba_no_guardada", message, prueba_id: r.pruebaId, intento_pendiente: true }, texto: message };
     }
     return {
       codigo: SALIDA.esperandoAUnaPersona,
       json: { ok: false, esperando: "relevamiento", prueba_id: r.pruebaId, reporte_id: r.reporteId, estado: r.estado },
-      texto: `Prueba ${r.pruebaId} pedida (${r.estado}). Seguila con \`supcoflow probar --wait\`.`,
+      texto: `Test ${r.pruebaId} requested (${r.estado}). Follow it with \`supcoflow test --wait\`.`,
     };
   }
   if (r.tipo === "ambigua") {
-    const message = `${r.message} El pedido quedó guardado: repetí \`supcoflow probar --autorizo-gasto\` y retomo la misma prueba, sin pedir otra.`;
+    const message = `${r.message} The request was saved: repeat \`${comandoDeReintento(intento)}\` and I'll pick up the same test, without asking for another.`;
     return { codigo: SALIDA.inesperado, json: { ok: false, error: r.error, message, intento_pendiente: true }, texto: message };
   }
 
@@ -197,24 +275,31 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   try {
     await d.pruebas.descartar(proyecto.id);
   } catch {
-    d.avisar("No pude cerrar el pedido guardado; el próximo `probar --autorizo-gasto` lo va a reenviar.");
+    d.avisar("I couldn't close the saved request; the next `test --authorize-spend` will resend it.");
   }
-  return rechazo(r, d.avisar);
+  return rechazo(r, intento, d.avisar);
 }
 
 function enCurso(pruebaId: string): Resultado {
-  const message = `Ya hay una prueba de este proyecto sin desenlace (${pruebaId}). Seguila con \`supcoflow probar --wait --prueba ${pruebaId}\`.`;
+  const message = `This project already has a test with no outcome (${pruebaId}). Follow it with \`supcoflow test --wait --test-id ${pruebaId}\`.`;
   return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "prueba_en_curso", message, prueba_id: pruebaId }, texto: message };
 }
 
-function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, avisar: (s: string) => void): Resultado {
+function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, intento: IntentoDePrueba, avisar: (s: string) => void): Resultado {
   const c = r.cuerpo;
   switch (r.error) {
     case "prueba_en_curso":
       return typeof c.prueba_id === "string" ? enCurso(c.prueba_id) : fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
     case "techo_distinto": {
-      const message = `${r.message} Volvé a correr \`supcoflow probar\` para ver el techo vigente y autorizalo.`;
-      return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: r.error, message, techo_usd: c.techo_usd ?? null }, texto: message };
+      // Sin reintentar: lo que se autorizó ya no es lo que hay, y decidir de nuevo es de la persona (con el número nuevo).
+      const nuevo = typeof c.techo_usd === "number" ? c.techo_usd : null;
+      const message = `The ceiling for a test changed${nuevo !== null ? `: it's now ${usd(nuevo)}` : ""}, and you authorized ${usd(intento.techoUsd)}. Nothing was started. Ask again with the new number.`;
+      return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: r.error, message, techo_usd: nuevo, autorizado_usd: intento.techoUsd }, texto: message };
+    }
+    case "politica_distinta": {
+      const ahora = typeof c.politica === "string" ? c.politica : typeof c.politica_actual === "string" ? c.politica_actual : null;
+      const message = `The project's policy changed${ahora !== null ? `: it's now \`${enInglesLaPolitica(ahora)}\`` : ""}, and you authorized a test under \`${enInglesLaPolitica(intento.politicaEsperada)}\`. Nothing was started. Ask again with the current policy.`;
+      return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: r.error, message, politica: ahora, politica_esperada: intento.politicaEsperada }, texto: message };
     }
     case "tope_mensual":
       return {
@@ -223,13 +308,13 @@ function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, avisar: (s:
         texto: r.message,
       };
     case "requiere_api_key": {
-      const message = `La prueba se pide con tu API key personal (la que deja \`supcoflow login\`), no con una clave de consulta ni con la sesión de la consola. ${r.message}`;
+      const message = `The test is requested with your personal API key (the one \`supcoflow login\` leaves), not with a read-only key or the console session. ${r.message}`;
       return fallo(SALIDA.haceFaltaUnaPersona, r.error, message);
     }
     case "idempotency_key_reusada":
       // No debería pasar: siempre se reenvía lo guardado con su clave. Si pasa, la clave ya no sirve.
-      avisar("El motor dice que la clave del pedido ya se usó con otro contenido; la descarté.");
-      return fallo(SALIDA.inesperado, r.error, `${r.message} Volvé a correr \`supcoflow probar --autorizo-gasto\` para pedir una prueba nueva.`);
+      avisar("The engine says this request's key was already used with other content; I discarded it.");
+      return fallo(SALIDA.inesperado, r.error, `${r.message} Run \`${comandoDeReintento(intento)}\` again to ask for a new test.`);
   }
   if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", r.message);
   if (r.status === 403 || r.error === "chat_deshabilitado") return fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
@@ -238,11 +323,11 @@ function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, avisar: (s:
 
 function textoDelCobro(c: Seguimiento["cobro"]): string | null {
   // Pendiente y perdido nunca se muestran como cero: el monto todavía no se sabe, la cota es el techo.
-  if (c.estado === "leido" && c.usd !== null) return `Costo: ${usd(c.usd)}.`;
-  if (c.estado === "pendiente") return `Cobro pendiente: se lee unos minutos después del cierre (hasta ${usd(c.techo_usd)}).`;
-  if (c.estado === "perdido") return `Cobro perdido: no se pudo leer el gasto (hasta ${usd(c.techo_usd)}).`;
+  if (c.estado === "leido" && c.usd !== null) return `Cost: ${usd(c.usd)}.`;
+  if (c.estado === "pendiente") return `Charge pending: it's read a few minutes after the run closes (up to ${usd(c.techo_usd)}).`;
+  if (c.estado === "perdido") return `Charge lost: the spend couldn't be read (up to ${usd(c.techo_usd)}).`;
   if (c.estado === null) return null;
-  return `Cobro: ${c.estado} (hasta ${usd(c.techo_usd)}).`;
+  return `Charge: ${c.estado} (up to ${usd(c.techo_usd)}).`;
 }
 
 function resultadoDelSeguimiento(s: Seguimiento): Resultado {
@@ -251,22 +336,22 @@ function resultadoDelSeguimiento(s: Seguimiento): Resultado {
     reporte: s.reporte, run: s.run, issue: s.issue, cobro: s.cobro,
   };
   const lineas = [
-    `Prueba ${s.pruebaId}: ${s.estado}.${s.mensaje ? ` ${s.mensaje}` : ""}`,
+    `Test ${s.pruebaId}: ${s.estado}.${s.mensaje ? ` ${s.mensaje}` : ""}`,
     s.issue ? `Issue #${s.issue.numero}: ${s.issue.url}` : null,
-    s.run?.motivo ? `Motivo del run: ${s.run.motivo}` : null,
+    s.run?.motivo ? `Run reason: ${s.run.motivo}` : null,
     textoDelCobro(s.cobro),
   ];
   if (ABIERTOS.has(s.estado)) {
-    lineas.push("Volvé a correr `supcoflow probar --wait`.");
+    lineas.push("Run `supcoflow test --wait` again.");
     return { codigo: SALIDA.esperandoAUnaPersona, json: { ok: false, esperando: "relevamiento", ...datos }, texto: lineas.filter(Boolean).join("\n") };
   }
   if (CON_DESENLACE_OK.has(s.estado)) return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto: lineas.filter(Boolean).join("\n") };
   if (PIDEN_UNA_PERSONA.has(s.estado)) {
-    if (s.reporte) lineas.push(`El caso en la consola: ${s.reporte.url}`);
+    if (s.reporte) lineas.push(`The case in the console: ${s.reporte.url}`);
     const texto = lineas.filter(Boolean).join("\n");
     return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: s.estado, message: s.mensaje ?? texto, ...datos }, texto };
   }
-  const message = `El motor dice que la prueba está en «${s.estado}», un estado que esta versión de la terminal no conoce. Actualizá supcoflow o mirala en la consola.`;
+  const message = `The engine says the test is in «${s.estado}», a state this version of the terminal doesn't know. Update supcoflow or look at it in the console.`;
   return { codigo: SALIDA.inesperado, json: { ok: false, error: "estado_desconocido", message, ...datos }, texto: message };
 }
 
@@ -276,17 +361,17 @@ async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegid
     try {
       const g = await d.pruebas.leer(proyectoId);
       // Un pedido sin confirmar gana sobre la última: seguir la anterior y salir 0 con SU issue se leería
-      // como el desenlace de la prueba recién pedida. Con `--prueba` explícito no se llega acá.
+      // como el desenlace de la prueba recién pedida. Con `--test-id` explícito no se llega acá.
       pruebaId = g.ultima;
       if (g.intento !== null) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
-          "Hay una prueba pedida sin confirmar; repetí `supcoflow probar --autorizo-gasto` sin `--mensaje` para recuperarla, y después `--wait`.");
+          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(g.intento)}\` without --message to recover it, and then \`--wait\`.`);
       }
     } catch (e) {
       return resultadoDeFallo(e);
     }
     if (pruebaId === null) {
-      return fallo(SALIDA.entradaInvalida, "sin_prueba", "No hay una prueba guardada en esta máquina para este proyecto: pedila con `supcoflow probar --autorizo-gasto`, o pasá `--prueba prb_…`.");
+      return fallo(SALIDA.entradaInvalida, "sin_prueba", "There's no saved test on this machine for this project: request one with `supcoflow test --authorize-spend --ceiling <usd> --expect-policy <policy>`, or pass `--test-id prb_…`.");
     }
   }
   // Se aparta lo que puede tardar un sondeo forzado (el primero siempre va, aunque quede poco): así el

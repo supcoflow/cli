@@ -361,7 +361,9 @@ export function revisarGuia(api: URL, clave: string, proyectoId: string, conteni
 
 // Dos cuerpos para una sola ruta: `{contenido, commit?, rama?}` sube el archivo directo (commit y rama son lo que la
 // terminal DECLARA; el motor no los verifica) y `{huella}` es la vía de GitHub (`--desde-github`).
-export type CuerpoDePublicar = { huella: string } | { contenido: string; commit?: string; rama?: string };
+// `ruta` es el archivo que la terminal leyó de verdad (`.supcoflow/guide.md` o el nombre viejo `guia.md`): también es
+// dato declarado, como el commit y la rama. Una terminal ≤ 0.7.0 no la mandaba y el motor lo toma como `guia.md`.
+export type CuerpoDePublicar = { huella: string } | { contenido: string; ruta?: string; commit?: string; rama?: string };
 
 export function publicarGuia(api: URL, clave: string, proyectoId: string, cuerpo: CuerpoDePublicar, f: Fetch): Promise<Respuesta> {
   // La vía de GitHub acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas (la directa no
@@ -374,6 +376,11 @@ export function leerGuia(api: URL, clave: string, proyectoId: string, f: Fetch):
   return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}?comprobar=1`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
 }
 
+// Las publicaciones del repo y la guía que rige ahora (`guide versions`): sólo lectura, la misma clase que `leerGuia`.
+export function leerVersionesDeLaGuia(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Respuesta> {
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/versiones`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
+}
+
 export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen: "repo" | "agente", f: Fetch): Promise<Respuesta> {
   return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/origen`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ origen }) }, f);
 }
@@ -383,9 +390,13 @@ export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen
 export type Widget = {
   tenant_id: string; project_id: string; backend_url: string;
   paquete: "@supcoflow/chat"; version: string; instalar: string;
-  nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; contenido: string; uso: string };
+  // `archivos_anteriores`: nombres con los que antes se sugería el archivo (el chat ya instalado puede estar ahí).
+  nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; archivos_anteriores: string[]; contenido: string; uso: string };
   script: { estado: "disponible_sin_soporte"; linea: string };
   csp: string;
+  // Sólo si el motor los manda arriba de todo (la forma exacta la fija el motor): se pasan tal cual.
+  archivo_sugerido?: string;
+  archivos_anteriores?: string[];
 };
 
 // Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
@@ -397,15 +408,28 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
     [v.tenant_id, v.project_id, v.backend_url, v.version, v.instalar, v.csp].map(texto);
   const [archivo, contenido, uso] = [n.archivo_sugerido, n.contenido, n.uso].map(texto);
   const linea = texto(s.linea);
+  const anteriores = listaDeTextos(n.archivos_anteriores ?? v.archivos_anteriores);
+  const archivoDeArriba = v.archivo_sugerido === undefined ? undefined : texto(v.archivo_sugerido);
+  if (anteriores === null || archivoDeArriba === null || archivoDeArriba === "") throw inesperada(status);
   if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
     || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
     || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
   return {
     tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, paquete: "@supcoflow/chat", version, instalar,
-    nextjs: { estado: n.estado, archivo_sugerido: archivo, contenido, uso },
+    nextjs: { estado: n.estado, archivo_sugerido: archivo, archivos_anteriores: anteriores, contenido, uso },
     script: { estado: "disponible_sin_soporte", linea },
     csp,
+    ...(archivoDeArriba !== undefined ? { archivo_sugerido: archivoDeArriba } : {}),
+    ...(Array.isArray(v.archivos_anteriores) ? { archivos_anteriores: anteriores } : {}),
   };
+}
+
+// Una lista de textos no vacíos; ausente es lista vacía (un motor sin el campo), y cualquier otra forma es null.
+function listaDeTextos(v: unknown): string[] | null {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v)) return null;
+  const textos = v.map(texto);
+  return textos.every((t): t is string => t !== null && t !== "") ? textos : null;
 }
 
 export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Widget> {
@@ -423,7 +447,8 @@ export type Diagnostico = {
   listo: boolean;
   // Sin lista fija de nombres: el motor suma puntos (la pausa de despachos, el run en vuelo, el acuerdo)
   // y la terminal los muestra todos; lo que decide es `listo`.
-  puntos: { punto: string; ok: boolean; mensaje: string }[];
+  // `grupo` lo suma el motor nuevo; sin él, la terminal agrupa por el nombre del punto (`diagnostico.ts`).
+  puntos: { punto: string; ok: boolean; mensaje: string; grupo?: "instalacion" | "prueba" }[];
   politica: string;
   techoUsd: number;
   saldoUsd: number | null;
@@ -444,7 +469,10 @@ export async function leerDiagnostico(api: URL, clave: string, proyectoId: strin
     || puntos.some((p) => !texto(p.punto) || typeof p.ok !== "boolean" || typeof p.mensaje !== "string")) throw inesperada(r.status);
   return {
     listo: c.listo,
-    puntos: puntos.map((p) => ({ punto: p.punto as string, ok: p.ok as boolean, mensaje: taparSecretos(p.mensaje as string) })),
+    puntos: puntos.map((p) => ({
+      punto: p.punto as string, ok: p.ok as boolean, mensaje: taparSecretos(p.mensaje as string),
+      ...(p.grupo === "instalacion" || p.grupo === "prueba" ? { grupo: p.grupo } : {}),
+    })),
     politica: c.politica as string,
     techoUsd: c.techo_usd,
     saldoUsd: saldo, topeUsd: tope, comprometidoUsd: comprometido,
@@ -452,7 +480,8 @@ export async function leerDiagnostico(api: URL, clave: string, proyectoId: strin
   };
 }
 
-export type IntentoDePrueba = { clave: string; mensaje: string | null; techoUsd: number };
+// `politicaEsperada` es la que la persona vio al autorizar; el motor compara las dos cosas con las de ahora.
+export type IntentoDePrueba = { clave: string; mensaje: string | null; techoUsd: number; politicaEsperada: "relevar" | "guardar" | null };
 
 // Tres desenlaces y no excepciones, porque cada uno hace algo distinto con el intento guardado:
 // `aceptada` lo confirma, `rechazo` lo cierra (el motor no creó nada con esa clave) y `ambigua` lo
@@ -469,6 +498,7 @@ export type RespuestaDePrueba =
 export async function pedirPrueba(api: URL, clave: string, proyectoId: string, intento: IntentoDePrueba, f: Fetch): Promise<RespuestaDePrueba> {
   const cuerpo: Record<string, unknown> = { techo_usd: intento.techoUsd };
   if (intento.mensaje !== null) cuerpo.mensaje = intento.mensaje;
+  if (intento.politicaEsperada !== null) cuerpo.politica_esperada = intento.politicaEsperada;
   let r: Respuesta;
   try {
     r = await pedir(api, `${rutaDelProyecto(proyectoId)}/pruebas`, {

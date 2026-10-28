@@ -1,12 +1,14 @@
 // src/comandos/guia.ts
-// `guia revisar|publicar|ver|usar` (bloque 5): la guía del producto que vive en el repo del cliente
-// (`.supcoflow/guia.md`). La terminal NO decide qué es una guía buena —eso lo decide el parser del motor—;
-// lee el archivo, manda UN pedido y traduce la respuesta a los códigos de salida del contrato.
+// `guide check|publish|show|use|versions` (bloque 5 y 0.8.0): la guía del producto que vive en el repo del cliente
+// (`.supcoflow/guide.md`; el nombre viejo `guia.md` se lee sólo si `guide.md` no existe). La terminal NO decide qué
+// es una guía buena —eso lo decide el parser del motor—; lee el archivo, manda UN pedido y traduce la respuesta a
+// los códigos de salida del contrato.
 import path from "node:path";
-import type { CuerpoDePublicar, elegirOrigen, leerGuia, publicarGuia, Respuesta, revisarGuia, Fetch } from "../api.ts";
+import type { CuerpoDePublicar, elegirOrigen, leerGuia, leerVersionesDeLaGuia, publicarGuia, Respuesta, revisarGuia, Fetch } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
-import { huellaDeGuia, MAX_BYTES_DE_LA_GUIA, RUTA_DE_LA_GUIA } from "../guia.ts";
+import { huellaDeGuia, MAX_BYTES_DE_LA_GUIA, RUTA_DE_LA_GUIA, RUTA_VIEJA_DE_LA_GUIA } from "../guia.ts";
+import { NO_LEIDO } from "../lectura.ts";
 import { repoPedido, type Git } from "../repo-local.ts";
 import { desenlace, fallo, rutaDe } from "./configurar.ts";
 import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-repo.ts";
@@ -19,6 +21,7 @@ export type DepsDeGuia = DepsDelProyectoDelRepo & {
   // un test no lance procesos.
   gitDeclarado: Git;
   revisar: typeof revisarGuia; publicar: typeof publicarGuia; ver: typeof leerGuia; elegir: typeof elegirOrigen;
+  versiones: typeof leerVersionesDeLaGuia;
 };
 
 // Texto que viene del motor (o del repo, vía el motor) y sale a la terminal de una persona: sin secretos y sin
@@ -28,13 +31,25 @@ export type DepsDeGuia = DepsDelProyectoDelRepo & {
 const limpio = (t: string) => taparSecretos(t.replace(/[\u0000-\u001f\u007f-\u009f]/g, ""));
 const cadena = (v: unknown): string => (typeof v === "string" ? limpio(v) : "");
 const corto = (commit: unknown) => cadena(commit).slice(0, 7);
-const secciones = (n: unknown) => (typeof n === "number" ? `${n} ${n === 1 ? "sección" : "secciones"}` : "secciones sin contar");
-const NOMBRE_DEL_ORIGEN = { repo: "la del repo", agente: "la de nuestro agente" } as const;
+const secciones = (n: unknown) => (typeof n === "number" ? `${n} ${n === 1 ? "section" : "sections"}` : "sections not counted");
+const NOMBRE_DEL_ORIGEN = { repo: "the repo's", agente: "our agent's" } as const;
+// El valor del flag `--source` para un origen de la API (el de nuestro agente se pide como `agent`).
+const COMO_SE_PIDE = { repo: "repo", agente: "agent" } as const;
+// Los avisos del nombre del archivo; los códigos son los que usa el motor por GitHub (`aviso`).
+const AVISOS_DEL_NOMBRE = {
+  nombre_viejo: `\`${RUTA_VIEJA_DE_LA_GUIA}\` is the old name: rename it to \`guide.md\`.`,
+  nombre_viejo_ignorado: `Both \`${RUTA_DE_LA_GUIA}\` and \`${RUTA_VIEJA_DE_LA_GUIA}\` exist: I use guide.md and ignore guia.md.`,
+} as const;
+type AvisoDelNombre = keyof typeof AVISOS_DEL_NOMBRE;
+
+type Leida = { ok: true; texto: string; raiz: string; ruta: string; aviso: AvisoDelNombre | null };
 
 // ─── El archivo local ───
 // Se busca en la raíz de ESTE clon, nunca en el cwd: parado en una subcarpeta sigue siendo la guía del repo.
 // Con `--repo` y sin clon de ese repo no hay dónde leerla (publicar lee la rama, pero la huella sale del archivo).
-async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promise<{ ok: true; texto: string; raiz: string } | { ok: false; resultado: Resultado }> {
+// Se lee `guide.md`; SÓLO si no existe se lee `guia.md` (si `guide.md` existe y no se puede leer, o no valida, es un
+// error: nunca motivo para leer el viejo). Si están los dos manda `guide.md` y se avisa que el otro se ignora.
+async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promise<Leida | { ok: false; resultado: Resultado }> {
   let raiz: string | null;
   try {
     raiz = (await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd })).raiz;
@@ -42,40 +57,60 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
     return { ok: false, resultado: resultadoDeFallo(e) };
   }
   if (raiz === null) {
-    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `No tengo el clon de ese repo acá, y la guía se lee de ${RUTA_DE_LA_GUIA}: parate en el clon del repo.`) };
+    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `I don't have that repo's clone here, and the guide is read from ${RUTA_DE_LA_GUIA}: stand in the repo's clone.`) };
   }
-  const leido = d.leerArchivoChico(path.join(raiz, RUTA_DE_LA_GUIA), MAX_BYTES_DE_LA_GUIA);
+  let ruta = RUTA_DE_LA_GUIA;
+  let aviso: AvisoDelNombre | null = null;
+  let leido = d.leerArchivoChico(path.join(raiz, ruta), MAX_BYTES_DE_LA_GUIA);
+  if ("error" in leido && leido.error === NO_LEIDO.noExiste) {
+    const vieja = d.leerArchivoChico(path.join(raiz, RUTA_VIEJA_DE_LA_GUIA), MAX_BYTES_DE_LA_GUIA);
+    if ("error" in vieja && vieja.error === NO_LEIDO.noExiste) {
+      return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${RUTA_DE_LA_GUIA} is missing in the repo: write it (one section per screen) and run again.`) };
+    }
+    ruta = RUTA_VIEJA_DE_LA_GUIA;
+    aviso = "nombre_viejo";
+    leido = vieja;
+  } else if (!("error" in leido)) {
+    // Con `guide.md` leído, el viejo sólo se mira para avisar que se ignora (no se lee su contenido).
+    const vieja = d.leerArchivoChico(path.join(raiz, RUTA_VIEJA_DE_LA_GUIA), 1);
+    if (!("error" in vieja) || vieja.error !== NO_LEIDO.noExiste) aviso = "nombre_viejo_ignorado";
+  }
   if ("error" in leido) {
-    if (leido.error === "no existe") return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `Falta ${RUTA_DE_LA_GUIA} en el repo: escribila (una sección por pantalla) y volvé a correr.`) };
-    if (leido.error === "es demasiado grande") return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_muy_grande", `${RUTA_DE_LA_GUIA} pasa los ${MAX_BYTES_DE_LA_GUIA / 1024} KB: acortala.`) };
-    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `No leo ${RUTA_DE_LA_GUIA}: ${limpio(leido.error)}.`) };
+    if (leido.error === NO_LEIDO.demasiadoGrande) return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_muy_grande", `${ruta} is over ${MAX_BYTES_DE_LA_GUIA / 1024} KB: shorten it.`) };
+    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `I can't read ${ruta}: ${limpio(leido.error)}.`) };
   }
   try {
     // ignoreBOM: el BOM se CONSERVA en el texto; quitarlo es regla de la huella (`huellaDeGuia`), no de la lectura.
     // fatal: un byte inválido no se reemplaza en silencio, porque la huella de GitHub no coincidiría nunca.
-    return { ok: true, raiz, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
+    return { ok: true, raiz, ruta, aviso, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
   } catch {
-    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `${RUTA_DE_LA_GUIA} no es UTF-8 válido.`) };
+    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `${ruta} isn't valid UTF-8.`) };
   }
 }
 
+// El aviso del nombre viaja en el JSON (`aviso`) y como última línea del texto, en lo que salió bien.
+function conAviso(r: Resultado, aviso: AvisoDelNombre | null): Resultado {
+  if (aviso === null || r.codigo !== SALIDA.ok) return r;
+  return { ...r, json: { ...r.json, aviso }, texto: `${r.texto}\n${AVISOS_DEL_NOMBRE[aviso]}` };
+}
+
 // ─── El desenlace propio de la guía, encima del de configurar ───
-function desenlaceDeGuia(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => Resultado): Resultado {
+function desenlaceDeGuia(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => Resultado, ruta: string = RUTA_DE_LA_GUIA): Resultado {
   const c = r.cuerpo as Record<string, unknown> | null;
   // 2xx, 401, 5xx y cuerpos raros los resuelve el de configurar. Ojo: la terminal no distingue 500
   // connect_no_disponible de 502 github_no_disponible (ambos llegan como falla del servicio): los dos son 1.
   if (r.status < 400 || r.status === 401 || r.status >= 500 || typeof c !== "object" || c === null) return desenlace(r, ok);
   const error = typeof c.error === "string" ? c.error : "rechazado";
-  const message = limpio(typeof c.message === "string" ? c.message : `El motor rechazó el pedido (${r.status}).`);
+  const message = limpio(typeof c.message === "string" ? c.message : `The engine rejected the request (${r.status}).`);
   const con = (codigo: Resultado["codigo"], extra: Record<string, unknown> = {}, texto = message): Resultado =>
     ({ codigo, json: { ok: false, error, message: taparSecretos(message), ...extra }, texto });
   switch (error) {
     case "guia_no_subida":
     case "guia_distinta": {
       const rama = cadena(c.rama), commit = cadena(c.commit);
-      const donde = rama !== "" ? ` (rama ${rama}${commit !== "" ? `, commit ${corto(commit)}` : ""})` : "";
-      const que = error === "guia_no_subida" ? "La guía no está en la rama principal del repo" : "La guía de la rama principal es otra, no la de tu archivo";
-      return con(SALIDA.esperandoAUnaPersona, { rama: c.rama ?? null, commit: c.commit ?? null }, `${que}${donde}: subí la guía a la rama principal y volvé a correr.`);
+      const donde = rama !== "" ? ` (branch ${rama}${commit !== "" ? `, commit ${corto(commit)}` : ""})` : "";
+      const que = error === "guia_no_subida" ? "The guide isn't on the repo's main branch" : "The main branch's guide is another one, not your file's";
+      return con(SALIDA.esperandoAUnaPersona, { rama: c.rama ?? null, commit: c.commit ?? null }, `${que}${donde}: push the guide to the main branch and run again.`);
     }
     case "instalacion_ausente":
     case "repo_fuera_de_alcance":
@@ -85,10 +120,10 @@ function desenlaceDeGuia(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => 
       const errores = Array.isArray(c.errores) ? c.errores : [];
       const lineas = errores.map((e) => {
         const x = (e ?? {}) as { linea?: unknown; motivo?: unknown };
-        return `línea ${typeof x.linea === "number" ? x.linea : "?"}: ${cadena(x.motivo)}`;
+        return `line ${typeof x.linea === "number" ? x.linea : "?"}: ${cadena(x.motivo)}`;
       });
       return con(SALIDA.entradaInvalida, { errores: errores.map((e) => { const x = (e ?? {}) as { linea?: unknown; motivo?: unknown }; return { linea: x.linea ?? null, motivo: taparSecretos(typeof x.motivo === "string" ? x.motivo : "") }; }) },
-        [`${RUTA_DE_LA_GUIA} está mal armada:`, ...lineas].join("\n"));
+        [`${ruta} is badly formed:`, ...lineas].join("\n"));
     }
     default:
       return desenlace(r, ok);
@@ -101,13 +136,13 @@ export async function guiaRevisar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dr
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   if (flags.dryRun) {
-    const haria = `POST ${rutaDe(p.proyecto, "/guia/revisar")} (${new TextEncoder().encode(g.texto).length} bytes)`;
-    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
+    const haria = `POST ${rutaDe(p.proyecto, "/guia/revisar")} (${new TextEncoder().encode(g.texto).length} bytes, from ${g.ruta})`;
+    return conAviso({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria, ruta: g.ruta }, texto: `With --dry-run I do nothing; without it: ${haria}.` }, g.aviso);
   }
   try {
-    return desenlaceDeGuia(await d.revisar(d.api, p.clave, p.proyecto.id, g.texto, d.fetch), (c) => ({
-      codigo: SALIDA.ok, json: { ok: true, secciones: c.secciones ?? null }, texto: `La guía está bien armada: ${secciones(c.secciones)}.`,
-    }));
+    return conAviso(desenlaceDeGuia(await d.revisar(d.api, p.clave, p.proyecto.id, g.texto, d.fetch), (c) => ({
+      codigo: SALIDA.ok, json: { ok: true, secciones: c.secciones ?? null, ruta: g.ruta }, texto: `The guide is well formed: ${secciones(c.secciones)}.`,
+    }), g.ruta), g.aviso);
   } catch (e) {
     return resultadoDeFallo(e);
   }
@@ -133,47 +168,55 @@ async function declarado(d: DepsDeGuia, raiz: string): Promise<{ commit?: string
   return rama !== null && rama !== "" && rama !== "HEAD" ? { commit, rama } : { commit };
 }
 
-export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun"> & { desdeGithub?: boolean }): Promise<Resultado> {
+export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun" | "fromGithub">): Promise<Resultado> {
   const g = await leerLaGuia(d, flags);
   if (!g.ok) return g.resultado;
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
-  const github = flags.desdeGithub === true;
+  const github = flags.fromGithub === true;
   // La vía de GitHub manda la huella del archivo local TAL CUAL (con BOM y \r\n: normalizarla es regla de
   // `huellaDeGuia`). La directa manda el contenido crudo y el motor calcula la huella: la terminal no la necesita.
   const huella = github ? huellaDeGuia(g.texto) : null;
   const decl = github ? {} : await declarado(d, g.raiz);
-  const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : { contenido: g.texto, ...decl };
-  const cuando = decl.commit ? `commit ${decl.commit.slice(0, 7)}${decl.rama ? ` de ${cadena(decl.rama)}` : ""} declarado` : "sin commit";
+  // La directa manda además la ruta que se leyó de verdad (dato declarado, como el commit y la rama). Por GitHub el
+  // motor resuelve los nombres él mismo, sobre un solo SHA de la rama principal.
+  const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : { contenido: g.texto, ruta: g.ruta, ...decl };
+  const cuando = decl.commit ? `commit ${decl.commit.slice(0, 7)}${decl.rama ? ` of ${cadena(decl.rama)}` : ""} declared` : "no commit";
   // El JSON del dry-run pasa por la misma limpieza que el texto (control primero, secretos después): la rama la
   // decide quien escribió el clon, y un ESC en ella no debe llegar a la terminal por ninguna de las dos salidas.
   if (flags.dryRun) {
     const haria = huella !== null
-      ? `POST ${rutaDe(p.proyecto, "/guia/publicar")} con la huella ${huella.slice(0, 12)}…`
-      : `POST ${rutaDe(p.proyecto, "/guia/publicar")} con el contenido (${new TextEncoder().encode(g.texto).length} bytes), ${cuando}`;
-    const json = huella !== null ? { ok: true, dry_run: true, huella, haria } : { ok: true, dry_run: true, commit: decl.commit ? cadena(decl.commit) : null, rama: decl.rama ? cadena(decl.rama) : null, haria };
-    return { codigo: SALIDA.ok, json, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
+      ? `POST ${rutaDe(p.proyecto, "/guia/publicar")} with the fingerprint ${huella.slice(0, 12)}…`
+      : `POST ${rutaDe(p.proyecto, "/guia/publicar")} with the content (${new TextEncoder().encode(g.texto).length} bytes, from ${g.ruta}), ${cuando}`;
+    const json = huella !== null
+      ? { ok: true, dry_run: true, huella, ruta: g.ruta, haria }
+      : { ok: true, dry_run: true, ruta: g.ruta, commit: decl.commit ? cadena(decl.commit) : null, rama: decl.rama ? cadena(decl.rama) : null, haria };
+    return conAviso({ codigo: SALIDA.ok, json, texto: `With --dry-run I do nothing; without it: ${haria}.` }, g.aviso);
   }
   try {
-    return desenlaceDeGuia(await d.publicar(d.api, p.clave, p.proyecto.id, cuerpo, d.fetch), (c) => {
+    return conAviso(desenlaceDeGuia(await d.publicar(d.api, p.clave, p.proyecto.id, cuerpo, d.fetch), (c) => {
       const guia = (c.guia ?? {}) as Record<string, unknown>;
       const ya = c.ya_publicada === true;
       const rem = c.reemplaza as { origen?: unknown; version?: unknown } | null | undefined;
-      const reemplaza = !ya && rem && rem.origen === "agente" && typeof rem.version === "number" ? ` (reemplaza a la de nuestro agente v${rem.version})` : "";
+      const reemplaza = !ya && rem && rem.origen === "agente" && typeof rem.version === "number" ? ` (replaces our agent's v${rem.version})` : "";
       const json = { ok: true, guia: c.guia ?? null, ya_publicada: ya, reemplaza: c.reemplaza ?? null };
+      // Una resubida idéntica devuelve la fila vieja con su ruta histórica: se dice, para que nadie crea que el
+      // renombre quedó registrado.
+      const ruta = cadena(guia.ruta);
+      const nota = ya && ruta !== "" && ruta !== g.ruta ? `\nThat version keeps the file name it was first published with (${ruta}).` : "";
       if (github) {
-        const base = `commit ${corto(guia.commit)} de ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
+        const base = `commit ${corto(guia.commit)} of ${cadena(guia.rama)}, ${secciones(guia.secciones)}`;
         // Republicar re-activa la guía del repo aunque antes rigiera la de nuestro agente: «sigue siendo» mentiría en ese caso.
-        const texto = ya ? `Ya estaba publicada: ${base}. Quedó como guía activa.` : `Guía publicada: ${base}. Es la guía activa${reemplaza}.`;
+        const texto = ya ? `It was already published: ${base}. It stayed as the active guide.${nota}` : `Guide published: ${base}. It's the active guide${reemplaza}.${nota}`;
         return { codigo: SALIDA.ok, json, texto };
       }
       // El commit se muestra como lo que es: lo que la terminal dijo, no lo que GitHub confirmó.
-      const origen = decl.commit ? `commit ${decl.commit.slice(0, 7)} declarado por la terminal (no verificado en GitHub)` : "sin commit";
+      const origen = decl.commit ? `commit ${decl.commit.slice(0, 7)} declared by the terminal (not verified in GitHub)` : "no commit";
       const texto = ya
-        ? `Ya estaba subida: ${secciones(guia.secciones)}. Quedó como guía activa; ${origen}.`
-        : `Guía subida: ${secciones(guia.secciones)}. Es la guía activa${reemplaza}; ${origen}.`;
+        ? `It was already uploaded: ${secciones(guia.secciones)}. It stayed as the active guide; ${origen}.${nota}`
+        : `Guide uploaded: ${secciones(guia.secciones)}. It's the active guide${reemplaza}; ${origen}.${nota}`;
       return { codigo: SALIDA.ok, json: { ...json, commit_declarado: decl.commit ?? null }, texto };
-    });
+    }, g.ruta), g.aviso);
   } catch (e) {
     return resultadoDeFallo(e);
   }
@@ -189,30 +232,33 @@ export async function guiaVer(d: DepsDeGuia, flags: Pick<Flags, "repo">): Promis
       const rama = c.rama as { al_dia?: unknown; commit?: unknown } | undefined;
       const alDia = rama && typeof rama.al_dia === "boolean" ? rama.al_dia : null;
       const json = { ok: true, guia: guia ?? null, otra: otra ?? null, al_dia: alDia, rama: rama ?? null };
-      if (!guia) return { codigo: SALIDA.ok, json, texto: "Este proyecto no tiene guía activa: `supcoflow guia publicar` sube la del repo." };
+      if (!guia) return { codigo: SALIDA.ok, json, texto: "This project has no active guide: `supcoflow guide publish` uploads the repo's." };
       const lineas: string[] = [];
       if (guia.origen === "repo") {
-        lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.repo} (versión ${guia.version}, ${secciones(guia.secciones)}).`);
+        lineas.push(`Active guide: ${NOMBRE_DEL_ORIGEN.repo} (version ${guia.version}, ${secciones(guia.secciones)}).`);
+        // La ruta es la que se leyó de verdad; por la terminal es declarada (el motor no la verificó), por GitHub no.
+        const ruta = cadena(guia.ruta);
+        if (ruta !== "") lineas.push(`File: ${ruta}${guia.procedencia === "terminal" ? " (declared by the terminal)" : ""}.`);
         if (guia.procedencia === "terminal") {
           // Subida desde la terminal: el motor NO comparó nada contra GitHub a propósito (al_dia null), así que "no pude
           // comprobar la rama" sería falso. Commit y rama son lo que declaró quien subió; el id crudo de quien publicó
           // (usr_…) no le dice nada a una persona y la terminal no resuelve nombres: queda sólo en el JSON.
           const commit = cadena(guia.commit), rama = cadena(guia.rama);
-          const partes = [cadena(guia.repo), rama !== "" ? `rama ${rama}` : "", commit !== "" ? `commit ${corto(commit)} (declarado)` : "sin commit declarado"].filter((x) => x !== "");
-          lineas.push(`Procedencia: ${partes.join(", ")}.`);
-          lineas.push("Subida desde la terminal; el commit es declarado, no verificado en GitHub.");
+          const partes = [cadena(guia.repo), rama !== "" ? `branch ${rama}` : "", commit !== "" ? `commit ${corto(commit)} (declared)` : "no declared commit"].filter((x) => x !== "");
+          lineas.push(`Source: ${partes.join(", ")}.`);
+          lineas.push("Uploaded from the terminal; the commit is declared, not verified in GitHub.");
         } else {
-          lineas.push(`Procedencia: ${cadena(guia.repo)}, rama ${cadena(guia.rama)}, commit ${corto(guia.commit)}, publicada por ${cadena(guia.publicada_por)}.`);
-          if (alDia === true) lineas.push("Está al día con la rama.");
-          else if (alDia === false) lineas.push("En la rama hay otra versión: corré `supcoflow guia publicar`.");
-          else lineas.push("No pude comprobar la rama ahora.");
+          lineas.push(`Source: ${cadena(guia.repo)}, branch ${cadena(guia.rama)}, commit ${corto(guia.commit)}, published by ${cadena(guia.publicada_por)}.`);
+          if (alDia === true) lineas.push("It's up to date with the branch.");
+          else if (alDia === false) lineas.push("The branch has another version: run `supcoflow guide publish`.");
+          else lineas.push("I couldn't check the branch right now.");
         }
       } else {
-        lineas.push(`Guía activa: ${NOMBRE_DEL_ORIGEN.agente} (v${guia.version}, ${secciones(guia.secciones)}).`);
-        lineas.push("Procedencia: la escribió nuestro agente y la aprobó una persona.");
+        lineas.push(`Active guide: ${NOMBRE_DEL_ORIGEN.agente} (v${guia.version}, ${secciones(guia.secciones)}).`);
+        lineas.push("Source: our agent wrote it and a person approved it.");
       }
       if (otra && (otra.origen === "repo" || otra.origen === "agente")) {
-        lineas.push(`También hay ${NOMBRE_DEL_ORIGEN[otra.origen]} (v${typeof otra.version === "number" ? otra.version : "?"}): \`supcoflow guia usar --origen ${otra.origen}\` la activa.`);
+        lineas.push(`There's also ${NOMBRE_DEL_ORIGEN[otra.origen]} (v${typeof otra.version === "number" ? otra.version : "?"}): \`supcoflow guide use --source ${COMO_SE_PIDE[otra.origen]}\` activates it.`);
       }
       return { codigo: SALIDA.ok, json, texto: lineas.join("\n") };
     });
@@ -221,20 +267,55 @@ export async function guiaVer(d: DepsDeGuia, flags: Pick<Flags, "repo">): Promis
   }
 }
 
-export async function guiaUsar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun" | "origen">): Promise<Resultado> {
-  const origen = flags.origen ?? null;
-  if (origen === null) return fallo(SALIDA.entradaInvalida, "falta_origen", "Decí cuál: `supcoflow guia usar --origen repo` o `--origen agente`.");
-  if (origen !== "repo" && origen !== "agente") return fallo(SALIDA.entradaInvalida, "origen_invalido", "--origen es `repo` o `agente`.");
+export async function guiaUsar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun" | "source">): Promise<Resultado> {
+  const pedido = flags.source ?? null;
+  if (pedido === null) return fallo(SALIDA.entradaInvalida, "falta_origen", "Say which: `supcoflow guide use --source repo` or `--source agent`.");
+  // A la API siempre viaja su valor (`agente`); `agente` también se acepta, por el alias viejo.
+  const origen = pedido === "repo" ? "repo" : pedido === "agent" || pedido === "agente" ? "agente" : null;
+  if (origen === null) return fallo(SALIDA.entradaInvalida, "origen_invalido", "--source is `repo` or `agent`.");
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   if (flags.dryRun) {
     const haria = `POST ${rutaDe(p.proyecto, "/guia/origen")} {origen: ${origen}}`;
-    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` };
+    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `With --dry-run I do nothing; without it: ${haria}.` };
   }
   try {
     return desenlaceDeGuia(await d.elegir(d.api, p.clave, p.proyecto.id, origen, d.fetch), (c) => ({
-      codigo: SALIDA.ok, json: { ok: true, guia: c.guia ?? null }, texto: `Ahora la guía activa es ${NOMBRE_DEL_ORIGEN[origen]}.`,
+      codigo: SALIDA.ok, json: { ok: true, guia: c.guia ?? null }, texto: `Now the active guide is ${NOMBRE_DEL_ORIGEN[origen]}.`,
     }));
+  } catch (e) {
+    return resultadoDeFallo(e);
+  }
+}
+
+// `guide versions`: la guía que rige ahora (la que lee el chat) y las publicaciones del repo, de la más nueva a la más
+// vieja. Una sola publicación dice «live»: la que es la vigente (el motor lo decide; acá sólo se muestra).
+export async function guiaVersiones(d: DepsDeGuia, flags: Pick<Flags, "repo">): Promise<Resultado> {
+  const p = await proyectoDelRepo(d, flags);
+  if (!p.ok) return p.resultado;
+  try {
+    return desenlaceDeGuia(await d.versiones(d.api, p.clave, p.proyecto.id, d.fetch), (c) => {
+      const vigente = typeof c.vigente === "object" && c.vigente !== null ? (c.vigente as Record<string, unknown>) : null;
+      const publicaciones = Array.isArray(c.publicaciones) ? (c.publicaciones as unknown[]).map((x) => (typeof x === "object" && x !== null ? (x as Record<string, unknown>) : {})) : [];
+      const json = { ok: true, vigente, publicaciones };
+      const lineas: string[] = [];
+      if (vigente === null) lineas.push("Active now: no guide.");
+      else if (vigente.origen === "agente") lineas.push(`Active now: ${NOMBRE_DEL_ORIGEN.agente} guide, v${vigente.version} (${secciones(vigente.secciones)}).`);
+      else lineas.push(`Active now: ${NOMBRE_DEL_ORIGEN.repo} guide, version ${vigente.version} (${secciones(vigente.secciones)}).`);
+      lineas.push(publicaciones.length === 0 ? "Published from the repo: none." : "Published from the repo, newest first:");
+      for (const x of publicaciones) {
+        const estado = x.live === true || x.estado === "live" ? "live" : "published";
+        const donde = [
+          x.procedencia === "terminal" ? "uploaded from the terminal (declared)" : x.procedencia === "github" ? "verified in GitHub" : "",
+          cadena(x.commit) !== "" ? `commit ${corto(x.commit)}` : "",
+          cadena(x.ruta),
+          cadena(x.publicada_por) !== "" ? `by ${cadena(x.publicada_por)}` : "",
+          cadena(x.publicada_en),
+        ].filter((t) => t !== "");
+        lineas.push(`  v${x.version} ${estado}${donde.length > 0 ? ` · ${donde.join(" · ")}` : ""}`);
+      }
+      return { codigo: SALIDA.ok, json, texto: lineas.join("\n") };
+    });
   } catch (e) {
     return resultadoDeFallo(e);
   }

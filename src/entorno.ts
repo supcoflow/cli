@@ -5,16 +5,17 @@ import { randomUUID } from "node:crypto";
 import {
   chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
 } from "node:fs";
+import { NO_LEIDO } from "./lectura.ts";
 import { homedir, hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
   buscarProyecto, canjear, configurar, leerDiagnostico, leerPrueba, leerWidget, pedirPrueba, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
-  listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, type Yo,
+  listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, leerVersionesDeLaGuia, type Yo,
 } from "./api.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
 import type { DepsDeClaves } from "./comandos/claves.ts";
 import type { DepsDeGuia } from "./comandos/guia.ts";
-import { esCarpetaReal, rutaRealOEnNada, type DepsDeInstalacion } from "./comandos/instalacion.ts";
+import { esCarpetaReal, esEnlaceReal, rutaRealOEnNada, type DepsDeInstalacion } from "./comandos/instalacion.ts";
 import { DESCRIPCION } from "./comandos/describir.ts";
 import type { DepsDeWidget } from "./comandos/widget.ts";
 import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
@@ -264,21 +265,21 @@ export function leerArchivoChico(p: string, tope: number): { bytes: Uint8Array }
     fd = openSync(p, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
-    return { error: code === "ENOENT" ? "no existe" : code === "ELOOP" ? "es un enlace" : "no se pudo abrir" };
+    return { error: code === "ENOENT" ? NO_LEIDO.noExiste : code === "ELOOP" ? NO_LEIDO.esUnEnlace : NO_LEIDO.noSePudoAbrir };
   }
   try {
-    if (!fstatSync(fd).isFile()) return { error: "no es un archivo común" };
+    if (!fstatSync(fd).isFile()) return { error: NO_LEIDO.noEsComun };
     const buf = Buffer.alloc(tope + 1);
     let n = 0;
     for (;;) {
       const leidos = readSync(fd, buf, n, buf.length - n, null);
       if (leidos === 0) break;
       n += leidos;
-      if (n > tope) return { error: "es demasiado grande" };
+      if (n > tope) return { error: NO_LEIDO.demasiadoGrande };
     }
     return { bytes: new Uint8Array(buf.subarray(0, n)) };
   } catch {
-    return { error: "no se pudo leer" };
+    return { error: NO_LEIDO.noSePudoLeer };
   } finally {
     closeSync(fd);
   }
@@ -318,7 +319,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
       try {
         const st = fstatSync(fd);
         if (!st.isFile()) return noSeLee(p, "no es un archivo común");
-        if (st.size > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, "es demasiado grande");
+        if (st.size > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, NO_LEIDO.demasiadoGrande);
         // Se lee hasta el tope + 1 y no `st.size`: el archivo puede crecer entre el fstat y la lectura.
         const buf = Buffer.alloc(TOPE_DEL_ARCHIVO_DEL_REPO + 1);
         let n = 0;
@@ -326,7 +327,7 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
           const leidos = readSync(fd, buf, n, buf.length - n, null);
           if (leidos === 0) break;
           n += leidos;
-          if (n > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, "es demasiado grande");
+          if (n > TOPE_DEL_ARCHIVO_DEL_REPO) return noSeLee(p, NO_LEIDO.demasiadoGrande);
         }
         return buf.subarray(0, n).toString("utf8");
       } catch {
@@ -480,7 +481,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     guia: {
       ...configurarEnElMotor,
       leerArchivoChico, fetch, gitDeclarado: gitRapido,
-      revisar: revisarGuia, publicar: publicarGuia, ver: leerGuia, elegir: elegirOrigen,
+      revisar: revisarGuia, publicar: publicarGuia, ver: leerGuia, elegir: elegirOrigen, versiones: leerVersionesDeLaGuia,
     },
     claves: {
       ...configurarEnElMotor,
@@ -497,7 +498,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     // para lo que la terminal dice de sí misma.
     instalacion: {
       ...configurarEnElMotor,
-      leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal,
+      leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal, esEnlace: esEnlaceReal,
       escribir: archivosDelRepo(avisar).escribir,
       terminal: DESCRIPCION.version,
     },

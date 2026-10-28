@@ -19,7 +19,10 @@ import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
 import { dentroDeUnWorkingTree } from "./guardado/repo.ts";
 
-export type Intento = { clave: string; mensaje: string | null; techoUsd: number };
+// `politicaEsperada` es la que la persona vio al autorizar (valor de la API); null si no se pasó (alias viejo) o si el
+// intento lo guardó la 0.7.0, que no la mandaba. El reintento reenvía el mismo cuerpo, así que se guarda con el intento.
+export type PoliticaEsperada = "relevar" | "guardar";
+export type Intento = { clave: string; mensaje: string | null; techoUsd: number; politicaEsperada: PoliticaEsperada | null };
 export type LoGuardado = { intento: Intento | null; ultima: string | null };
 
 export type RegistroDePruebas = {
@@ -33,10 +36,13 @@ export type RegistroDePruebas = {
   descartar(proyectoId: string): Promise<void>;
 };
 
-function esIntento(v: unknown): v is { clave: string; mensaje: string | null; techo_usd: number } {
+type IntentoGuardado = { clave: string; mensaje: string | null; techo_usd: number; politica_esperada?: PoliticaEsperada | null };
+
+function esIntento(v: unknown): v is IntentoGuardado {
   if (typeof v !== "object" || v === null) return false;
   const i = v as Record<string, unknown>;
-  return typeof i.clave === "string" && i.clave.length > 0 && (i.mensaje === null || typeof i.mensaje === "string") && typeof i.techo_usd === "number";
+  const politica = i.politica_esperada === undefined || i.politica_esperada === null || i.politica_esperada === "relevar" || i.politica_esperada === "guardar";
+  return typeof i.clave === "string" && i.clave.length > 0 && (i.mensaje === null || typeof i.mensaje === "string") && typeof i.techo_usd === "number" && politica;
 }
 
 export function crearRegistroDePruebas(d: {
@@ -73,8 +79,11 @@ export function crearRegistroDePruebas(d: {
     const intentoOk = o.intento === null || esIntento(o.intento);
     const ultimaOk = o.ultima === null || typeof o.ultima === "string";
     if (!intentoOk || !ultimaOk) throw noGuardada("entender");
-    const i = o.intento as { clave: string; mensaje: string | null; techo_usd: number } | null;
-    return { intento: i === null ? null : { clave: i.clave, mensaje: i.mensaje, techoUsd: i.techo_usd }, ultima: o.ultima as string | null };
+    const i = o.intento as IntentoGuardado | null;
+    return {
+      intento: i === null ? null : { clave: i.clave, mensaje: i.mensaje, techoUsd: i.techo_usd, politicaEsperada: i.politica_esperada ?? null },
+      ultima: o.ultima as string | null,
+    };
   }
 
   async function escribir(proyectoId: string, g: LoGuardado): Promise<void> {
@@ -91,7 +100,9 @@ export function crearRegistroDePruebas(d: {
         `No guardo el pedido de la prueba dentro de un repo de git (${raiz}); sin guardarlo no lo mando. Apuntá XDG_CONFIG_HOME fuera de un repo.`);
     }
     const valor = JSON.stringify({
-      intento: g.intento === null ? null : { clave: g.intento.clave, mensaje: g.intento.mensaje, techo_usd: g.intento.techoUsd },
+      intento: g.intento === null
+        ? null
+        : { clave: g.intento.clave, mensaje: g.intento.mensaje, techo_usd: g.intento.techoUsd, politica_esperada: g.intento.politicaEsperada },
       ultima: g.ultima,
     });
     try {

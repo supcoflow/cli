@@ -26,11 +26,11 @@ const OPERACION = "clave_crear";
 const SUFIJO = /^scf_([0-9a-f]{16})_[0-9a-f]{64}$/;
 const ID_DE_CLAVE = /^cla_[0-9a-f]{16}$/;
 
-export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "nombre" | "guardarEn" | "dryRun">): Promise<Resultado> {
-  if (flags.guardarEn === null) return fallo(SALIDA.entradaInvalida, "falta_guardar_en", "Decí dónde guardar la clave: `supcoflow claves crear --nombre ci --guardar-en ~/ci.key` (fuera de un repo).");
-  if (flags.nombre === null) return fallo(SALIDA.entradaInvalida, "falta_nombre", "Poné un nombre que diga para qué es: `--nombre ci`.");
+export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "name" | "saveTo" | "dryRun">): Promise<Resultado> {
+  if (flags.saveTo === null) return fallo(SALIDA.entradaInvalida, "falta_guardar_en", "Decí dónde guardar la clave: `supcoflow claves crear --nombre ci --guardar-en ~/ci.key` (fuera de un repo).");
+  if (flags.name === null) return fallo(SALIDA.entradaInvalida, "falta_nombre", "Poné un nombre que diga para qué es: `--nombre ci`.");
   // Absoluta desde ya: la salida dice dónde quedó sin depender de dónde estaba parado el comando.
-  const destino = path.resolve(d.cwd, flags.guardarEn);
+  const destino = path.resolve(d.cwd, flags.saveTo);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const ruta = rutaDe(p.proyecto, "/claves");
@@ -38,7 +38,7 @@ export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "
   const invalido = d.secretos.validarDestino(destino);
   if (invalido !== null) return fallo(invalido.codigo, "destino_invalido", `${destino}: ${invalido.error}.`);
   if (flags.dryRun) return dryRun(`POST ${ruta} y después …/confirmar`);
-  const alcance = `${p.proyecto.id}#${flags.nombre}`;
+  const alcance = `${p.proyecto.id}#${flags.name}`;
   // El registro de idempotencia pone el alcance en minúsculas (`CI` y `ci` comparten fila): el candado
   // tiene que coincidir, o dos procesos con la misma clave de reintento corrían a la vez.
 
@@ -78,7 +78,7 @@ export async function clavesCrear(d: DepsDeClaves, flags: Pick<Flags, "repo" | "
     // 3. El ciclo. Estricta: sin la clave de reintento guardada no se manda nada (Review Focus 15).
     const key = await d.idempotencia.claveDe(OPERACION, alcance, { estricta: true });
     for (let vuelta = 0; vuelta < 2; vuelta++) {
-      const r = await d.configurar(d.api, p.clave, ruta, { nombre: flags.nombre }, { idempotencyKey: key });
+      const r = await d.configurar(d.api, p.clave, ruta, { nombre: flags.name }, { idempotencyKey: key });
       if (r.status === 200 && r.cuerpo.estado === "activa") {
         // El motor no rota una activa (no devuelve secreto): vale sólo si lo que tenemos es su secreto vigente.
         const claveId = String(r.cuerpo.clave_id);

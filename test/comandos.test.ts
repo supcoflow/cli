@@ -367,53 +367,54 @@ describe("con el llavero sin responder al leer la clave", () => {
 describe("flags que no aplican (despacho)", () => {
   const sin = (c: string, ...f: string[]) => flagQueNoAplica(c, f);
   it("un flag de configurar en un comando que no lo acepta no aplica", () => {
-    expect(sin("quien-soy", "sitio")).not.toBeNull();
-    expect(sin("chat prender", "tema")).not.toBeNull();
-    expect(sin("chat marca", "archivo")).not.toBeNull();
-    expect(sin("claves listar", "guardarEn")).not.toBeNull();
-    expect(sin("claves crear", "id")).not.toBeNull();
-    expect(sin("catalogo", "repo")).not.toBeNull();
+    expect(sin("whoami", "site")).not.toBeNull();
+    expect(sin("chat on", "theme")).not.toBeNull();
+    expect(sin("chat brand", "file")).not.toBeNull();
+    expect(sin("keys list", "saveTo")).not.toBeNull();
+    expect(sin("keys create", "id")).not.toBeNull();
+    expect(sin("catalog", "repo")).not.toBeNull();
     expect(sin("login", "repo")).not.toBeNull();
-    expect(sin("guia ver", "origen")).not.toBeNull();
-    expect(sin("guia publicar", "origen")).not.toBeNull();
-    expect(sin("claves listar", "origen")).not.toBeNull();
-    expect(sin("guia revisar", "desdeGithub")).not.toBeNull();
-    expect(sin("guia ver", "desdeGithub")).not.toBeNull();
+    expect(sin("guide show", "source")).not.toBeNull();
+    expect(sin("guide publish", "source")).not.toBeNull();
+    expect(sin("keys list", "source")).not.toBeNull();
+    expect(sin("guide check", "fromGithub")).not.toBeNull();
+    expect(sin("guide show", "fromGithub")).not.toBeNull();
+    expect(sin("guide versions", "fromGithub")).not.toBeNull();
   });
   it("los flags de cada comando de configurar sí aplican", () => {
-    expect(sin("sitios agregar", "sitio", "repo")).toBeNull();
-    expect(sin("chat marca", "titulo", "saludo", "tema", "repo")).toBeNull();
-    expect(sin("chat logo", "archivo")).toBeNull();
-    expect(sin("datos fijar", "permitir")).toBeNull();
-    expect(sin("politica fijar", "modo")).toBeNull();
-    expect(sin("claves crear", "nombre", "guardarEn")).toBeNull();
-    expect(sin("claves revocar", "id")).toBeNull();
-    expect(sin("configuracion", "repo")).toBeNull();
-    expect(sin("guia usar", "origen", "repo")).toBeNull();
-    expect(sin("guia revisar", "repo")).toBeNull();
-    expect(sin("guia publicar", "desdeGithub", "repo")).toBeNull();
-    expect(sin("proyecto ver", "repo")).toBeNull();
+    expect(sin("sites add", "site", "repo")).toBeNull();
+    expect(sin("chat brand", "title", "greeting", "theme", "repo")).toBeNull();
+    expect(sin("chat logo", "file")).toBeNull();
+    expect(sin("data set", "allow")).toBeNull();
+    expect(sin("policy set", "mode")).toBeNull();
+    expect(sin("keys create", "name", "saveTo")).toBeNull();
+    expect(sin("keys revoke", "id")).toBeNull();
+    expect(sin("config", "repo")).toBeNull();
+    expect(sin("guide use", "source", "repo")).toBeNull();
+    expect(sin("guide check", "repo")).toBeNull();
+    expect(sin("guide publish", "fromGithub", "repo")).toBeNull();
+    expect(sin("guide versions", "repo")).toBeNull();
+    expect(sin("project show", "repo")).toBeNull();
   });
-  it("bloque 6: --skill y --app sólo en `instalacion anotar`; `widget` toma --repo", () => {
-    expect(sin("instalacion anotar", "skill", "app", "repo")).toBeNull();
+  it("bloque 6: --skill y --app sólo en `install record`; --file también en `chat logo`; `widget` toma --repo", () => {
+    expect(sin("install record", "skill", "app", "repo", "file")).toBeNull();
     expect(sin("widget", "repo")).toBeNull();
-    for (const c of ["widget", "guia publicar", "proyecto crear", "configuracion", "quien-soy"]) {
-      expect(sin(c, "skill"), c).toMatch(/instalacion anotar/);
-      expect(sin(c, "app"), c).toMatch(/instalacion anotar/);
+    for (const c of ["widget", "guide publish", "project create", "config", "whoami"]) {
+      expect(sin(c, "skill"), c).toMatch(/install record/);
+      expect(sin(c, "app"), c).toMatch(/install record/);
+      expect(sin(c, "file"), c).toMatch(/install record/);
     }
-    expect(sin("instalacion anotar", "sitio")).not.toBeNull();
+    expect(sin("install record", "site")).not.toBeNull();
   });
-  it("bloque 7: --autorizo-gasto, --mensaje y --prueba sólo en `probar`; --wait también en `probar`; --repo en los dos", () => {
-    expect(sin("probar", "autorizoGasto", "mensaje", "repo")).toBeNull();
-    expect(sin("probar", "wait", "prueba")).toBeNull();
-    expect(sin("diagnosticar", "repo")).toBeNull();
-    for (const c of ["diagnosticar", "widget", "quien-soy", "login"]) {
-      expect(sin(c, "autorizoGasto"), c).toMatch(/probar/);
-      expect(sin(c, "mensaje"), c).toMatch(/probar/);
-      expect(sin(c, "prueba"), c).toMatch(/probar/);
+  it("bloque 7: --authorize-spend, --ceiling, --expect-policy, --message y --test-id sólo en `test`; --wait también en `test`; --repo en los dos", () => {
+    expect(sin("test", "authorizeSpend", "ceiling", "expectPolicy", "message", "repo")).toBeNull();
+    expect(sin("test", "wait", "testId")).toBeNull();
+    expect(sin("diagnose", "repo")).toBeNull();
+    for (const c of ["diagnose", "widget", "whoami", "login"]) {
+      for (const f of ["authorizeSpend", "ceiling", "expectPolicy", "message", "testId"]) expect(sin(c, f), `${c} ${f}`).toMatch(/supcoflow test/);
     }
-    expect(sin("diagnosticar", "wait")).not.toBeNull();
-    expect(sin("probar", "start")).not.toBeNull();
+    expect(sin("diagnose", "wait")).not.toBeNull();
+    expect(sin("test", "start")).not.toBeNull();
     expect(sin("login", "wait")).toBeNull();
   });
 });

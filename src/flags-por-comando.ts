@@ -1,31 +1,35 @@
 // Qué comandos aceptan cada flag que no es global. Un flag que no aplica sale 3 en vez de ignorarse:
-// un asistente que pasa `--repo` a `quien-soy` creería que preguntó por ese repo. Vive aparte de
-// `cli.ts` (que corre al importarse) para poder probarse sin lanzar el binario.
+// un asistente que pasa `--repo` a `whoami` creería que preguntó por ese repo. Vive aparte de
+// `cli.ts` (que corre al importarse) para poder probarse sin lanzar el binario. Los nombres de los
+// campos son los de `Flags`; los textos nombran los flags y comandos canónicos.
 const DE_CONFIGURAR_CON_REPO = [
-  "configuracion", "chat prender", "chat apagar", "chat marca", "chat logo", "sitios agregar", "sitios quitar",
-  "datos fijar", "politica fijar", "claves crear", "claves listar", "claves revocar",
-  "guia revisar", "guia publicar", "guia ver", "guia usar",
+  "config", "chat on", "chat off", "chat brand", "chat logo", "sites add", "sites remove",
+  "data set", "policy set", "keys create", "keys list", "keys revoke",
+  "guide check", "guide publish", "guide show", "guide use", "guide versions",
 ] as const;
 
 export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: readonly string[]; texto: string }[] = [
-  { flags: ["start"], comandos: ["login", "repo conectar"], texto: "--start es de `supcoflow login` y `supcoflow repo conectar`." },
-  { flags: ["wait"], comandos: ["login", "repo conectar", "probar"], texto: "--wait es de `supcoflow login`, `supcoflow repo conectar` y `supcoflow probar`." },
+  { flags: ["start"], comandos: ["login", "repo connect"], texto: "--start belongs to `supcoflow login` and `supcoflow repo connect`." },
+  { flags: ["wait"], comandos: ["login", "repo connect", "test"], texto: "--wait belongs to `supcoflow login`, `supcoflow repo connect` and `supcoflow test`." },
   {
-    flags: ["repo"], comandos: ["repo conectar", "proyecto crear", "proyecto ver", ...DE_CONFIGURAR_CON_REPO, "widget", "instalacion anotar", "diagnosticar", "probar"],
-    texto: "--repo es de `supcoflow repo conectar`, `proyecto crear|ver`, `widget`, `instalacion anotar`, `diagnosticar`, `probar` y los comandos que configuran un proyecto (no de `catalogo`).",
+    flags: ["repo"], comandos: ["repo connect", "project create", "project show", ...DE_CONFIGURAR_CON_REPO, "widget", "install record", "diagnose", "test"],
+    texto: "--repo belongs to `supcoflow repo connect`, `project create|show`, `widget`, `install record`, `diagnose`, `test` and the commands that configure a project (not to `catalog`).",
   },
-  { flags: ["install", "test"], comandos: ["proyecto crear"], texto: "--install y --test son de `supcoflow proyecto crear`." },
-  { flags: ["sitio"], comandos: ["sitios agregar", "sitios quitar"], texto: "--sitio es de `supcoflow sitios agregar|quitar`." },
-  { flags: ["titulo", "saludo", "tema"], comandos: ["chat marca"], texto: "--titulo, --saludo y --tema son de `supcoflow chat marca`." },
-  { flags: ["archivo"], comandos: ["chat logo"], texto: "--archivo es de `supcoflow chat logo`." },
-  { flags: ["permitir"], comandos: ["datos fijar"], texto: "--permitir es de `supcoflow datos fijar`." },
-  { flags: ["modo"], comandos: ["politica fijar"], texto: "--modo es de `supcoflow politica fijar`." },
-  { flags: ["nombre", "guardarEn"], comandos: ["claves crear"], texto: "--nombre y --guardar-en son de `supcoflow claves crear`." },
-  { flags: ["origen"], comandos: ["guia usar"], texto: "--origen es de `supcoflow guia usar`." },
-  { flags: ["desdeGithub"], comandos: ["guia publicar"], texto: "--desde-github es de `supcoflow guia publicar`." },
-  { flags: ["id"], comandos: ["claves revocar"], texto: "--id es de `supcoflow claves revocar`." },
-  { flags: ["autorizoGasto", "mensaje", "prueba"], comandos: ["probar"], texto: "--autorizo-gasto, --mensaje y --prueba son de `supcoflow probar`." },
-  { flags: ["skill", "app"], comandos: ["instalacion anotar"], texto: "--skill y --app son de `supcoflow instalacion anotar`." },
+  { flags: ["install", "test"], comandos: ["project create"], texto: "--install and --test belong to `supcoflow project create`." },
+  { flags: ["site"], comandos: ["sites add", "sites remove"], texto: "--site belongs to `supcoflow sites add|remove`." },
+  { flags: ["title", "greeting", "theme"], comandos: ["chat brand"], texto: "--title, --greeting and --theme belong to `supcoflow chat brand`." },
+  { flags: ["file"], comandos: ["chat logo", "install record"], texto: "--file belongs to `supcoflow chat logo` and `supcoflow install record`." },
+  { flags: ["allow"], comandos: ["data set"], texto: "--allow belongs to `supcoflow data set`." },
+  { flags: ["mode"], comandos: ["policy set"], texto: "--mode belongs to `supcoflow policy set`." },
+  { flags: ["name", "saveTo"], comandos: ["keys create"], texto: "--name and --save-to belong to `supcoflow keys create`." },
+  { flags: ["source"], comandos: ["guide use"], texto: "--source belongs to `supcoflow guide use`." },
+  { flags: ["fromGithub"], comandos: ["guide publish"], texto: "--from-github belongs to `supcoflow guide publish`." },
+  { flags: ["id"], comandos: ["keys revoke"], texto: "--id belongs to `supcoflow keys revoke`." },
+  {
+    flags: ["authorizeSpend", "ceiling", "expectPolicy", "message", "testId"], comandos: ["test"],
+    texto: "--authorize-spend, --ceiling, --expect-policy, --message and --test-id belong to `supcoflow test`.",
+  },
+  { flags: ["skill", "app"], comandos: ["install record"], texto: "--skill and --app belong to `supcoflow install record`." },
 ];
 
 /** El mensaje del primer flag presente que el comando no acepta, o null si todo aplica. */

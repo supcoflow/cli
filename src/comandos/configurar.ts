@@ -112,27 +112,27 @@ export async function chatPrenderApagar(d: DepsDeConfigurar, flags: Pick<Flags, 
   }));
 }
 
-export async function sitios(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "sitio">, accion: "agregar" | "quitar"): Promise<Resultado> {
-  if (flags.sitio === null) return fallo(SALIDA.entradaInvalida, "falta_sitio", `Falta el sitio: \`supcoflow sitios ${accion} --sitio https://tu-app.com\`.`);
+export async function sitios(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "site">, accion: "agregar" | "quitar"): Promise<Resultado> {
+  if (flags.site === null) return fallo(SALIDA.entradaInvalida, "falta_sitio", `Falta el sitio: \`supcoflow sitios ${accion} --sitio https://tu-app.com\`.`);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const ruta = rutaDe(p.proyecto, "/origenes");
   if (flags.dryRun) return dryRun(`POST ${ruta} {accion: ${accion}}`);
-  return desenlace(await d.configurar(d.api, p.clave, ruta, { accion, origen: flags.sitio }), (c) => ({
+  return desenlace(await d.configurar(d.api, p.clave, ruta, { accion, origen: flags.site }), (c) => ({
     codigo: SALIDA.ok, json: { ok: true, sitios: c.origenes }, texto: `Sitios: ${(c.origenes as string[]).join(", ") || "ninguno"}.`,
   }));
 }
 
-export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "titulo" | "saludo" | "tema">): Promise<Resultado> {
+export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "title" | "greeting" | "theme">): Promise<Resultado> {
   const tema: Record<string, string> = {};
-  for (const t of flags.tema) {
+  for (const t of flags.theme) {
     const i = t.indexOf("=");
     if (i <= 0 || i === t.length - 1) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--tema va como clave=valor (por ejemplo acento=#0a7); recibí «${t}».`);
     const clave = t.slice(0, i);
     if (clave in tema) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--tema ${clave} va una sola vez.`);
     tema[clave] = t.slice(i + 1);
   }
-  if (flags.titulo === null && flags.saludo === null && Object.keys(tema).length === 0) {
+  if (flags.title === null && flags.greeting === null && Object.keys(tema).length === 0) {
     return fallo(SALIDA.entradaInvalida, "marca_vacia", "Pasá al menos --titulo, --saludo o --tema.");
   }
   const p = await proyectoDelRepo(d, flags);
@@ -150,8 +150,8 @@ export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" |
     return resultadoDeFallo(e);
   }
   const cuerpo: Record<string, unknown> = {};
-  const titulo = flags.titulo ?? (typeof actual?.titulo === "string" ? actual.titulo : null);
-  const saludo = flags.saludo ?? (typeof actual?.saludo === "string" ? actual.saludo : null);
+  const titulo = flags.title ?? (typeof actual?.titulo === "string" ? actual.titulo : null);
+  const saludo = flags.greeting ?? (typeof actual?.saludo === "string" ? actual.saludo : null);
   if (titulo !== null) cuerpo.titulo = titulo;
   if (saludo !== null) cuerpo.saludo = saludo;
   const temaActual = typeof actual?.tema === "object" && actual.tema !== null ? (actual.tema as Record<string, string>) : {};
@@ -166,17 +166,17 @@ const MIMES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg
 // El tope del motor es 200 KB (`MAX_LOGO_BYTES`); acá se corta antes para no mandar de más. El motor decide.
 const TOPE_DEL_LOGO = 200_000;
 
-export async function chatLogo(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "archivo">): Promise<Resultado> {
-  if (flags.archivo === null) return fallo(SALIDA.entradaInvalida, "falta_archivo", "Falta el logo: `supcoflow chat logo --archivo logo.png`.");
-  const mime = MIMES[path.extname(flags.archivo).toLowerCase()];
+export async function chatLogo(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "file">): Promise<Resultado> {
+  if (flags.file === null) return fallo(SALIDA.entradaInvalida, "falta_archivo", "Falta el logo: `supcoflow chat logo --archivo logo.png`.");
+  const mime = MIMES[path.extname(flags.file).toLowerCase()];
   if (mime === undefined) return fallo(SALIDA.entradaInvalida, "logo_invalido", "El logo tiene que ser .png, .jpg o .webp.");
-  const leido = d.leerArchivoChico(flags.archivo, TOPE_DEL_LOGO);
-  if ("error" in leido) return fallo(SALIDA.entradaInvalida, "logo_ilegible", `No leo ${flags.archivo}: ${leido.error}.`);
+  const leido = d.leerArchivoChico(flags.file, TOPE_DEL_LOGO);
+  if ("error" in leido) return fallo(SALIDA.entradaInvalida, "logo_ilegible", `No leo ${flags.file}: ${leido.error}.`);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   if (flags.dryRun) return dryRun(`POST ${rutaDe(p.proyecto, "/chat/logo")} (${leido.bytes.length} bytes)`);
   return desenlace(
-    await d.subirLogo(d.api, p.clave, p.proyecto.id, { bytes: leido.bytes, mime, nombre: path.basename(flags.archivo) }),
+    await d.subirLogo(d.api, p.clave, p.proyecto.id, { bytes: leido.bytes, mime, nombre: path.basename(flags.file) }),
     (c) => ({ codigo: SALIDA.ok, json: { ok: true, logo_url: c.logo_url }, texto: "Logo subido." }),
   );
 }
