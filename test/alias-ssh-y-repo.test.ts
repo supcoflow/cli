@@ -85,6 +85,7 @@ describe("V-1 (c): un clon de gitlab.com con --repo equipo/reservas no es ese re
       api: new URL("http://localhost:3000"), guardado, git: GITLAB, cwd: "/w/reservas",
       idempotencia: { claveDe: async () => "k-1", tiene: async () => false, olvidar: async () => {} },
       buscarProyecto: async () => null,
+      quienSoy: async () => ({ via: "api_key", equipo: "tnt_x", usuario: { id: "usr_1", login: "equipo", email: null }, proyecto: null }),
       ultimaConexion: async () => ({ id: "cnx_0123456789abcdef", repo: "equipo/reservas", estado: "conectado", url: "u", venceEn: "v", repoCanonico: "equipo/reservas", fallo: null }),
       crearProyecto: async (_a: URL, _k: string, conexionId: string) => { creados.push(conexionId); return { tipo: "ok", proyecto: PROY, reusado: false }; },
       leerProyecto: async () => ({ proyecto: PROY, github: { estado: "ok", verificadoEn: "2026-10-15T00:00:00.000Z" } }),

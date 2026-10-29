@@ -455,8 +455,9 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   // Los candados de `claves crear` viven al lado de las credenciales, nunca en un repo.
   const candados = crearCandados(fsDelCandadoReal, join(dirname(rutaDelArchivo), "candados"), process.pid, procesoVivo);
   const secretos = crearGuardaDeSecretos(fsDeSecretosReal);
+  // `archivos`: `proyectoDelRepo` lee `.supcoflow/proyecto.json` del clon con él (fricción 6).
   const configurarEnElMotor = {
-    api, guardado, git: gitReal, cwd, avisar,
+    api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar),
     buscarProyecto: (a: URL, clave: string, repo: string) => buscarProyecto(a, clave, repo, fetch),
     leerConfiguracion: (a: URL, clave: string, id: string) => leerConfiguracion(a, clave, id, fetch),
     configurar: (a: URL, clave: string, ruta: string, cuerpo: unknown, extra?: { idempotencyKey?: string }) => configurar(a, clave, ruta, cuerpo, fetch, extra),
@@ -495,6 +496,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     proyecto: {
       api, guardado, git: gitReal, cwd, idempotencia, archivos: archivosDelRepo(avisar), avisar,
       buscarProyecto: (a, clave, repo) => buscarProyecto(a, clave, repo, fetch),
+      quienSoy: (a, clave) => quienSoy(a, clave, fetch),
       ultimaConexion: (a, clave, repo, plazoMs) => ultimaConexion(a, clave, repo, fetch, plazoMs),
       crearProyecto: (a, clave, conexionId, cuerpo, key) => crearProyecto(a, clave, conexionId, cuerpo, key, fetch),
       leerProyecto: (a, clave, id) => leerProyecto(a, clave, id, fetch),
@@ -517,7 +519,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       idempotencia, candados, secretos,
     },
     widget: {
-      api, guardado, git: gitReal, cwd,
+      api, guardado, git: gitReal, cwd, archivos: archivosDelRepo(avisar),
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch),
     },
@@ -530,7 +532,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       terminal: DESCRIPCION.version,
     },
     prueba: {
-      api, guardado, git: gitReal, cwd, avisar, pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
+      api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar), pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
       pedirPrueba: (a, clave, id, intento) => pedirPrueba(a, clave, id, intento, fetch),

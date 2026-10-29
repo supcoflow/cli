@@ -2,19 +2,17 @@
 // `crear` sale de una conexión ya confirmada (`repo conectar`) y deja `.supcoflow/proyecto.json` en la
 // raíz del repo para que la próxima herramienta sepa de qué proyecto se trata sin preguntarle al motor.
 import path from "node:path";
-import type { AltaRemota, Pedido, Proyecto } from "../api.ts";
+import type { AltaRemota, Pedido, Proyecto, Yo } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
 import type { Guardado } from "../guardado/index.ts";
 import type { RegistroDeIdempotencia } from "../idempotencia.ts";
 import { repoPedido, type Git } from "../repo-local.ts";
 import { claveVigente } from "./clave-vigente.ts";
+import { armarElContexto, coherenciaAlCrear, coherenciaDelClon, idDelArchivo, leerElArchivoDelClon, lineaDelContexto } from "./contexto.ts";
 
 const PLAZO_DE_LECTURA_MS = 15_000;
 const OPERACION = "proyecto_crear";
-// Lo único que se lee de un `.supcoflow/proyecto.json` ajeno es su id, y sólo si tiene esta forma:
-// así lo que salga a la terminal no puede ser otra cosa que un id (Review Focus 11).
-const FORMA_DEL_ID = /^proj_[a-z0-9-]{1,80}$/;
 // Los 422/409 del alta que el plan no listaba (alta-desde-conexion.ts del motor).
 const RECHAZOS_DE_UNA_PERSONA = new Set(["instalacion_no_verificada", "repo_fuera_de_la_instalacion"]);
 const RECHAZOS_TRANSITORIOS = new Set(["slug_ocupado", "repo_ya_conectado"]);
@@ -26,6 +24,7 @@ export type DepsDeProyecto = {
   cwd: string;
   idempotencia: RegistroDeIdempotencia;
   buscarProyecto(api: URL, clave: string, repo: string): Promise<Proyecto | null>;
+  quienSoy(api: URL, clave: string): Promise<Yo>;
   ultimaConexion(api: URL, clave: string, repo: string, plazoMs: number): Promise<Pedido | null>;
   crearProyecto(api: URL, clave: string, conexionId: string, cuerpo: { install_command?: string; test_command?: string }, key: string): Promise<AltaRemota>;
   leerProyecto(api: URL, clave: string, id: string): Promise<{ proyecto: Proyecto; github: { estado: string | null; verificadoEn: string | null } }>;
@@ -44,17 +43,6 @@ const comillas = (s: string) => `"${s.replace(/["\\]/g, "\\$&")}"`;
 // secreto: cualquiera que lea el repo lo lee.
 function contenidoDelArchivo(p: Proyecto): string {
   return JSON.stringify({ id: p.id, slug: p.slug, repo: p.repo }, null, 2) + "\n";
-}
-
-function idDelArchivo(crudo: string): string | null {
-  try {
-    const v: unknown = JSON.parse(crudo);
-    if (typeof v !== "object" || v === null) return null;
-    const id = (v as Record<string, unknown>).id;
-    return typeof id === "string" && FORMA_DEL_ID.test(id) ? id : null;
-  } catch {
-    return null;
-  }
 }
 
 // Mismo contenido aunque el formato cambie (otra indentación, otro orden): no es «otro proyecto».
@@ -115,11 +103,21 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
   if (!leida.ok) return leida.resultado;
   const clave = leida.vigente.clave;
 
+  // Antes de conectar o crear nada (fricción 6): el archivo del clon contra lo que la clave ve, y, si va a haber un alta, el
+  // dueño del repo contra la cuenta. Sale 4 `contexto_incoherente` sin tocar nada.
+  const archivo = leerElArchivoDelClon(d.archivos, raiz);
+  if (archivo.estado === "ilegible") return coherenciaDelClon(archivo, null, repo)!;
   let existente: Proyecto | null;
   let conexion: Pedido | null = null;
   try {
     existente = await d.buscarProyecto(d.api, clave, repo);
-    if (existente === null) conexion = await d.ultimaConexion(d.api, clave, repo, PLAZO_DE_LECTURA_MS);
+    const incoherente = coherenciaDelClon(archivo, existente, repo);
+    if (incoherente !== null) return incoherente;
+    if (existente === null) {
+      const alCrear = coherenciaAlCrear({ yo: await d.quienSoy(d.api, clave), fuente: leida.vigente.fuente, repo });
+      if (alCrear !== null) return alCrear;
+      conexion = await d.ultimaConexion(d.api, clave, repo, PLAZO_DE_LECTURA_MS);
+    }
   } catch (e) {
     return resultadoDeFallo(e);
   }
@@ -201,25 +199,34 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
 
 export async function proyectoVer(d: DepsDeProyecto, flags: Pick<Flags, "repo">): Promise<Resultado> {
   let repo: string;
+  let raiz: string | null;
   try {
-    repo = (await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd })).repo;
+    ({ repo, raiz } = await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd }));
   } catch (e) {
     return resultadoDeFallo(e);
   }
   const leida = await claveVigente(d.guardado, d.api.origin);
   if (!leida.ok) return leida.resultado;
   const clave = leida.vigente.clave;
+  const archivo = leerElArchivoDelClon(d.archivos, raiz);
+  if (archivo.estado === "ilegible") return coherenciaDelClon(archivo, null, repo)!;
   try {
     const encontrado = await d.buscarProyecto(d.api, clave, repo);
+    const incoherente = coherenciaDelClon(archivo, encontrado, repo);
+    if (incoherente !== null) return incoherente;
+    // Quién soy, en qué equipo, qué repo y qué proyecto: la línea que la persona lee al empezar, también cuando todo cierra.
+    const yo = await d.quienSoy(d.api, clave);
+    const contexto = armarElContexto({ yo, fuente: leida.vigente.fuente, repo, proyecto: encontrado, archivo });
+    const linea = lineaDelContexto(contexto, yo.proyecto);
     if (encontrado === null) {
-      return { codigo: SALIDA.ok, json: { ok: true, repo, proyecto: null }, texto: "This repo doesn't have a project yet: `supcoflow project create`." };
+      return { codigo: SALIDA.ok, json: { ok: true, repo, proyecto: null, contexto }, texto: `${linea} This repo doesn't have a project yet: \`supcoflow project create\`.` };
     }
     const { proyecto: p, github } = await d.leerProyecto(d.api, clave, encontrado.id);
     const proyecto = { id: p.id, slug: p.slug, repo: p.repo, rama: p.rama, install_command: p.installCommand, test_command: p.testCommand };
     return {
       codigo: SALIDA.ok,
-      json: { ok: true, proyecto, github: { estado: github.estado, verificado_en: github.verificadoEn } },
-      texto: `${p.id} (${p.repo}, branch ${p.rama}): installs with \`${p.installCommand}\`, tests with \`${p.testCommand}\`. GitHub: ${github.estado ?? "not verified"}.`,
+      json: { ok: true, proyecto, github: { estado: github.estado, verificado_en: github.verificadoEn }, contexto },
+      texto: `${linea} ${p.id} (${p.repo}, branch ${p.rama}): installs with \`${p.installCommand}\`, tests with \`${p.testCommand}\`. GitHub: ${github.estado ?? "not verified"}.`,
     };
   } catch (e) {
     return resultadoDeFallo(e);

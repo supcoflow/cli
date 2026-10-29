@@ -141,6 +141,8 @@ beforeAll(async () => {
           }
           return responder(res, 400, { error: "authorization_pending" });
         case "/api/yo":
+          // 1A.1: `proyecto ver` y `proyecto crear` preguntan quién es la clave (el dueño `d` del repo `d/r`).
+          if (bearer === CLAVE_A) return responder(res, 200, { via: "api_key", equipo: "tnt_x", usuario: { id: "usr_1", login: "d", email: null }, proyecto: null });
           return responder(res, 401, { error: "clave_invalida", message: "La clave ya no vale." });
         case "/api/conexiones":
           return responder(res, req.method === "POST" ? 201 : 200, { pedido: pedido() });
@@ -329,13 +331,16 @@ describe("supcoflow sin terminal", () => {
 
   it("un .supcoflow que es un enlace no se sigue: sale 4 y el destino queda intacto", async () => {
     motor.conexion = "conectado";
+    motor.claves.length = 0;
     try {
       const repo = repoDeGit();
       const afuera = mkdtempSync(join(tmp, "afuera-"));
       symlinkSync(afuera, join(repo, ".supcoflow"));
       const r = await correrSinTty(["proyecto", "crear", "--json"], { conClave: true, cwd: repo });
       expect(r.codigo).toBe(4);
-      expect(JSON.parse(r.stdout).error).toBe("archivo_distinto");
+      // 1A.1: un `.supcoflow` que no se lee frena ANTES de conectar o crear nada (antes salía `archivo_distinto` ya creado el proyecto).
+      expect(JSON.parse(r.stdout)).toMatchObject({ error: "contexto_incoherente", motivo: "archivo_del_clon_ilegible" });
+      expect(motor.claves).toEqual([]);
       expect(readdirSync(afuera)).toEqual([]);
       expect(lstatSync(join(repo, ".supcoflow")).isSymbolicLink()).toBe(true);
     } finally {

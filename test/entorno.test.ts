@@ -148,3 +148,13 @@ describe("leerArchivoChico", () => {
     expect(leerArchivoChico(join(raiz, "enlace.png"), 10)).toEqual({ error: NO_LEIDO.esUnEnlace });
   });
 });
+
+describe("el control del contexto está enchufado en TODO comando que actúa sobre el proyecto del repo (1A.1)", () => {
+  it("cada grupo de dependencias que pasa por proyectoDelRepo trae el lector del archivo del clon, y `proyecto` además quienSoy", () => {
+    const e = entornoReal({ SUPCOFLOW_API_URL: "http://127.0.0.1:4000", SUPCOFLOW_SIN_LLAVERO: "1" });
+    for (const grupo of ["configurar", "guia", "claves", "widget", "instalacion", "prueba", "proyecto"] as const) {
+      expect(typeof (e[grupo] as { archivos?: { leer?: unknown } }).archivos?.leer, grupo).toBe("function");
+    }
+    expect(typeof e.proyecto.quienSoy).toBe("function");
+  });
+});
