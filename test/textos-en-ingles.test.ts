@@ -24,7 +24,16 @@ export function literales(codigo: string): { linea: number; texto: string }[] {
   const lineaDe = (pos: number) => codigo.slice(0, pos).split("\n").length;
   // Una plantilla se escanea por partes: `}` dentro de `${…}` hay que volver a pedirla como continuación.
   const llaves: number[] = [];
-  for (let t = scanner.scan(); t !== ts.SyntaxKind.EndOfFileToken; t = scanner.scan()) {
+  // Un `/` después de algo que cierra una expresión es una división; en cualquier otro lugar empieza una regex, que el
+  // escáner solo no distingue: si no se vuelve a escanear, lo de adentro de la regex se lee como código (y como cadenas).
+  const CIERRAN = new Set([ts.SyntaxKind.Identifier, ts.SyntaxKind.NumericLiteral, ts.SyntaxKind.StringLiteral, ts.SyntaxKind.RegularExpressionLiteral,
+    ts.SyntaxKind.CloseParenToken, ts.SyntaxKind.CloseBracketToken, ts.SyntaxKind.CloseBraceToken, ts.SyntaxKind.ThisKeyword, ts.SyntaxKind.NoSubstitutionTemplateLiteral, ts.SyntaxKind.TemplateTail]);
+  let previo: ts.SyntaxKind = ts.SyntaxKind.Unknown;
+  for (let t = scanner.scan(); t !== ts.SyntaxKind.EndOfFileToken; previo = t, t = scanner.scan()) {
+    if ((t === ts.SyntaxKind.SlashToken || t === ts.SyntaxKind.SlashEqualsToken) && !CIERRAN.has(previo)) {
+      t = scanner.reScanSlashToken();
+      continue;
+    }
     if (t === ts.SyntaxKind.StringLiteral || t === ts.SyntaxKind.NoSubstitutionTemplateLiteral) {
       salida.push({ linea: lineaDe(scanner.getTokenStart()), texto: scanner.getTokenValue() });
     } else if (t === ts.SyntaxKind.TemplateHead) {
@@ -48,6 +57,8 @@ describe("alarma: ningún literal de src/ lleva caracteres del castellano (fuera
   it("el escáner ve los literales y no los comentarios", () => {
     const l = literales('// ñ en un comentario\nconst a = "año"; /* ¿otro? */ const b = `x ${1 + 1} ñu ${"y"} z`;\n');
     expect(l.map((x) => x.texto)).toEqual(["año", "x ", " ñu ", "y", " z"]);
+    // Una regex con comillas adentro no abre una cadena, y una división no es una regex.
+    expect(literales('const c = (s) => `"${s.replace(/["\\\\]/g, "x")}"`; // ñ\nconst d = a / 2 / b; const e = "ok";').map((x) => x.texto)).toEqual(['"', "x", '"', "ok"]);
     expect(l.filter((x) => CARACTERES.test(x.texto)).map((x) => x.texto)).toEqual(["año", " ñu "]);
   });
 

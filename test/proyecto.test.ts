@@ -78,7 +78,7 @@ describe("proyecto crear", () => {
     const r = await proyectoCrear(d, sinFlags);
     expect(r).toMatchObject({ codigo: 4, json: { ok: false, error } });
     expect(r.texto).toContain(message);
-    expect(r.texto).toContain("supcoflow repo conectar");
+    expect(r.texto).toContain("supcoflow repo connect");
     expect(olvidos).toEqual([]);
   });
   it.each(["slug_ocupado", "repo_ya_conectado"])("I1: el rechazo %s es transitorio: 1", async (error) => {

@@ -253,7 +253,7 @@ describe("los pedidos de la guía (bloque 5)", () => {
 const WIDGET = {
   tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
   paquete: "@supcoflow/chat", version: "2.2.1", instalar: "npm i @supcoflow/chat@2.2.1 --save-exact",
-  nextjs: { estado: "probando", archivo_sugerido: "app/supcoflow-chat.tsx", contenido: '"use client";\n', uso: "<SupcoflowChat />" },
+  nextjs: { estado: "probando", archivo_sugerido: "app/_supcoflow/support-chat.tsx", archivos_anteriores: ["app/_supcoflow/chat-de-soporte.tsx"], contenido: '"use client";\n', uso: "<SupcoflowChat />" },
   script: { estado: "disponible_sin_soporte", linea: "<script src=\"x\"></script>" },
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
@@ -265,6 +265,19 @@ describe("leerWidget", () => {
     expect(new URL(vistos[0]!.url).pathname).toBe("/api/proyectos/proj_1/widget");
     expect(vistos[0]!.method).toBe("GET");
     expect(vistos[0]!.headers.get("authorization")).toBe(`Bearer ${CLAVE}`);
+  });
+  it("AD9: archivos_anteriores se lee SÓLO dentro de nextjs; ausente es lista vacía, y arriba de todo no se lee", async () => {
+    const { archivos_anteriores: _fuera, ...sinLista } = WIDGET.nextjs;
+    const sin = await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, nextjs: sinLista, archivos_anteriores: ["app/x.tsx"], archivo_sugerido: "otro.tsx" }));
+    expect(sin.nextjs.archivos_anteriores).toEqual([]);
+    expect(sin).not.toHaveProperty("archivos_anteriores");
+    expect(sin).not.toHaveProperty("archivo_sugerido");
+    expect(sin.nextjs.archivo_sugerido).toBe("app/_supcoflow/support-chat.tsx");
+  });
+  it("archivos_anteriores con otra forma (no lista, o con algo que no es texto) es respuesta_inesperada", async () => {
+    for (const malo of ["x.tsx", [1], [""]]) {
+      await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, nextjs: { ...WIDGET.nextjs, archivos_anteriores: malo } }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
+    }
   });
   it("una forma que no valida (campo faltante, estado raro, script sin linea) es respuesta_inesperada", async () => {
     const sin = { ...WIDGET, csp: undefined };

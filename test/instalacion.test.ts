@@ -4,9 +4,10 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { esCarpetaReal, instalacionAnotar, rutaRealOEnNada, type DepsDeInstalacion } from "../src/comandos/instalacion.ts";
+import { esCarpetaReal, esEnlaceReal, instalacionAnotar, rutaRealOEnNada, type DepsDeInstalacion } from "../src/comandos/instalacion.ts";
 import { archivosDelRepo, gitReal, leerArchivoChico } from "../src/entorno.ts";
-import { armarInstalacion, RUTA_DE_LA_INSTALACION, serializar, type Instalacion } from "../src/instalacion.ts";
+import { archivoAnotado, armarInstalacion, RUTA_DE_LA_INSTALACION, serializar, validarElArchivoDelChat, type Instalacion } from "../src/instalacion.ts";
+import { NO_LEIDO } from "../src/lectura.ts";
 
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
 const PROY = { id: "proj_r-1", slug: "r", repo: "d/r", rama: "main", installCommand: "npm ci", testCommand: "npm test" };
@@ -21,9 +22,10 @@ const CONFIG = {
   politica: { modo: "relevar", fijada_en: null },
 };
 const ESPERADA: Instalacion = {
-  version: 1, skill: "0.1.0", terminal: "0.6.0",
+  version: 2, skill: "0.1.0", terminal: "0.6.0",
   chat: { declarado: "2.2.1", instalado: "2.2.1" },
   configuracion: { acuerdo_version: 3, politica: "relevar", guia: { origen: "repo", procedencia: "terminal", commit: COMMIT } },
+  archivo: null,
 };
 const pkgApp = (dep: string | null = "2.2.1") => JSON.stringify({ name: "app", dependencies: dep === null ? { next: "16.0.0" } : { next: "16.0.0", "@supcoflow/chat": dep } });
 const pkgChat = (v: string = "2.2.1") => JSON.stringify({ name: "@supcoflow/chat", version: v });
@@ -58,17 +60,18 @@ function deps(m: Mundo, o: Partial<DepsDeInstalacion> = {}): DepsDeInstalacion {
       const e = m.errores.get(p);
       if (e !== undefined) return { error: e };
       const t = m.archivos.get(m.enlaces.get(p) ?? p);
-      return t === undefined ? { error: "no existe" } : { bytes: new TextEncoder().encode(t) };
+      return t === undefined ? { error: NO_LEIDO.noExiste } : { bytes: new TextEncoder().encode(t) };
     },
     rutaReal: (p) => m.enlaces.get(p) ?? (m.archivos.has(p) || m.dirs.has(p) ? p : null),
     esCarpeta: (p) => m.dirs.has(p),
+    esEnlace: (p) => m.enlaces.has(p),
     escribir: (p, s) => { m.escritos.push(p); m.archivos.set(p, s); },
     avisar: (s) => void m.avisos.push(s),
     terminal: "0.6.0",
     ...o,
   };
 }
-const F = { repo: null, dryRun: false, skill: "0.1.0", app: null };
+const F = { repo: null, dryRun: false, skill: "0.1.0", app: null, file: null };
 const ARCHIVO = `/w/r/${RUTA_DE_LA_INSTALACION}`;
 
 describe("armarInstalacion (lista cerrada de campos)", () => {
@@ -123,7 +126,7 @@ describe("armarInstalacion (lista cerrada de campos)", () => {
   });
 });
 
-describe("supcoflow instalacion anotar", () => {
+describe("supcoflow install record", () => {
   it("sin --skill: 3 falta_skill, sin pedido", async () => {
     const m = mundo();
     expect(await instalacionAnotar(deps(m), { ...F, skill: null })).toMatchObject({ codigo: 3, json: { error: "falta_skill" } });
@@ -267,8 +270,8 @@ describe("supcoflow instalacion anotar", () => {
     m.enlaces.set("/w/r/node_modules/@supcoflow/chat/package.json", "/fuera/chat/package.json");
     const r = await instalacionAnotar(deps(m), F);
     expect(r).toMatchObject({ codigo: 0, json: { instalacion: { chat: { instalado: null } } } });
-    expect(m.avisos.join("\n")).toMatch(/fuera del repo/);
-    expect((r.json.avisos as string[]).join("\n")).toMatch(/fuera del repo/);
+    expect(m.avisos.join("\n")).toMatch(/points outside the repo/);
+    expect((r.json.avisos as string[]).join("\n")).toMatch(/points outside the repo/);
   });
   it("sin el paquete instalado: instalado null", async () => {
     const m = mundo();
@@ -277,7 +280,7 @@ describe("supcoflow instalacion anotar", () => {
   });
   it("package.json del paquete ilegible o sin version: 1 paquete_ilegible, no escribe", async () => {
     for (const arreglar of [
-      (m: Mundo) => m.errores.set("/w/r/node_modules/@supcoflow/chat/package.json", "es demasiado grande"),
+      (m: Mundo) => m.errores.set("/w/r/node_modules/@supcoflow/chat/package.json", NO_LEIDO.demasiadoGrande),
       (m: Mundo) => m.archivos.set("/w/r/node_modules/@supcoflow/chat/package.json", "{no es json"),
       (m: Mundo) => m.archivos.set("/w/r/node_modules/@supcoflow/chat/package.json", '{"name":"@supcoflow/chat"}'),
     ]) {
@@ -314,7 +317,7 @@ describe("instalacion anotar sobre un repo de git real", () => {
   const depsReales = (): { d: DepsDeInstalacion; avisos: string[] } => {
     const avisos: string[] = [];
     const d = deps(mundo(), {
-      git: gitReal, cwd: raiz, leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal, 
+      git: gitReal, cwd: raiz, leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal, esEnlace: esEnlaceReal,
       escribir: archivosDelRepo(() => {}).escribir, avisar: (s) => void avisos.push(s),
     });
     return { d, avisos };
@@ -415,9 +418,137 @@ describe("instalacion anotar sobre un repo de git real", () => {
       const { d, avisos } = depsReales();
       const r = await instalacionAnotar(d, F);
       expect(r).toMatchObject({ codigo: 0, json: { instalacion: { chat: { instalado: null } } } });
-      expect(avisos.join("\n")).toMatch(/fuera del repo/);
+      expect(avisos.join("\n")).toMatch(/points outside the repo/);
     } finally {
       rmSync(afuera, { recursive: true, force: true });
     }
+  });
+});
+
+// ─── T3.8 (R7, spec §10.3): `install record --file` y el formato v2 ───
+describe("install record --file (instalacion.json v2)", () => {
+  const CHAT = "app/_supcoflow/support-chat.tsx";
+  const conArchivo = (archivo: string | null): Instalacion => ({ ...ESPERADA, archivo });
+
+  it("--file con una ruta válida: escribe v2 con `archivo` y lo devuelve en el JSON", async () => {
+    const m = mundo();
+    const r = await instalacionAnotar(deps(m), { ...F, file: CHAT });
+    expect(r).toMatchObject({ codigo: 0, json: { ok: true, archivo: CHAT, instalacion: conArchivo(CHAT) } });
+    expect(JSON.parse(m.archivos.get(ARCHIVO)!)).toEqual(conArchivo(CHAT));
+    expect(m.archivos.get(ARCHIVO)).toBe(serializar(conArchivo(CHAT)));
+    expect(r.texto).toContain(`file ${CHAT}`);
+  });
+  it("la ruta se anota normalizada (./, barras de más, separador de Windows)", async () => {
+    for (const cruda of [`./${CHAT}`, `app//_supcoflow/./support-chat.tsx`, "app\\_supcoflow\\support-chat.tsx"]) {
+      const m = mundo();
+      expect((await instalacionAnotar(deps(m), { ...F, file: cruda })).json).toMatchObject({ archivo: CHAT });
+    }
+  });
+  it("`..`, ruta absoluta, unidad de Windows, vacía y carpeta: 3 archivo_invalido, sin pedido y sin escribir", async () => {
+    for (const mala of ["../fuera.tsx", "app/../../fuera.tsx", "app/..", "/etc/passwd", "C:\\x\\y.tsx", "\\\\servidor\\x", "", ".", "./", "a\u0000b"]) {
+      const m = mundo();
+      const r = await instalacionAnotar(deps(m), { ...F, file: mala });
+      expect(r, JSON.stringify(mala)).toMatchObject({ codigo: 3, json: { error: "archivo_invalido" } });
+      expect(m.pedidos, JSON.stringify(mala)).toEqual([]);
+      expect(m.escritos, JSON.stringify(mala)).toEqual([]);
+    }
+  });
+  it("un symlink (el archivo mismo o una carpeta del camino): 3 archivo_invalido y no escribe", async () => {
+    const delArchivo = mundo({ enlaces: new Map([[`/w/r/${CHAT}`, "/w/r/otro.tsx"]]) });
+    expect(await instalacionAnotar(deps(delArchivo), { ...F, file: CHAT })).toMatchObject({ codigo: 3, json: { error: "archivo_invalido" } });
+    const deCarpeta = mundo({ enlaces: new Map([["/w/r/app", "/fuera/app"]]) });
+    const r = await instalacionAnotar(deps(deCarpeta), { ...F, file: CHAT });
+    expect(r).toMatchObject({ codigo: 3, json: { error: "archivo_invalido" } });
+    expect(r.texto).toContain("app");
+    for (const m of [delArchivo, deCarpeta]) {
+      expect(m.escritos).toEqual([]);
+      expect(m.pedidos).toEqual([]);
+    }
+  });
+  it("el archivo todavía puede no existir (se anota antes de escribirlo, o con --dry-run)", async () => {
+    const m = mundo();
+    expect(m.archivos.has(`/w/r/${CHAT}`)).toBe(false);
+    expect((await instalacionAnotar(deps(m), { ...F, file: CHAT, dryRun: true })).json).toMatchObject({ dry_run: true, archivo: CHAT });
+  });
+  it("re-correr SIN --file conserva el `archivo` ya anotado (no lo borra)", async () => {
+    const m = mundo({ versionado: true });
+    m.archivos.set(ARCHIVO, serializar(conArchivo(CHAT)));
+    const r = await instalacionAnotar(deps(m), { ...F, skill: "0.2.0" });
+    expect(r.json).toMatchObject({ archivo: CHAT, instalacion: { skill: "0.2.0", archivo: CHAT } });
+    expect(JSON.parse(m.archivos.get(ARCHIVO)!).archivo).toBe(CHAT);
+  });
+  it("--file nuevo reemplaza al anotado", async () => {
+    const m = mundo({ versionado: true });
+    m.archivos.set(ARCHIVO, serializar(conArchivo(CHAT)));
+    expect((await instalacionAnotar(deps(m), { ...F, file: "web/app/_supcoflow/support-chat.tsx" })).json).toMatchObject({ archivo: "web/app/_supcoflow/support-chat.tsx" });
+  });
+  it("un instalacion.json v1 (version: 1, sin archivo) se lee sin error: archivo null; y se reescribe como v2", async () => {
+    const v1 = JSON.stringify({ version: 1, skill: "0.1.0", terminal: "0.6.0", chat: { declarado: "2.2.1", instalado: "2.2.1" }, configuracion: ESPERADA.configuracion }, null, 2) + "\n";
+    const m = mundo({ versionado: true });
+    m.archivos.set(ARCHIVO, v1);
+    const r = await instalacionAnotar(deps(m), F);
+    expect(r).toMatchObject({ codigo: 0, json: { ok: true, archivo: null, sin_cambios: false } });
+    expect(JSON.parse(m.archivos.get(ARCHIVO)!)).toMatchObject({ version: 2, archivo: null });
+  });
+  it("--file con otro proyecto/clon: --repo sin clon sale 3 sin_clon como antes", async () => {
+    expect(await instalacionAnotar(deps(mundo()), { ...F, repo: "otro/repo", file: CHAT })).toMatchObject({ codigo: 3, json: { error: "sin_clon" } });
+  });
+});
+
+describe("archivoAnotado y validarElArchivoDelChat (puras)", () => {
+  it("v1 con `version: 1`, sin `version`, ilegible, vacío o con un archivo inválido: null, nunca un error", () => {
+    const v1 = (extra: object) => JSON.stringify({ skill: "0.1.0", ...extra });
+    expect(archivoAnotado(v1({ version: 1 }))).toBeNull();
+    expect(archivoAnotado(v1({}))).toBeNull();
+    expect(archivoAnotado("{no es json")).toBeNull();
+    expect(archivoAnotado(null)).toBeNull();
+    expect(archivoAnotado(v1({ version: 2, archivo: "../x" }))).toBeNull();
+    expect(archivoAnotado(v1({ version: 2, archivo: 3 }))).toBeNull();
+    expect(archivoAnotado(v1({ version: 1, archivo: "app/x.tsx" }))).toBeNull();
+  });
+  it("v2: de ida y vuelta (serializar → leer) devuelve el mismo archivo", () => {
+    expect(archivoAnotado(serializar({ ...ESPERADA, archivo: "app/_supcoflow/support-chat.tsx" }))).toBe("app/_supcoflow/support-chat.tsx");
+    expect(archivoAnotado(serializar(ESPERADA))).toBeNull();
+  });
+  it("validarElArchivoDelChat normaliza y rechaza con el motivo", () => {
+    expect(validarElArchivoDelChat("./a//b.tsx")).toEqual({ ok: true, ruta: "a/b.tsx" });
+    expect(validarElArchivoDelChat("../a")).toMatchObject({ ok: false, motivo: expect.stringContaining("..") });
+    expect(validarElArchivoDelChat("/a")).toMatchObject({ ok: false, motivo: expect.stringContaining("absolute") });
+    expect(validarElArchivoDelChat("a".repeat(301))).toMatchObject({ ok: false });
+  });
+});
+
+describe("install record --file sobre un repo de git real", () => {
+  let tmp: string;
+  let raiz: string;
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), "supcoflow-instalacion-file-"));
+    raiz = realpathSync(tmp);
+    execFileSync("git", ["init", "-q"], { cwd: raiz });
+    execFileSync("git", ["remote", "add", "origin", "https://github.com/d/r.git"], { cwd: raiz });
+    writeFileSync(join(raiz, "package.json"), pkgApp());
+  });
+  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+  const real = (): DepsDeInstalacion => deps(mundo(), {
+    git: gitReal, cwd: raiz, leerArchivoChico, rutaReal: rutaRealOEnNada, esCarpeta: esCarpetaReal, esEnlace: esEnlaceReal,
+    escribir: archivosDelRepo(() => {}).escribir, avisar: () => {},
+  });
+  it("un symlink real a un archivo, o una carpeta del camino que es un symlink: 3 archivo_invalido y no escribe nada", async () => {
+    mkdirSync(join(raiz, "app", "_supcoflow"), { recursive: true });
+    writeFileSync(join(raiz, "real.tsx"), "x");
+    symlinkSync(join(raiz, "real.tsx"), join(raiz, "app", "_supcoflow", "support-chat.tsx"));
+    expect(await instalacionAnotar(real(), { ...F, file: "app/_supcoflow/support-chat.tsx" })).toMatchObject({ codigo: 3, json: { error: "archivo_invalido" } });
+    mkdirSync(join(raiz, "fuera"), { recursive: true });
+    symlinkSync(join(raiz, "fuera"), join(raiz, "web"));
+    expect(await instalacionAnotar(real(), { ...F, file: "web/support-chat.tsx" })).toMatchObject({ codigo: 3, json: { error: "archivo_invalido" } });
+    expect(existsSync(join(raiz, RUTA_DE_LA_INSTALACION))).toBe(false);
+  });
+  it("un archivo real: lo anota (v2) y repetir da sin_cambios", async () => {
+    mkdirSync(join(raiz, "app", "_supcoflow"), { recursive: true });
+    writeFileSync(join(raiz, "app", "_supcoflow", "support-chat.tsx"), "x");
+    const r = await instalacionAnotar(real(), { ...F, file: "app/_supcoflow/support-chat.tsx" });
+    expect(r).toMatchObject({ codigo: 0, json: { archivo: "app/_supcoflow/support-chat.tsx", sin_cambios: false } });
+    expect(JSON.parse(readFileSync(join(raiz, RUTA_DE_LA_INSTALACION), "utf8"))).toMatchObject({ version: 2, archivo: "app/_supcoflow/support-chat.tsx" });
+    expect(await instalacionAnotar(real(), { ...F, file: "app/_supcoflow/support-chat.tsx" })).toMatchObject({ json: { sin_cambios: true } });
   });
 });

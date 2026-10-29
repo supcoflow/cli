@@ -93,7 +93,7 @@ describe("loginInteractivo", () => {
     const r = await loginInteractivo({ ...d, esTty: false, mostrar: (s) => mostrado.push(s) }, { json: false, dryRun: false });
     expect(r.codigo).toBe(3);
     expect(r.json).toMatchObject({ ok: false, error: "hace_falta_tty" });
-    expect(r.json.message).toBe("Sin terminal interactiva usá `supcoflow login --start --json` y después `supcoflow login --wait --json`.");
+    expect(r.json.message).toBe("Without an interactive terminal, use `supcoflow login --start --json` and then `supcoflow login --wait --json`.");
     expect(llamadas).not.toContain("pedirCodigo");
   });
   it("con --json aunque haya TTY: 3 igual, sin pedir código", async () => {
@@ -139,7 +139,7 @@ describe("comandoQuienSoy", () => {
     const { base, quienSoy, llamadas } = armar();
     const r = await comandoQuienSoy({ ...base, quienSoy });
     expect(r.codigo).toBe(2);
-    expect(r.json).toEqual({ ok: false, error: "sin_sesion", message: "Iniciá sesión con `supcoflow login`." });
+    expect(r.json).toEqual({ ok: false, error: "sin_sesion", message: "Log in with `supcoflow login`." });
     expect(llamadas).not.toContain("quienSoy");
   });
   it("con clave → 0 con la fuente, sin la clave en la salida", async () => {
@@ -148,7 +148,7 @@ describe("comandoQuienSoy", () => {
     const r = await comandoQuienSoy({ ...base, quienSoy });
     expect(r.codigo).toBe(0);
     expect(r.json).toEqual({ ok: true, via: "clave", equipo: "acme", usuario: yo.usuario, proyecto: null, fuente: "llavero" });
-    expect(r.texto).toBe("ana en el equipo acme (clave en llavero)");
+    expect(r.texto).toBe("ana in team acme (key in the system keychain)");
     sinSecretos(r);
   });
   it("401 con la clave de SUPCOFLOW_TOKEN → 2 y el mensaje lo dice", async () => {
@@ -168,7 +168,7 @@ describe("comandoQuienSoy", () => {
     await guardado.anotarPorRevocar(ORIGEN, X);
     const r = await comandoQuienSoy({ ...base, quienSoy });
     expect(r.codigo).toBe(0);
-    expect(avisos).toContain("Hay 1 clave(s) anterior(es) anotadas para revocar; se reintenta en el próximo login o logout.");
+    expect(avisos).toContain("1 previous key(s) are noted down to be revoked; I'll try again on the next login or logout.");
     expect(llamadas.some((l) => l.startsWith("revocarPropia"))).toBe(false);
     expect((await guardado.leerPorRevocar(ORIGEN)).claves).toEqual([X]);
   });
@@ -177,7 +177,7 @@ describe("comandoQuienSoy", () => {
     await guardado.guardarClave(ORIGEN, A);
     llavero.roto = (op, c) => op === "leer" && c.endsWith("#por_revocar");
     await comandoQuienSoy({ ...base, quienSoy });
-    expect(avisos).toContain("No pude leer entera la lista de claves por revocar.");
+    expect(avisos).toContain("I couldn't read the whole list of keys waiting to be revoked.");
   });
 });
 
@@ -208,7 +208,7 @@ describe("comandoLogout", () => {
     const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: false });
     expect(r.codigo).toBe(1);
     expect(r.json.error).toBe("motor_inalcanzable");
-    expect(String(r.json.message)).toContain("no cerré la sesión");
+    expect(String(r.json.message)).toContain("I didn't log out");
     expect(await guardado.leerClaveGuardada(ORIGEN)).toEqual({ clave: A, fuente: "llavero" });
     sinSecretos(r);
   });
@@ -218,7 +218,7 @@ describe("comandoLogout", () => {
     await guardado.anotarPorRevocar(ORIGEN, X);
     const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: true });
     expect(r.codigo).toBe(0);
-    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `revocar la clave de llavero en ${ORIGEN} y borrarla` });
+    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `revoke the key in the system keychain at ${ORIGEN} and delete it` });
     expect(llamadas).toEqual([]);
     expect(await guardado.leerClaveGuardada(ORIGEN)).toEqual({ clave: A, fuente: "llavero" });
     expect((await guardado.leerPorRevocar(ORIGEN)).claves).toEqual([X]);
@@ -266,7 +266,7 @@ describe("comandoLogout", () => {
       const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: false });
       expect(r.codigo).toBe(0);
       expect(r.json.quedan_por_revocar).toBe(1);
-      expect(avisos.join("\n")).toContain("siguen anotadas");
+      expect(avisos.join("\n")).toContain("are noted down");
       expect((await guardado.leerPorRevocar(ORIGEN)).claves).toEqual([X]);
     });
     it("con el llavero sin responder: quedan_por_revocar null (nunca 0) y aviso", async () => {
@@ -276,7 +276,7 @@ describe("comandoLogout", () => {
       llavero.roto = (op, c) => op === "leer" && c.endsWith("#por_revocar");
       const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: false });
       expect(r.json.quedan_por_revocar).toBeNull();
-      expect(avisos.join("\n")).toContain("siguen anotadas");
+      expect(avisos.join("\n")).toContain("I couldn't check how many keys are left to revoke");
     });
   });
 
@@ -288,14 +288,14 @@ describe("comandoLogout", () => {
     expect(llamadas).toEqual([`revocarPropia ${A}`]);
     expect(await guardado.leerClaveGuardada(ORIGEN)).toEqual({ clave: B, fuente: "llavero" });
     expect(r.json).toMatchObject({ ok: true, revocada: true, queda_clave_guardada: true });
-    expect(avisos).toContain("Revoqué la clave de SUPCOFLOW_TOKEN; sacala de tu entorno.");
-    expect(avisos).toContain("Sigue guardada otra clave en llavero; para cerrarla, corré `supcoflow logout` sin SUPCOFLOW_TOKEN.");
+    expect(avisos).toContain("I revoked the key in SUPCOFLOW_TOKEN; remove it from your environment.");
+    expect(avisos).toContain("Another key is still saved in the system keychain; to log it out, run `supcoflow logout` without SUPCOFLOW_TOKEN.");
     sinSecretos(r);
   });
   it("SUPCOFLOW_TOKEN y --dry-run: haria sin «y borrarla»", async () => {
     const { base, revocarPropia } = armar({ env: { SUPCOFLOW_TOKEN: A } });
     const r = await comandoLogout({ ...base, revocarPropia }, { dryRun: true });
-    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `revocar la clave de env en ${ORIGEN}` });
+    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `revoke the key in SUPCOFLOW_TOKEN at ${ORIGEN}` });
   });
 });
 
@@ -321,7 +321,7 @@ describe("con el llavero sin responder al leer la clave", () => {
     const r = await comandoQuienSoy({ ...base, quienSoy });
     expect(r.codigo).toBe(0);
     expect(r.json).toMatchObject({ ok: true, fuente: "archivo" });
-    expect(avisos.join("\n")).toContain("llavero");
+    expect(avisos.join("\n")).toContain("keychain");
   });
   it("logout: sin nada legible → 1 no_pude_leer_la_clave, no revoca ni borra nada", async () => {
     const { base, revocarPropia, guardado, llavero, llamadas } = armar();
@@ -359,7 +359,7 @@ describe("con el llavero sin responder al leer la clave", () => {
     expect(archivo.datos.has(ORIGEN)).toBe(false);
     // A no se pudo ver, así que no se revocó: borrarla la dejaría viva y olvidada.
     expect(llavero.datos.get(ORIGEN)?.valor).toBe(A);
-    expect(avisos.join("\n")).toContain("otra copia");
+    expect(avisos.join("\n")).toContain("another copy");
     sinSecretos(r);
   });
 });

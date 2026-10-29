@@ -238,7 +238,7 @@ export async function reemplazarClave(
     }
     const despues = revocada
       ? "I revoked it so it doesn't stay active; your previous session, if there was one, is as it was."
-      : "I couldn't revoke it either: revoke it in the console, under \"Terminal access\".";
+      : "I couldn't revoke it either: revoke it in the console, under \"Accesos desde la terminal\" (the console is in Spanish).";
     return fallo(SALIDA.inesperado, "no_se_pudo_guardar", `I couldn't save the new key (${motivo(e)}). ${despues}`);
   }
 
@@ -261,7 +261,7 @@ export async function reemplazarClave(
         quedaPorRevocar = true;
         d.avisar("I couldn't revoke your previous key; it's noted down and I'll try again on the next login or logout.");
       } catch {
-        const message = "I couldn't revoke or note down your previous key: revoke it in the console, under \"Terminal access\".";
+        const message = "I couldn't revoke or note down your previous key: revoke it in the console, under \"Accesos desde la terminal\" (the console is in Spanish).";
         d.avisar(message);
         if (queda() >= PLAZO_MINIMO_MS) await d.guardado.borrarPendiente(origen, techo());
         // La nueva SÍ quedó guardada y anda: el json lo dice para que nadie vuelva a hacer login.

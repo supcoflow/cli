@@ -129,6 +129,8 @@ export function archivoAnotado(texto: string | null): string | null {
   } catch {
     return null;
   }
+  // AD9: un v1 se reconoce por `version: 1` (lo escribe la terminal 0.7.0) y no tiene archivo, aunque el campo aparezca.
+  if (objeto(v)?.version === 1) return null;
   const a = objeto(v)?.archivo;
   if (typeof a !== "string") return null;
   const r = validarElArchivoDelChat(a);

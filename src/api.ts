@@ -26,7 +26,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -394,9 +394,6 @@ export type Widget = {
   nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; archivos_anteriores: string[]; contenido: string; uso: string };
   script: { estado: "disponible_sin_soporte"; linea: string };
   csp: string;
-  // Sólo si el motor los manda arriba de todo (la forma exacta la fija el motor): se pasan tal cual.
-  archivo_sugerido?: string;
-  archivos_anteriores?: string[];
 };
 
 // Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
@@ -408,9 +405,9 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
     [v.tenant_id, v.project_id, v.backend_url, v.version, v.instalar, v.csp].map(texto);
   const [archivo, contenido, uso] = [n.archivo_sugerido, n.contenido, n.uso].map(texto);
   const linea = texto(s.linea);
-  const anteriores = listaDeTextos(n.archivos_anteriores ?? v.archivos_anteriores);
-  const archivoDeArriba = v.archivo_sugerido === undefined ? undefined : texto(v.archivo_sugerido);
-  if (anteriores === null || archivoDeArriba === null || archivoDeArriba === "") throw inesperada(status);
+  // AD9: `archivos_anteriores` vive sólo dentro de `nextjs`, al lado de `archivo_sugerido`; arriba de todo no se lee.
+  const anteriores = listaDeTextos(n.archivos_anteriores);
+  if (anteriores === null) throw inesperada(status);
   if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
     || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
     || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
@@ -419,8 +416,6 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
     nextjs: { estado: n.estado, archivo_sugerido: archivo, archivos_anteriores: anteriores, contenido, uso },
     script: { estado: "disponible_sin_soporte", linea },
     csp,
-    ...(archivoDeArriba !== undefined ? { archivo_sugerido: archivoDeArriba } : {}),
-    ...(Array.isArray(v.archivos_anteriores) ? { archivos_anteriores: anteriores } : {}),
   };
 }
 

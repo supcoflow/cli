@@ -44,7 +44,7 @@ const pedido = () => ({
 const WIDGET = {
   tenant_id: "tnt_1", project_id: PROYECTO.id, backend_url: "https://chat.supcoflow.dev", paquete: "@supcoflow/chat", version: "2.2.1",
   instalar: "npm i @supcoflow/chat@2.2.1 --save-exact",
-  nextjs: { estado: "probando", archivo_sugerido: "app/chat-de-soporte.tsx", contenido: "\"use client\";\nexport {};\n", uso: "<ChatDeSoporte />" },
+  nextjs: { estado: "probando", archivo_sugerido: "app/_supcoflow/support-chat.tsx", archivos_anteriores: ["app/_supcoflow/chat-de-soporte.tsx"], contenido: "\"use client\";\nexport {};\n", uso: "<ChatDeSoporte />" },
   script: { estado: "disponible_sin_soporte", linea: "<script src=\"https://chat.supcoflow.dev/w.js\"></script>" },
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
@@ -96,7 +96,14 @@ beforeAll(async () => {
       if (metodo === "POST" && ruta === `${base}/claves/revocar`) return responder(res, 200, { ok: true });
       if (metodo === "GET" && ruta === `${base}/diagnostico`) {
         return responder(res, 200, {
-          listo: true, puntos: [{ punto: "chat", ok: true, mensaje: "El chat está prendido." }], politica: "relevar",
+          listo: true, politica: "relevar",
+          puntos: [
+            { punto: "instalacion", ok: true, mensaje: "La instalación de GitHub no reporta problemas.", grupo: "instalacion" },
+            { punto: "sitios", ok: true, mensaje: "1 sitio(s) admitido(s) para el chat.", grupo: "instalacion" },
+            { punto: "chat", ok: true, mensaje: "El chat está prendido.", grupo: "instalacion" },
+            { punto: "guia", ok: true, mensaje: "Hay una guía vigente del producto.", grupo: "instalacion" },
+            { punto: "despachos", ok: true, mensaje: "Los despachos están activos.", grupo: "prueba" },
+          ],
           techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, prueba_abierta: null,
         });
       }
@@ -208,7 +215,7 @@ function repoDeGit(): string {
 
 const CASOS = [
   ["login"], ["login", "--json"], ["login", "--start", "--json"], ["login", "--wait", "--json"],
-  ["logout", "--json"], ["quien-soy", "--json"], ["describir", "--json"], ["--help"], ["nada"],
+  ["logout", "--json"], ["whoami", "--json"], ["describe", "--json"], ["--help"], ["nada"], ["quien-soy", "--json"], ["describir", "--json"],
 ];
 
 describe("supcoflow sin terminal", () => {
@@ -227,10 +234,10 @@ describe("supcoflow sin terminal", () => {
     expect(pedidosAlMotor.filter((p) => p === "/api/dispositivo/codigo")).toHaveLength(0);
   });
 
-  it("`describir --json` y `nada` dicen lo que el contrato promete", async () => {
-    const d = await correr(["describir", "--json"], { stdin: "ignore" });
+  it("`describe --json` y `nada` dicen lo que el contrato promete", async () => {
+    const d = await correr(["describe", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(28);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(29);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -505,7 +512,7 @@ describe("supcoflow sin terminal", () => {
       expect(r.stdout.trimEnd().split("\n")).toHaveLength(1);
       const anotado = JSON.parse(await readFile(join(repo, ".supcoflow", "instalacion.json"), "utf8"));
       const pkg = JSON.parse(await readFile(join(RAIZ, "package.json"), "utf8")) as { version: string };
-      expect(anotado).toMatchObject({ version: 1, skill: "0.1.0", terminal: pkg.version, chat: { declarado: null, instalado: null } });
+      expect(anotado).toMatchObject({ version: 2, archivo: null, skill: "0.1.0", terminal: pkg.version, chat: { declarado: null, instalado: null } });
       expect(anotado.configuracion).toEqual({ acuerdo_version: null, politica: "relevar", guia: null });
       expect(r.stdout + r.stderr).not.toMatch(/scf_[0-9a-f]{16}_/);
       // Repetir sin cambios no toca nada.
@@ -527,45 +534,50 @@ describe("supcoflow sin terminal", () => {
   });
 
   // Bloque 7, R2: diagnosticar y probar como los corre un asistente: stdin cerrado, --json, sin preguntar nada.
-  describe("diagnosticar y probar", () => {
+  describe("diagnose y test", () => {
     beforeAll(() => { motor.proyectoExiste = true; });
     afterAll(() => { motor.proyectoExiste = false; });
     const pruebas = () => join(dirname(archivo), "pruebas.json");
     const POST_PRUEBA = `/api/proyectos/${PROYECTO.id}/pruebas`;
 
-    it("R2: los cuatro terminan solos con stdin cerrado, una línea JSON, sin POST salvo con --autorizo-gasto", async () => {
+    it("R2: los siete terminan solos con stdin cerrado, una línea JSON, sin POST salvo con --authorize-spend", async () => {
       rmSync(pruebas(), { force: true });
       const casos: [string[], number][] = [
+        [["diagnose", "--json"], 0],
+        [["test", "--json"], 4],
+        [["test", "--dry-run", "--authorize-spend", "--ceiling", "2", "--expect-policy", "investigate", "--json"], 0],
+        // Los nombres de la 0.7.0 siguen andando como alias: sin --ceiling, el viejo `--autorizo-gasto` sale 3.
         [["diagnosticar", "--json"], 0],
         [["probar", "--json"], 4],
-        [["probar", "--dry-run", "--autorizo-gasto", "--json"], 0],
+        [["probar", "--autorizo-gasto", "--json"], 3],
+        [["probar", "--dry-run", "--autorizo-gasto", "--ceiling", "2", "--json"], 0],
       ];
       for (const [args, codigo] of casos) {
         pedidosAlMotor.length = 0;
-        const r = await correrSinTty([...args, "--repo", "d/r"], { conClave: true });
+        const r = await correrSinTty([...args, "--repo", "d/r"], { conClave: true, cwd: repoDeGit() });
         expect(r.vencido, args.join(" ")).toBe(false);
         expect(r.codigo, `${args.join(" ")}: ${r.stdout}`).toBe(codigo);
         expect(r.stdout.trimEnd().split("\n"), args.join(" ")).toHaveLength(1);
         expect(pedidosAlMotor.filter((p) => p === POST_PRUEBA), args.join(" ")).toEqual([]);
       }
       // R6 por el binario: el 4 trae los números del diagnóstico y no deja nada guardado.
-      const sin = await correrSinTty(["probar", "--json", "--repo", "d/r"], { conClave: true });
+      const sin = await correrSinTty(["test", "--json", "--repo", "d/r"], { conClave: true });
       expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5 });
       expect(existsSync(pruebas())).toBe(false);
     }, 60_000);
 
-    it("R2: `probar --wait` termina solo: 5 en curso (dentro del tramo) y 0 con el issue y el cobro pendiente", async () => {
+    it("R2: `test --wait` termina solo: 5 en curso (dentro del tramo) y 0 con el issue y el cobro pendiente", async () => {
       rmSync(pruebas(), { force: true });
-      const pide = await correrSinTty(["probar", "--autorizo-gasto", "--json", "--repo", "d/r"], { conClave: true });
+      const pide = await correrSinTty(["test", "--authorize-spend", "--ceiling", "2", "--expect-policy", "investigate", "--json", "--repo", "d/r"], { conClave: true });
       expect(pide.codigo, pide.stdout).toBe(5);
       motor.estadoDePrueba = "en_curso";
       const t0 = Date.now();
-      const enCurso = await correrSinTty(["probar", "--wait", "--json", "--repo", "d/r"], { conClave: true });
+      const enCurso = await correrSinTty(["test", "--wait", "--json", "--repo", "d/r"], { conClave: true });
       expect(enCurso.vencido).toBe(false);
       expect(enCurso.codigo).toBe(5);
       expect(Date.now() - t0).toBeLessThan(90_000);
       motor.estadoDePrueba = "issue_creado";
-      const fin = await correrSinTty(["probar", "--wait", "--json", "--repo", "d/r"], { conClave: true });
+      const fin = await correrSinTty(["test", "--wait", "--json", "--repo", "d/r"], { conClave: true });
       expect(fin.codigo).toBe(0);
       expect(fin.stdout.trimEnd().split("\n")).toHaveLength(1);
       expect(JSON.parse(fin.stdout)).toMatchObject({ estado: "issue_creado", issue: { numero: 42 }, cobro: { estado: "pendiente", usd: null } });
@@ -576,10 +588,10 @@ describe("supcoflow sin terminal", () => {
       motor.clavesDePrueba.length = 0;
       motor.pruebasPorClave.clear();
       motor.pruebaPierde = true;
-      const primero = await correrSinTty(["probar", "--autorizo-gasto", "--mensaje", "Mi caso", "--json", "--repo", "d/r"], { conClave: true });
+      const primero = await correrSinTty(["test", "--authorize-spend", "--ceiling", "2", "--expect-policy", "investigate", "--message", "Mi caso", "--json", "--repo", "d/r"], { conClave: true });
       expect(primero.codigo, primero.stdout).toBe(1);
       expect(JSON.parse(primero.stdout)).toMatchObject({ intento_pendiente: true });
-      const segundo = await correrSinTty(["probar", "--autorizo-gasto", "--json", "--repo", "d/r"], { conClave: true });
+      const segundo = await correrSinTty(["test", "--authorize-spend", "--ceiling", "2", "--expect-policy", "investigate", "--json", "--repo", "d/r"], { conClave: true });
       expect(segundo.codigo, segundo.stdout).toBe(5);
       expect(motor.clavesDePrueba).toHaveLength(2);
       expect(motor.clavesDePrueba[1]).toBe(motor.clavesDePrueba[0]);
@@ -591,10 +603,14 @@ describe("supcoflow sin terminal", () => {
     }, 60_000);
 
     it.each([
+      [["test", "--wait", "--authorize-spend", "--json"]],
+      [["test", "--test-id", "prb_0123456789abcdef", "--json"]],
+      [["diagnose", "--message", "x", "--json"]],
+      [["test", "--start", "--json"]],
       [["probar", "--wait", "--autorizo-gasto", "--json"]],
       [["probar", "--prueba", "prb_0123456789abcdef", "--json"]],
-      [["diagnosticar", "--mensaje", "x", "--json"]],
-      [["probar", "--start", "--json"]],
+      [["test", "--authorize-spend", "--json"]],
+      [["test", "--authorize-spend", "--ceiling", "2", "--json"]],
     ])("%j sale 3 sin tocar el motor", async (args) => {
       pedidosAlMotor.length = 0;
       const r = await correrSinTty([...args], { conClave: true });
