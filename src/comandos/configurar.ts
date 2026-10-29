@@ -25,19 +25,19 @@ export function desenlace(r: Respuesta, ok: (cuerpo: Record<string, unknown>) =>
   if (r.status >= 200 && r.status < 300) return ok(r.cuerpo);
   // Propio de esta función (hoy `conClave` ya lo filtra antes): sin esto, un 401 o un 5xx caerían en el 3 de
   // «entrada inválida» y la persona (o el asistente) corregiría una entrada que estaba bien.
-  if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", "La clave ya no vale: iniciá sesión de nuevo.");
+  if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", "The key is no longer valid: log in again.");
   if (r.status >= 500 || typeof r.cuerpo !== "object" || r.cuerpo === null) {
-    return fallo(SALIDA.inesperado, "respuesta_inesperada", `El motor contestó algo que no entiendo (${r.status}); probá de nuevo en un rato.`);
+    return fallo(SALIDA.inesperado, "respuesta_inesperada", `The engine answered something I don't understand (${r.status}); try again in a while.`);
   }
   const error = typeof r.cuerpo.error === "string" ? r.cuerpo.error : "rechazado";
-  const message = taparSecretos(typeof r.cuerpo.message === "string" ? r.cuerpo.message : `El motor rechazó el pedido (${r.status}).`);
+  const message = taparSecretos(typeof r.cuerpo.message === "string" ? r.cuerpo.message : `The engine rejected the request (${r.status}).`);
   if (PIDEN_UNA_PERSONA.has(error)) return fallo(SALIDA.haceFaltaUnaPersona, error, message);
   if (TRANSITORIOS.has(error)) return fallo(SALIDA.inesperado, error, message);
   return fallo(SALIDA.entradaInvalida, error, message);
 }
 
 export const rutaDe = (p: { id: string }, resto: string) => `/api/proyectos/${encodeURIComponent(p.id)}${resto}`;
-export const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` });
+export const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `With --dry-run I do nothing; without it: ${haria}.` });
 
 export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flags, "repo">): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
@@ -51,18 +51,18 @@ export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flag
     // promete «ninguna IA» ni «toda IA». `acuerdo` puede ser null, un acuerdo o {ilegible: true}.
     const ac = c.acuerdo as { ilegible?: boolean } | null | undefined;
     const acuerdo = ac === null || ac === undefined
-      ? "sin fijar (entra todo, como hoy)"
+      ? "not set (everything gets through, as today)"
       : ac.ilegible === true
-        ? "fijado pero ilegible (revisalo en la consola)"
-        : "fijado";
-    const alcance = ac === null || ac === undefined ? "" : " Frena lo que se guarda y lo que lee la IA que releva; no cubre lo que ve la IA del chat mientras conversa.";
+        ? "set but unreadable (check it in the console)"
+        : "set";
+    const alcance = ac === null || ac === undefined ? "" : " It limits what is saved and what the AI that investigates reads; it does not cover what the chat's AI sees while it talks.";
     return {
       codigo: SALIDA.ok,
       json: { ok: true, proyecto: p.proyecto.id, ...c },
       texto: [
-        `${p.proyecto.id}: chat ${chat.habilitado ? "prendido" : "apagado"}, ${sitiosLista.length} sitio(s), acuerdo de datos ${acuerdo}.${alcance}`,
-        `Política de problemas: ${textoDePolitica(c.politica)}`,
-        `Marca: ${textoDeMarca(c.marca)}`,
+        `${p.proyecto.id}: chat ${chat.habilitado ? "on" : "off"}, ${sitiosLista.length} site(s), data agreement ${acuerdo}.${alcance}`,
+        `Problem policy: ${textoDePolitica(c.politica)}`,
+        `Brand: ${textoDeMarca(c.marca)}`,
       ].join("\n"),
     };
   } catch (e) {
@@ -75,9 +75,9 @@ export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flag
 // no la manda no se adivina: se dice que no vino.
 function textoDePolitica(v: unknown): string {
   const modo = (v as { modo?: unknown } | null | undefined)?.modo;
-  if (modo === "relevar") return "relevar: cada problema se releva y nace el issue (gasta).";
-  if (modo === "guardar") return "guardar: los problemas del chat se guardan sin relevar; desde la consola una persona puede pedir el relevamiento (gasta).";
-  return "el motor no la informó.";
+  if (modo === "relevar") return "investigate: every problem is investigated and an issue is created (this costs money).";
+  if (modo === "guardar") return "save: the chat's problems are saved without investigating; from the console a person can still ask for the investigation (this costs money).";
+  return "the engine didn't report it.";
 }
 
 // Título, saludo y tema los escribe quien configura el chat y llegan tal cual: un ESC en el título movería el
@@ -88,17 +88,17 @@ const limpio = (t: string) => t.replace(/[\u0000-\u001f\u007f-\u009f]/g, "");
 // `marca` es null (nunca se fijó: el chat usa la de fábrica) o {titulo, saludo, tema, logo_url}. Del tema se
 // muestran las claves tal cual vinieron: el motor decide cuáles hay, la terminal no las reinterpreta.
 function textoDeMarca(v: unknown): string {
-  if (v === undefined) return "el motor no la informó.";
-  if (v === null) return "sin fijar (el chat usa la de fábrica).";
+  if (v === undefined) return "the engine didn't report it.";
+  if (v === null) return "not set (the chat uses the default one).";
   const m = v as { titulo?: unknown; saludo?: unknown; tema?: unknown; logo_url?: unknown };
   const partes: string[] = [];
-  if (typeof m.titulo === "string" && m.titulo !== "") partes.push(`título «${limpio(m.titulo)}»`);
-  if (typeof m.saludo === "string" && m.saludo !== "") partes.push(`saludo «${limpio(m.saludo)}»`);
+  if (typeof m.titulo === "string" && m.titulo !== "") partes.push(`title «${limpio(m.titulo)}»`);
+  if (typeof m.saludo === "string" && m.saludo !== "") partes.push(`greeting «${limpio(m.saludo)}»`);
   if (typeof m.tema === "object" && m.tema !== null) {
     const colores = Object.entries(m.tema as Record<string, unknown>).filter(([, x]) => typeof x === "string").map(([k, x]) => `${limpio(k)} ${limpio(x as string)}`);
-    if (colores.length > 0) partes.push(`tema ${colores.join(", ")}`);
+    if (colores.length > 0) partes.push(`theme ${colores.join(", ")}`);
   }
-  partes.push(typeof m.logo_url === "string" && m.logo_url !== "" ? "con logo" : "sin logo");
+  partes.push(typeof m.logo_url === "string" && m.logo_url !== "" ? "with logo" : "no logo");
   return partes.join(", ") + ".";
 }
 
@@ -108,32 +108,32 @@ export async function chatPrenderApagar(d: DepsDeConfigurar, flags: Pick<Flags, 
   const ruta = rutaDe(p.proyecto, "/chat");
   if (flags.dryRun) return dryRun(`POST ${ruta} {habilitado: ${habilitar}}`);
   return desenlace(await d.configurar(d.api, p.clave, ruta, { habilitado: habilitar }), () => ({
-    codigo: SALIDA.ok, json: { ok: true, habilitado: habilitar }, texto: habilitar ? "Chat prendido." : "Chat apagado.",
+    codigo: SALIDA.ok, json: { ok: true, habilitado: habilitar }, texto: habilitar ? "Chat turned on." : "Chat turned off.",
   }));
 }
 
-export async function sitios(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "sitio">, accion: "agregar" | "quitar"): Promise<Resultado> {
-  if (flags.sitio === null) return fallo(SALIDA.entradaInvalida, "falta_sitio", `Falta el sitio: \`supcoflow sitios ${accion} --sitio https://tu-app.com\`.`);
+export async function sitios(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "site">, accion: "agregar" | "quitar"): Promise<Resultado> {
+  if (flags.site === null) return fallo(SALIDA.entradaInvalida, "falta_sitio", `The site is missing: \`supcoflow sites ${accion === "agregar" ? "add" : "remove"} --site https://your-app.com\`.`);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const ruta = rutaDe(p.proyecto, "/origenes");
   if (flags.dryRun) return dryRun(`POST ${ruta} {accion: ${accion}}`);
-  return desenlace(await d.configurar(d.api, p.clave, ruta, { accion, origen: flags.sitio }), (c) => ({
-    codigo: SALIDA.ok, json: { ok: true, sitios: c.origenes }, texto: `Sitios: ${(c.origenes as string[]).join(", ") || "ninguno"}.`,
+  return desenlace(await d.configurar(d.api, p.clave, ruta, { accion, origen: flags.site }), (c) => ({
+    codigo: SALIDA.ok, json: { ok: true, sitios: c.origenes }, texto: `Sites: ${(c.origenes as string[]).join(", ") || "none"}.`,
   }));
 }
 
-export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "titulo" | "saludo" | "tema">): Promise<Resultado> {
+export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "title" | "greeting" | "theme">): Promise<Resultado> {
   const tema: Record<string, string> = {};
-  for (const t of flags.tema) {
+  for (const t of flags.theme) {
     const i = t.indexOf("=");
-    if (i <= 0 || i === t.length - 1) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--tema va como clave=valor (por ejemplo acento=#0a7); recibí «${t}».`);
+    if (i <= 0 || i === t.length - 1) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--theme goes as key=value (for example acento=#0a7); I got «${t}».`);
     const clave = t.slice(0, i);
-    if (clave in tema) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--tema ${clave} va una sola vez.`);
+    if (clave in tema) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--theme ${clave} can only be given once.`);
     tema[clave] = t.slice(i + 1);
   }
-  if (flags.titulo === null && flags.saludo === null && Object.keys(tema).length === 0) {
-    return fallo(SALIDA.entradaInvalida, "marca_vacia", "Pasá al menos --titulo, --saludo o --tema.");
+  if (flags.title === null && flags.greeting === null && Object.keys(tema).length === 0) {
+    return fallo(SALIDA.entradaInvalida, "marca_vacia", "Give at least one of --title, --greeting or --theme.");
   }
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
@@ -150,8 +150,8 @@ export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" |
     return resultadoDeFallo(e);
   }
   const cuerpo: Record<string, unknown> = {};
-  const titulo = flags.titulo ?? (typeof actual?.titulo === "string" ? actual.titulo : null);
-  const saludo = flags.saludo ?? (typeof actual?.saludo === "string" ? actual.saludo : null);
+  const titulo = flags.title ?? (typeof actual?.titulo === "string" ? actual.titulo : null);
+  const saludo = flags.greeting ?? (typeof actual?.saludo === "string" ? actual.saludo : null);
   if (titulo !== null) cuerpo.titulo = titulo;
   if (saludo !== null) cuerpo.saludo = saludo;
   const temaActual = typeof actual?.tema === "object" && actual.tema !== null ? (actual.tema as Record<string, string>) : {};
@@ -159,24 +159,24 @@ export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" |
   if (Object.keys(temaFinal).length > 0) cuerpo.tema = temaFinal;
   const ruta = rutaDe(p.proyecto, "/chat/marca");
   if (flags.dryRun) return dryRun(`POST ${ruta}`);
-  return desenlace(await d.configurar(d.api, p.clave, ruta, cuerpo), (c) => ({ codigo: SALIDA.ok, json: { ok: true, marca: c.marca }, texto: "Marca guardada." }));
+  return desenlace(await d.configurar(d.api, p.clave, ruta, cuerpo), (c) => ({ codigo: SALIDA.ok, json: { ok: true, marca: c.marca }, texto: "Brand saved." }));
 }
 
 const MIMES: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" };
 // El tope del motor es 200 KB (`MAX_LOGO_BYTES`); acá se corta antes para no mandar de más. El motor decide.
 const TOPE_DEL_LOGO = 200_000;
 
-export async function chatLogo(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "archivo">): Promise<Resultado> {
-  if (flags.archivo === null) return fallo(SALIDA.entradaInvalida, "falta_archivo", "Falta el logo: `supcoflow chat logo --archivo logo.png`.");
-  const mime = MIMES[path.extname(flags.archivo).toLowerCase()];
-  if (mime === undefined) return fallo(SALIDA.entradaInvalida, "logo_invalido", "El logo tiene que ser .png, .jpg o .webp.");
-  const leido = d.leerArchivoChico(flags.archivo, TOPE_DEL_LOGO);
-  if ("error" in leido) return fallo(SALIDA.entradaInvalida, "logo_ilegible", `No leo ${flags.archivo}: ${leido.error}.`);
+export async function chatLogo(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "file">): Promise<Resultado> {
+  if (flags.file === null) return fallo(SALIDA.entradaInvalida, "falta_archivo", "The logo is missing: `supcoflow chat logo --file logo.png`.");
+  const mime = MIMES[path.extname(flags.file).toLowerCase()];
+  if (mime === undefined) return fallo(SALIDA.entradaInvalida, "logo_invalido", "The logo must be .png, .jpg or .webp.");
+  const leido = d.leerArchivoChico(flags.file, TOPE_DEL_LOGO);
+  if ("error" in leido) return fallo(SALIDA.entradaInvalida, "logo_ilegible", `I can't read ${flags.file}: ${leido.error}.`);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   if (flags.dryRun) return dryRun(`POST ${rutaDe(p.proyecto, "/chat/logo")} (${leido.bytes.length} bytes)`);
   return desenlace(
-    await d.subirLogo(d.api, p.clave, p.proyecto.id, { bytes: leido.bytes, mime, nombre: path.basename(flags.archivo) }),
-    (c) => ({ codigo: SALIDA.ok, json: { ok: true, logo_url: c.logo_url }, texto: "Logo subido." }),
+    await d.subirLogo(d.api, p.clave, p.proyecto.id, { bytes: leido.bytes, mime, nombre: path.basename(flags.file) }),
+    (c) => ({ codigo: SALIDA.ok, json: { ok: true, logo_url: c.logo_url }, texto: "Logo uploaded." }),
   );
 }

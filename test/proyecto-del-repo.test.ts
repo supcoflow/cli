@@ -17,6 +17,6 @@ describe("proyectoDelRepo", () => {
   it("sin proyecto: 4 sin_proyecto con la pista", async () => {
     const r = await proyectoDelRepo({ ...base, buscarProyecto: async () => null }, { repo: null });
     expect(r).toMatchObject({ ok: false, resultado: { codigo: 4, json: { error: "sin_proyecto" } } });
-    if (!r.ok) expect(r.resultado.texto).toContain("supcoflow proyecto crear");
+    if (!r.ok) expect(r.resultado.texto).toContain("supcoflow project create");
   });
 });

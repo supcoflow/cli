@@ -26,7 +26,7 @@ export async function proyectoDelRepo(
   try {
     const proyecto = await d.buscarProyecto(d.api, leida.vigente.clave, repo);
     if (proyecto === null) {
-      const message = `El repo ${repo} todavía no tiene proyecto. Creá el proyecto: \`supcoflow proyecto crear\`.`;
+      const message = `The repo ${repo} doesn't have a project yet. Create the project: \`supcoflow project create\`.`;
       return { ok: false, resultado: { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "sin_proyecto", message, repo }, texto: message } };
     }
     return { ok: true, clave: leida.vigente.clave, proyecto };

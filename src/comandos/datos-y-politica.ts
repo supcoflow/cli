@@ -4,6 +4,7 @@
 // se valida acá se valida para no gastar un pedido; la regla de verdad es la del motor.
 import type { Respuesta } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
+import { PERMITIDOS_VIEJOS, PREFIJO_VIEJO_DE_ATRIBUTO } from "../alias.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
 import { claveVigente } from "./clave-vigente.ts";
 import { desenlace, type DepsDeConfigurar } from "./configurar.ts";
@@ -17,46 +18,56 @@ export type Permitido = {
   usuario_id: boolean; usuario_rol: boolean; atributos: string[]; pagina_y_navegador: boolean;
   capturas: boolean; elementos: boolean; email: boolean;
 };
-const BANDERAS = ["usuario_id", "usuario_rol", "pagina_y_navegador", "capturas", "elementos", "email"] as const;
+// Los nombres de `--allow` son ingleses; a la API viaja el suyo (`Permitido`). Los castellanos de la 0.7.0 valen igual
+// (`src/alias.ts`).
+const DE_LA_API = { user_id: "usuario_id", user_role: "usuario_rol", page_and_browser: "pagina_y_navegador", screenshots: "capturas", elements: "elementos", email: "email" } as const;
+const BANDERAS = Object.keys(DE_LA_API) as (keyof typeof DE_LA_API)[];
+const PREFIJO_DEL_ATRIBUTO = "attribute:";
 // Los límites del contrato (`Permitido.atributos`: ≤ 8, 1–40 caracteres). Se cortan acá para que un
-// --permitir imposible salga 3 sin pedido; el motor sigue siendo quien decide.
+// --allow imposible salga 3 sin pedido; el motor sigue siendo quien decide.
 const MAX_ATRIBUTOS = 8;
 const MAX_LARGO_DE_ATRIBUTO = 40;
 
 const fallo = (codigo: Resultado["codigo"], error: string, message: string): Resultado => ({ codigo, json: { ok: false, error, message }, texto: message });
 const rutaDe = (p: { id: string }, resto: string) => `/api/proyectos/${encodeURIComponent(p.id)}${resto}`;
-const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él: ${haria}.` });
+const dryRun = (haria: string): Resultado => ({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `With --dry-run I do nothing; without it: ${haria}.` });
+
+// Lleva un valor de `--allow` (nuevo o viejo) a su forma inglesa canónica.
+function aInglesElPermitido(x: string): string {
+  if (x.startsWith(PREFIJO_VIEJO_DE_ATRIBUTO)) return PREFIJO_DEL_ATRIBUTO + x.slice(PREFIJO_VIEJO_DE_ATRIBUTO.length);
+  return PERMITIDOS_VIEJOS[x] ?? x;
+}
 
 export function leerPermitir(crudo: string): Permitido | { error: string } {
-  const partes = crudo.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+  const partes = crudo.split(",").map((s) => s.trim()).filter((s) => s.length > 0).map(aInglesElPermitido);
   const p: Permitido = { usuario_id: false, usuario_rol: false, atributos: [], pagina_y_navegador: false, capturas: false, elementos: false, email: false };
-  if (partes.length === 1 && partes[0] === "nada") return p;
-  if (partes.length === 0 || partes.includes("nada")) return { error: "`nada` va solo; si no, nombrá lo que sí pasa." };
+  if (partes.length === 1 && partes[0] === "nothing") return p;
+  if (partes.length === 0 || partes.includes("nothing")) return { error: "`nothing` goes alone; otherwise, name what does get through." };
   const vistos = new Set<string>();
   for (const x of partes) {
-    if (vistos.has(x)) return { error: `«${x}» está repetido.` };
+    if (vistos.has(x)) return { error: `«${x}» is repeated.` };
     vistos.add(x);
-    if (x.startsWith("atributo:")) {
+    if (x.startsWith(PREFIJO_DEL_ATRIBUTO)) {
       // Recortado: « plan» y «plan» son el mismo atributo para quien lo escribe, y el motor lo compara exacto.
-      const nombre = x.slice("atributo:".length).trim();
-      if (nombre.length === 0) return { error: "`atributo:` va con el nombre exacto del atributo, por ejemplo atributo:plan." };
-      if (nombre.length > MAX_LARGO_DE_ATRIBUTO) return { error: `El nombre de un atributo tiene hasta ${MAX_LARGO_DE_ATRIBUTO} caracteres.` };
-      if (p.atributos.length >= MAX_ATRIBUTOS) return { error: `Hasta ${MAX_ATRIBUTOS} atributos.` };
+      const nombre = x.slice(PREFIJO_DEL_ATRIBUTO.length).trim();
+      if (nombre.length === 0) return { error: "`attribute:` goes with the attribute's exact name, for example attribute:plan." };
+      if (nombre.length > MAX_LARGO_DE_ATRIBUTO) return { error: `An attribute's name has up to ${MAX_LARGO_DE_ATRIBUTO} characters.` };
+      if (p.atributos.length >= MAX_ATRIBUTOS) return { error: `Up to ${MAX_ATRIBUTOS} attributes.` };
       p.atributos.push(nombre);
     } else if ((BANDERAS as readonly string[]).includes(x)) {
-      p[x as (typeof BANDERAS)[number]] = true;
+      p[DE_LA_API[x as keyof typeof DE_LA_API]] = true;
     } else {
-      return { error: `No conozco «${x}». Valen: ${BANDERAS.join(", ")}, atributo:<nombre>, o nada.` };
+      return { error: `I don't know «${x}». Valid: ${BANDERAS.join(", ")}, attribute:<name>, or nothing.` };
     }
   }
   return p;
 }
 
-export async function datosFijar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "permitir">): Promise<Resultado> {
-  if (flags.permitir === null) {
-    return fallo(SALIDA.entradaInvalida, "falta_permitir", "Falta qué datos pasan: `supcoflow datos fijar --permitir usuario_id,capturas` (o `--permitir nada`).");
+export async function datosFijar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "allow">): Promise<Resultado> {
+  if (flags.allow === null) {
+    return fallo(SALIDA.entradaInvalida, "falta_permitir", "Say which data gets through: `supcoflow data set --allow user_id,screenshots` (or `--allow nothing`).");
   }
-  const permitido = leerPermitir(flags.permitir);
+  const permitido = leerPermitir(flags.allow);
   if ("error" in permitido) return fallo(SALIDA.entradaInvalida, "permitir_invalido", permitido.error);
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
@@ -75,16 +86,17 @@ export async function datosFijar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" 
     return {
       codigo: SALIDA.ok,
       json: { ok: true, acuerdo: c.acuerdo, alcance: "guardado_y_relevamiento" },
-      texto: `Acuerdo de datos fijado (versión ${version}). Frena lo que se guarda y lo que lee la IA que releva; no lo que ve la IA del chat mientras conversa.`,
+      texto: `Data agreement set (version ${version}). It limits what is saved and what the AI that investigates reads; not what the chat's AI sees while it talks.`,
     };
   });
 }
 
-export async function politicaFijar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "modo">): Promise<Resultado> {
-  if (flags.modo !== "relevar" && flags.modo !== "guardar") {
-    return fallo(SALIDA.entradaInvalida, "modo_invalido", "--modo vale `relevar` o `guardar`: `supcoflow politica fijar --modo guardar`.");
+export async function politicaFijar(d: DepsDeConfigurar, flags: Pick<Flags, "repo" | "dryRun" | "mode">): Promise<Resultado> {
+  // A la API viaja `relevar` / `guardar`; `investigate` / `save` son sus nombres ingleses.
+  const modo = flags.mode === "investigate" || flags.mode === "relevar" ? "relevar" : flags.mode === "save" || flags.mode === "guardar" ? "guardar" : null;
+  if (modo === null) {
+    return fallo(SALIDA.entradaInvalida, "modo_invalido", "--mode is `investigate` or `save`: `supcoflow policy set --mode save`.");
   }
-  const modo = flags.modo;
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const ruta = rutaDe(p.proyecto, "/politica");
@@ -98,7 +110,7 @@ export async function politicaFijar(d: DepsDeConfigurar, flags: Pick<Flags, "rep
   return desenlace(r, (c) => ({
     codigo: SALIDA.ok,
     json: { ok: true, politica: c.politica },
-    texto: `Política de problemas fijada: ${modo}.`,
+    texto: `Problem policy set: ${modo === "relevar" ? "investigate" : "save"}.`,
   }));
 }
 

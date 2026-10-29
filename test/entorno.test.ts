@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ARCHIVO_QUE_NO_SE_LEE, archivosDelRepo, leerArchivoChico, correrReal, entornoReal, TOPE_DEL_ARCHIVO_DEL_REPO } from "../src/entorno.ts";
+import { NO_LEIDO } from "../src/lectura.ts";
 
 describe("el Correr real", () => {
   it("mata al hijo en el techo y lo dice", async () => {
@@ -141,9 +142,9 @@ describe("leerArchivoChico", () => {
     const p = join(raiz, "l.png");
     writeFileSync(p, "abc");
     expect(leerArchivoChico(p, 10)).toEqual({ bytes: new Uint8Array([97, 98, 99]) });
-    expect(leerArchivoChico(p, 2)).toEqual({ error: "es demasiado grande" });
-    expect(leerArchivoChico(join(raiz, "no"), 10)).toEqual({ error: "no existe" });
+    expect(leerArchivoChico(p, 2)).toEqual({ error: NO_LEIDO.demasiadoGrande });
+    expect(leerArchivoChico(join(raiz, "no"), 10)).toEqual({ error: NO_LEIDO.noExiste });
     symlinkSync(p, join(raiz, "enlace.png"));
-    expect(leerArchivoChico(join(raiz, "enlace.png"), 10)).toEqual({ error: "es un enlace" });
+    expect(leerArchivoChico(join(raiz, "enlace.png"), 10)).toEqual({ error: NO_LEIDO.esUnEnlace });
   });
 });

@@ -20,5 +20,9 @@
       "texto": "## Ñandú\nPara qué sirve: sí\n",
       "huella": "cc620381787b4ad2b79a89e43b5c106a614069956fcd66bd6b0bd5968ef82699"
     }
-  ]
+  ],
+  "ejemplo": {
+    "archivo": "guia-de-ejemplo.md",
+    "huella": "5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad"
+  }
 }

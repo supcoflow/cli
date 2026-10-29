@@ -51,16 +51,16 @@ export async function leerRepoLocal(
 }
 
 const MOTIVOS: Record<string, string> = {
-  sin_git: "esta carpeta no es un repo de git",
-  sin_origin: "el repo no tiene un remoto «origin»",
-  origin_no_es_github: "el «origin» no es un repo de GitHub",
+  sin_git: "this folder isn't a git repo",
+  sin_origin: "the repo has no remote called \"origin\"",
+  origin_no_es_github: "the \"origin\" remote isn't a GitHub repo",
 };
 
 export async function repoPedido(d: { flagRepo: string | null; git: Git; cwd: string }): Promise<{ repo: string; raiz: string | null }> {
   const local = await leerRepoLocal(d.git, d.cwd);
   if (d.flagRepo !== null) {
     if (!esRepoValido(d.flagRepo)) {
-      throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "repo_invalido", "El valor de --repo tiene que ser owner/repo (por ejemplo duenio/mi-app), sin la URL.");
+      throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "repo_invalido", "The value of --repo must be owner/repo (for example owner/my-app), without the URL.");
     }
     // La raíz sólo se da si el origin local es ESE repo: con otro, lo que se escriba en esta
     // carpeta (el archivo del proyecto) no le pertenece.
@@ -68,8 +68,8 @@ export async function repoPedido(d: { flagRepo: string | null; git: Git; cwd: st
     return { repo: d.flagRepo, raiz: mismo ? local.raiz : null };
   }
   if (local.repo === null) {
-    const porque = local.motivo ? MOTIVOS[local.motivo] : "no se pudo leer";
-    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "sin_repo", `No encontré un repo de GitHub acá (${porque}). Pasá --repo owner/repo.`);
+    const porque = local.motivo ? MOTIVOS[local.motivo] : "the folder couldn't be read";
+    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "sin_repo", `I couldn't find a GitHub repo here (${porque}). Pass --repo owner/repo.`);
   }
   return { repo: local.repo, raiz: local.raiz };
 }

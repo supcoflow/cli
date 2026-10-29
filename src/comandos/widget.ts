@@ -11,20 +11,24 @@ export type DepsDeWidget = DepsDelProyectoDelRepo & {
 };
 
 function textoDe(w: Widget): string {
+  const anteriores = w.nextjs.archivos_anteriores;
   return [
-    "1. Instalá el paquete (con el gestor de la app, la versión exacta):",
+    "1. Install the package (with the app's package manager, the exact version):",
     `   ${w.instalar}`,
     "",
-    `2. Creá el archivo ${w.nextjs.archivo_sugerido} con este contenido (Next.js, ${w.nextjs.estado}):`,
+    `2. Create the file ${w.nextjs.archivo_sugerido} with this content (Next.js, ${w.nextjs.estado}):`,
     w.nextjs.contenido.trimEnd(),
+    ...(anteriores.length > 0
+      ? [`   If the chat is already installed in ${anteriores.join(" or ")}, update that file in place instead of creating a second one.`]
+      : []),
     "",
-    "3. Usalo en el layout que cubre las pantallas donde se traban los usuarios:",
+    "3. Use it in the layout that covers the screens where users get stuck:",
     `   ${w.nextjs.uso}`,
     "",
-    "4. Política de contenido (CSP): si la app tiene `connect-src`, agregale este origen conservando lo que ya tiene:",
+    "4. Content Security Policy (CSP): if the app has `connect-src`, add this origin and keep what it already has:",
     `   ${w.csp}`,
     "",
-    "Alternativa con <script> (disponible, no probada en una app real):",
+    "Alternative with <script> (available, not tested in a real app):",
     `   ${w.script.linea}`,
   ].join("\n");
 }

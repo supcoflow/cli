@@ -19,7 +19,10 @@ import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
 import { dentroDeUnWorkingTree } from "./guardado/repo.ts";
 
-export type Intento = { clave: string; mensaje: string | null; techoUsd: number };
+// `politicaEsperada` es la que la persona vio al autorizar (valor de la API); null si no se pasó (alias viejo) o si el
+// intento lo guardó la 0.7.0, que no la mandaba. El reintento reenvía el mismo cuerpo, así que se guarda con el intento.
+export type PoliticaEsperada = "relevar" | "guardar";
+export type Intento = { clave: string; mensaje: string | null; techoUsd: number; politicaEsperada: PoliticaEsperada | null };
 export type LoGuardado = { intento: Intento | null; ultima: string | null };
 
 export type RegistroDePruebas = {
@@ -33,10 +36,13 @@ export type RegistroDePruebas = {
   descartar(proyectoId: string): Promise<void>;
 };
 
-function esIntento(v: unknown): v is { clave: string; mensaje: string | null; techo_usd: number } {
+type IntentoGuardado = { clave: string; mensaje: string | null; techo_usd: number; politica_esperada?: PoliticaEsperada | null };
+
+function esIntento(v: unknown): v is IntentoGuardado {
   if (typeof v !== "object" || v === null) return false;
   const i = v as Record<string, unknown>;
-  return typeof i.clave === "string" && i.clave.length > 0 && (i.mensaje === null || typeof i.mensaje === "string") && typeof i.techo_usd === "number";
+  const politica = i.politica_esperada === undefined || i.politica_esperada === null || i.politica_esperada === "relevar" || i.politica_esperada === "guardar";
+  return typeof i.clave === "string" && i.clave.length > 0 && (i.mensaje === null || typeof i.mensaje === "string") && typeof i.techo_usd === "number" && politica;
 }
 
 export function crearRegistroDePruebas(d: {
@@ -52,7 +58,7 @@ export function crearRegistroDePruebas(d: {
   const cuenta = (proyectoId: string) => `${d.origen}#prueba#${proyectoId}`;
   const noGuardada = (que: string) => new FalloDeLaTerminal(
     SALIDA.inesperado, "prueba_no_guardada",
-    `No pude ${que} ${d.rutaDelArchivo}; sin eso, un reintento podría pedir otra prueba (y gastar dos veces). Revisá ese archivo (no puede estar dentro de un repo) y probá de nuevo.`,
+    `I couldn't ${que} ${d.rutaDelArchivo}; without that, a retry could ask for another test (and spend twice). Check that file (it can't be inside a repo) and try again.`,
   );
 
   async function leer(proyectoId: string): Promise<LoGuardado> {
@@ -60,21 +66,24 @@ export function crearRegistroDePruebas(d: {
     try {
       crudo = (await d.almacen.leer(cuenta(proyectoId)))?.valor ?? null;
     } catch {
-      throw noGuardada("leer");
+      throw noGuardada("read");
     }
     if (crudo === null) return { intento: null, ultima: null };
     let v: unknown;
     try {
       v = JSON.parse(crudo);
     } catch {
-      throw noGuardada("entender");
+      throw noGuardada("understand");
     }
     const o = (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
     const intentoOk = o.intento === null || esIntento(o.intento);
     const ultimaOk = o.ultima === null || typeof o.ultima === "string";
-    if (!intentoOk || !ultimaOk) throw noGuardada("entender");
-    const i = o.intento as { clave: string; mensaje: string | null; techo_usd: number } | null;
-    return { intento: i === null ? null : { clave: i.clave, mensaje: i.mensaje, techoUsd: i.techo_usd }, ultima: o.ultima as string | null };
+    if (!intentoOk || !ultimaOk) throw noGuardada("understand");
+    const i = o.intento as IntentoGuardado | null;
+    return {
+      intento: i === null ? null : { clave: i.clave, mensaje: i.mensaje, techoUsd: i.techo_usd, politicaEsperada: i.politica_esperada ?? null },
+      ultima: o.ultima as string | null,
+    };
   }
 
   async function escribir(proyectoId: string, g: LoGuardado): Promise<void> {
@@ -84,20 +93,22 @@ export function crearRegistroDePruebas(d: {
     try {
       raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
     } catch {
-      throw noGuardada("resolver la ruta de");
+      throw noGuardada("resolve the path of");
     }
     if (raiz !== null) {
       throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
-        `No guardo el pedido de la prueba dentro de un repo de git (${raiz}); sin guardarlo no lo mando. Apuntá XDG_CONFIG_HOME fuera de un repo.`);
+        `I'm not saving the test request inside a git repo (${raiz}); without saving it I won't send it. Point XDG_CONFIG_HOME outside a repo.`);
     }
     const valor = JSON.stringify({
-      intento: g.intento === null ? null : { clave: g.intento.clave, mensaje: g.intento.mensaje, techo_usd: g.intento.techoUsd },
+      intento: g.intento === null
+        ? null
+        : { clave: g.intento.clave, mensaje: g.intento.mensaje, techo_usd: g.intento.techoUsd, politica_esperada: g.intento.politicaEsperada },
       ultima: g.ultima,
     });
     try {
       await d.almacen.escribir(cuenta(proyectoId), { valor, escritoEn: d.ahora() });
     } catch {
-      throw noGuardada("guardar en");
+      throw noGuardada("save to");
     }
   }
 

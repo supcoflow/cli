@@ -3,7 +3,7 @@
 // lo llama (una persona o un asistente) decide cuándo volver a llamar.
 import type { Canje, PedidoDeCodigo } from "../api.ts";
 import { FalloDeLaTerminal, resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
-import type { Guardado, Pendiente } from "../guardado/index.ts";
+import { NOMBRE_DE_LA_FUENTE, type Guardado, type Pendiente } from "../guardado/index.ts";
 import { PLAZO_MINIMO_MS, RESERVA_PARA_CERRAR_MS, sondearUnTramo, TRAMO_MAXIMO_MS } from "../sondeo.ts";
 
 export type DepsDeLogin = {
@@ -20,7 +20,7 @@ export type DepsDeLogin = {
 };
 
 const TECHO_DE_UN_PASO_MS = 5_000;
-const VOLVER_A_EMPEZAR = "Volvé a empezar con `supcoflow login --start`.";
+const VOLVER_A_EMPEZAR = "Start over with `supcoflow login --start`.";
 
 const fallo = (codigo: Resultado["codigo"], error: string, message: string, extra: Record<string, unknown> = {}): Resultado => ({
   codigo, json: { ok: false, error, message, ...extra }, texto: message,
@@ -39,7 +39,7 @@ export type DepsDelReintento = Pick<DepsDeLogin, "api" | "guardado" | "ahora" | 
 export async function reintentarPorRevocar(d: DepsDelReintento, limite: number): Promise<{ revocadas: number; quedan: number | null }> {
   const origen = d.api.origin;
   const noSe = () => {
-    d.avisar("No pude leer entera la lista de claves por revocar (el llavero no respondió); la reintento la próxima vez.");
+    d.avisar("I couldn't read the whole list of keys waiting to be revoked (the keychain didn't respond); I'll try again next time.");
   };
   let lectura: { claves: string[]; completa: boolean };
   try {
@@ -77,8 +77,8 @@ export async function reintentarPorRevocar(d: DepsDelReintento, limite: number):
 export async function loginStart(d: DepsDeLogin, flags: { dryRun: boolean }): Promise<Resultado> {
   const origen = d.api.origin;
   if (flags.dryRun) {
-    const haria = `pedir un código de dispositivo a ${origen}`;
-    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `Con --dry-run no hago nada; sin él, iría a ${haria}.` };
+    const haria = `ask ${origen} for a device code`;
+    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria }, texto: `With --dry-run I do nothing; without it: ${haria}.` };
   }
   await reintentarPorRevocar(d, d.ahora() + 15_000);
   let c: PedidoDeCodigo;
@@ -97,7 +97,7 @@ export async function loginStart(d: DepsDeLogin, flags: { dryRun: boolean }): Pr
     await d.guardado.guardarPendiente(origen, pendiente);
   } catch (e) {
     return fallo(SALIDA.inesperado, e instanceof FalloDeLaTerminal ? e.error : "no_se_pudo_guardar",
-      `No pude guardar el inicio de sesión en curso: ${motivo(e)}`);
+      `I couldn't save the login in progress: ${motivo(e)}`);
   }
   return {
     codigo: SALIDA.esperandoAUnaPersona,
@@ -105,7 +105,7 @@ export async function loginStart(d: DepsDeLogin, flags: { dryRun: boolean }): Pr
       ok: false, esperando: "persona", verification_uri: c.verificationUri,
       verification_uri_complete: c.verificationUriComplete, user_code: c.userCode, expires_in: c.expiresIn,
     },
-    texto: `Abrí ${c.verificationUriComplete} y confirmá el código ${c.userCode}. Después corré \`supcoflow login --wait\`.`,
+    texto: `Open ${c.verificationUriComplete} and confirm the code ${c.userCode}. Then run \`supcoflow login --wait\`.`,
   };
 }
 
@@ -120,7 +120,7 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
 
   const p = await d.guardado.leerPendiente(origen);
   if (p === null) {
-    return fallo(SALIDA.entradaInvalida, "sin_login_en_curso", "No hay un inicio de sesión en curso: empezá con `supcoflow login --start`.");
+    return fallo(SALIDA.entradaInvalida, "sin_login_en_curso", "There is no login in progress: start with `supcoflow login --start`.");
   }
   // La anterior se lee ANTES de sondear, así no consume la reserva del cierre. Se pide por
   // `leerClaveCompleta` para saber de paso si SUPCOFLOW_TOKEN está definida (sin costo: la variable
@@ -134,10 +134,10 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
   // y sin borrar el pendiente, así el mismo `--wait` sirve cuando el llavero vuelva.
   if (!lectura.completa) {
     const salida = conVariable
-      ? "desbloqueá el llavero y volvé a llamar `supcoflow login --wait`."
-      : "desbloqueá el llavero y volvé a llamar `supcoflow login --wait` (o, sin login, exportá SUPCOFLOW_TOKEN con una clave vigente).";
+      ? "unlock the keychain and run `supcoflow login --wait` again."
+      : "unlock the keychain and run `supcoflow login --wait` again (or, without logging in, export SUPCOFLOW_TOKEN with a valid key).";
     return fallo(SALIDA.inesperado, "no_pude_leer_la_clave",
-      `No pude leer tu clave guardada (el llavero no respondió), y sin saber cuál es no la puedo reemplazar sin dejarla viva: ${salida}`);
+      `I couldn't read your saved key (the keychain didn't respond), and without knowing which one it is I can't replace it without leaving it active: ${salida}`);
   }
   const anterior = lectura.valor;
 
@@ -158,26 +158,26 @@ export async function loginWait(d: DepsDeLogin): Promise<Resultado> {
       return {
         codigo: SALIDA.esperandoAUnaPersona,
         json: { ok: false, esperando: "persona", user_code: fin.pendiente.userCode, verification_uri_complete: fin.pendiente.verificationUriComplete },
-        texto: `Todavía no se confirmó. Abrí ${fin.pendiente.verificationUriComplete} y confirmá el código ${fin.pendiente.userCode}; después volvé a correr \`supcoflow login --wait\`.`,
+        texto: `Not confirmed yet. Open ${fin.pendiente.verificationUriComplete} and confirm the code ${fin.pendiente.userCode}; then run \`supcoflow login --wait\` again.`,
       };
     case "token": {
       const r = await reemplazarClave(d, { clave: fin.clave, equipo: fin.equipo }, anterior?.clave ?? null, limite);
       // Va acá y no adentro de `reemplazarClave` porque es acá donde se supo, antes de sondear, sin
       // gastar reserva: preguntarlo al final costaría otra lectura lenta del guardado.
       if (conVariable && r.json.guardada_en !== undefined) {
-        d.avisar("SUPCOFLOW_TOKEN está definida y tiene prioridad sobre la clave que acabo de guardar.");
+        d.avisar("SUPCOFLOW_TOKEN is set and takes priority over the key I just saved.");
       }
       return r;
     }
     case "rechazado":
       await d.guardado.borrarPendiente(origen, techo());
-      return fallo(SALIDA.haceFaltaUnaPersona, "acceso_rechazado", "Rechazaron el acceso desde la consola; tu sesión anterior, si había, sigue igual.");
+      return fallo(SALIDA.haceFaltaUnaPersona, "acceso_rechazado", "Access was denied in the console; your previous session, if there was one, is unchanged.");
     case "vencido":
       await d.guardado.borrarPendiente(origen, techo());
-      return fallo(SALIDA.faltaLogin, "codigo_vencido", `El código venció. ${VOLVER_A_EMPEZAR}`);
+      return fallo(SALIDA.faltaLogin, "codigo_vencido", `The code has expired. ${VOLVER_A_EMPEZAR}`);
     case "invalido":
       await d.guardado.borrarPendiente(origen, techo());
-      return fallo(SALIDA.faltaLogin, "codigo_invalido", `El código ya no vale. ${VOLVER_A_EMPEZAR}`);
+      return fallo(SALIDA.faltaLogin, "codigo_invalido", `The code is no longer valid. ${VOLVER_A_EMPEZAR}`);
   }
 }
 
@@ -191,13 +191,13 @@ export async function loginInteractivo(
 ): Promise<Resultado> {
   if (!d.esTty || flags.json) {
     return fallo(SALIDA.entradaInvalida, "hace_falta_tty",
-      "Sin terminal interactiva usá `supcoflow login --start --json` y después `supcoflow login --wait --json`.");
+      "Without an interactive terminal, use `supcoflow login --start --json` and then `supcoflow login --wait --json`.");
   }
   const inicio = await loginStart(d, flags);
   if (inicio.codigo !== SALIDA.esperandoAUnaPersona) return inicio;
   // El texto de `--start` le dice a la persona que corra `--wait`; acá eso lo hace el comando solo.
   const { verification_uri_complete: url, user_code: codigo } = inicio.json;
-  d.mostrar(`Abrí ${String(url)} y confirmá el código ${String(codigo)}. Espero acá…`);
+  d.mostrar(`Open ${String(url)} and confirm the code ${String(codigo)}. I'll wait here...`);
   // Cada tramo termina por su cuenta (≤ 90 s) y el código vence a los pocos minutos, así que el
   // bucle tiene fin aunque la persona nunca conteste: termina en `codigo_vencido`.
   let r: Resultado;
@@ -237,9 +237,9 @@ export async function reemplazarClave(
       revocada = false;
     }
     const despues = revocada
-      ? "La revoqué para que no quede viva; tu sesión anterior, si había, sigue como estaba."
-      : "Tampoco pude revocarla: revocala en la consola, en «Accesos desde la terminal».";
-    return fallo(SALIDA.inesperado, "no_se_pudo_guardar", `No pude guardar la clave nueva (${motivo(e)}). ${despues}`);
+      ? "I revoked it so it doesn't stay active; your previous session, if there was one, is as it was."
+      : "I couldn't revoke it either: revoke it in the console, under \"Accesos desde la terminal\" (the console is in Spanish).";
+    return fallo(SALIDA.inesperado, "no_se_pudo_guardar", `I couldn't save the new key (${motivo(e)}). ${despues}`);
   }
 
   // 2. Revocar la anterior, o anotarla.
@@ -259,9 +259,9 @@ export async function reemplazarClave(
       try {
         await d.guardado.anotarPorRevocar(origen, anterior, techo());
         quedaPorRevocar = true;
-        d.avisar("No pude revocar tu clave anterior; quedó anotada y la reintento en el próximo login o logout.");
+        d.avisar("I couldn't revoke your previous key; it's noted down and I'll try again on the next login or logout.");
       } catch {
-        const message = "No pude revocar ni anotar tu clave anterior: revocala en la consola, en «Accesos desde la terminal».";
+        const message = "I couldn't revoke or note down your previous key: revoke it in the console, under \"Accesos desde la terminal\" (the console is in Spanish).";
         d.avisar(message);
         if (queda() >= PLAZO_MINIMO_MS) await d.guardado.borrarPendiente(origen, techo());
         // La nueva SÍ quedó guardada y anda: el json lo dice para que nadie vuelva a hacer login.
@@ -275,10 +275,10 @@ export async function reemplazarClave(
   // 3. Borrar el pendiente; su `false` no cambia nada.
   if (queda() >= PLAZO_MINIMO_MS) await d.guardado.borrarPendiente(origen, techo());
 
-  const donde = guardadaEn === "llavero" ? "el llavero del sistema" : "el archivo de credenciales";
+  const donde = guardadaEn === "llavero" ? NOMBRE_DE_LA_FUENTE.llavero : NOMBRE_DE_LA_FUENTE.archivo;
   return {
     codigo: SALIDA.ok,
     json: { ok: true, equipo: nueva.equipo, guardada_en: guardadaEn, anterior_revocada: anteriorRevocada, queda_por_revocar: quedaPorRevocar },
-    texto: `Sesión iniciada en el equipo ${nueva.equipo}; la clave quedó en ${donde}.`,
+    texto: `Logged in to team ${nueva.equipo}; the key is saved in ${donde}.`,
   };
 }

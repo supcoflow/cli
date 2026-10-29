@@ -101,7 +101,7 @@ describe("loginStart", () => {
       ok: false, esperando: "persona", verification_uri: pedido.verificationUri,
       verification_uri_complete: pedido.verificationUriComplete, user_code: "BCDF-GHJK", expires_in: 600,
     });
-    expect(r.texto).toBe(`Abrí ${pedido.verificationUriComplete} y confirmá el código BCDF-GHJK. Después corré \`supcoflow login --wait\`.`);
+    expect(r.texto).toBe(`Open ${pedido.verificationUriComplete} and confirm the code BCDF-GHJK. Then run \`supcoflow login --wait\`.`);
     expect(await g.leerPendiente(ORIGEN)).toEqual({
       deviceCode: DEVICE, userCode: "BCDF-GHJK", verificationUriComplete: pedido.verificationUriComplete,
       venceEn: T0 + 600_000, intervaloS: 5, ultimoSondeoEn: null,
@@ -112,7 +112,7 @@ describe("loginStart", () => {
     await g.anotarPorRevocar(ORIGEN, X);
     const r = await loginStart(d, { dryRun: true });
     expect(r.codigo).toBe(0);
-    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `pedir un código de dispositivo a ${ORIGEN}` });
+    expect(r.json).toEqual({ ok: true, dry_run: true, haria: `ask ${ORIGEN} for a device code` });
     expect(llamadas).toEqual([]);
     expect(await g.leerPendiente(ORIGEN)).toBeNull();
   });
@@ -134,7 +134,7 @@ describe("loginStart", () => {
     await g.anotarPorRevocar(ORIGEN, X);
     llavero.roto = (op) => op === "leer";
     expect((await loginStart(d, { dryRun: false })).codigo).toBe(5);
-    expect(avisos.join("\n")).toContain("No pude leer entera la lista de claves por revocar");
+    expect(avisos.join("\n")).toContain("I couldn't read the whole list of keys waiting to be revoked");
   });
   it("no toca la clave vigente (Review Focus 7)", async () => {
     const { d, g } = armar();
@@ -239,7 +239,7 @@ describe("loginWait", () => {
     expect(r.codigo).toBe(0);
     expect(r.json).toMatchObject({ ok: true, anterior_revocada: false, queda_por_revocar: true });
     expect(await g.leerPorRevocar(ORIGEN)).toEqual({ claves: [A], completa: true });
-    expect(avisos).toContain("No pude revocar tu clave anterior; quedó anotada y la reintento en el próximo login o logout.");
+    expect(avisos).toContain("I couldn't revoke your previous key; it's noted down and I'll try again on the next login or logout.");
     expect(await g.leerClave(ORIGEN)).toEqual({ clave: B, fuente: "llavero" });
   });
   it("revocar la anterior falla Y anotarla falla: 1 clave_anterior_sin_revocar, pero B quedó guardada", async () => {
@@ -302,7 +302,7 @@ describe("loginWait", () => {
     expect(r.codigo).toBe(0);
     expect(llamadas).toContain(`revocarPropia ${A}`);
     expect(llamadas).not.toContain(`revocarPropia ${X}`);
-    expect(avisos).toContain("SUPCOFLOW_TOKEN está definida y tiene prioridad sobre la clave que acabo de guardar.");
+    expect(avisos).toContain("SUPCOFLOW_TOKEN is set and takes priority over the key I just saved.");
   });
 });
 

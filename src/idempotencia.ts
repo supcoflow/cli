@@ -35,7 +35,7 @@ export function crearRegistroDeIdempotencia(d: {
   // arreglar. Por eso, en estricto, cada «aviso y sigo» de abajo lanza.
   const noGuardada = () => new FalloDeLaTerminal(
     SALIDA.inesperado, "idempotencia_no_guardada",
-    `No pude guardar la clave de reintento en ${d.rutaDelArchivo}; sin ella, un reintento crearía otra clave. Revisá ese archivo (no puede estar dentro de un repo) y probá de nuevo.`,
+    `I couldn't save the retry key in ${d.rutaDelArchivo}; without it, a retry would create another key. Check that file (it can't be inside a repo) and try again.`,
   );
 
   return {
@@ -48,7 +48,7 @@ export function crearRegistroDeIdempotencia(d: {
         if (opciones.estricta) throw noGuardada();
         // Un archivo que no se entiende no se reescribe (perdería otras claves); se sigue sin guardar.
         const nueva = d.generar();
-        d.avisar(`No pude leer ${d.rutaDelArchivo}: sigo con una clave de idempotencia sin guardar.`);
+        d.avisar(`I couldn't read ${d.rutaDelArchivo}: I'm going on with an idempotency key that isn't saved.`);
         return nueva;
       }
       const nueva = d.generar();
@@ -62,19 +62,19 @@ export function crearRegistroDeIdempotencia(d: {
         raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
       } catch {
         if (opciones.estricta) throw noGuardada();
-        d.avisar(`No pude resolver la ruta de ${d.rutaDelArchivo}: sigo con una clave de idempotencia sin guardar.`);
+        d.avisar(`I couldn't resolve the path of ${d.rutaDelArchivo}: I'm going on with an idempotency key that isn't saved.`);
         return nueva;
       }
       if (raiz !== null) {
         if (opciones.estricta) throw noGuardada();
-        d.avisar(`No guardo la clave de idempotencia dentro de un repo de git (${raiz}): un reintento mandará otra.`);
+        d.avisar(`I'm not saving the idempotency key inside a git repo (${raiz}): a retry will send a different one.`);
         return nueva;
       }
       try {
         await d.almacen.escribir(c, { valor: nueva, escritoEn: d.ahora() });
       } catch {
         if (opciones.estricta) throw noGuardada();
-        d.avisar(`No pude guardar la clave de idempotencia en ${d.rutaDelArchivo}: un reintento mandará otra.`);
+        d.avisar(`I couldn't save the idempotency key in ${d.rutaDelArchivo}: a retry will send a different one.`);
       }
       return nueva;
     },
@@ -93,7 +93,7 @@ export function crearRegistroDeIdempotencia(d: {
       try {
         await d.almacen.borrar(cuenta(operacion, alcance));
       } catch {
-        d.avisar(`No pude borrar la clave de idempotencia de ${d.rutaDelArchivo}.`);
+        d.avisar(`I couldn't delete the idempotency key from ${d.rutaDelArchivo}.`);
       }
     },
   };

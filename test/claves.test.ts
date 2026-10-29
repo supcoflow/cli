@@ -71,7 +71,7 @@ function deps(m: Mundo, respuestas: { status: number; cuerpo: Record<string, unk
   };
   return { d, pedidos };
 }
-const F = { repo: null, nombre: "ci", guardarEn: DESTINO, id: null, dryRun: false };
+const F = { repo: null, name: "ci", saveTo: DESTINO, id: null, dryRun: false };
 const CREADA_A = { status: 201, cuerpo: { clave_id: ID, clave: SECRETO_A, estado: "pendiente" } };
 const CONFIRMADA = { status: 200, cuerpo: { clave_id: ID, estado: "activa" } };
 
@@ -104,7 +104,7 @@ describe("claves crear (§6.5)", () => {
     const { d, pedidos } = deps(m, []);
     const r = await clavesCrear(d, F);
     expect(r).toMatchObject({ codigo: 4, json: { error: "destino_ocupado" } });
-    expect(r.texto).toMatch(/borrá el archivo|otro destino/);
+    expect(r.texto).toMatch(/delete the file|another destination/);
     expect(pedidos).toEqual([]);
   });
   it("un archivo con otra cosa (no una clave) → 4 destino_ocupado, intacto y sin copiar su contenido", async () => {
@@ -212,10 +212,10 @@ describe("claves crear (§6.5)", () => {
     expect(pedidos).toEqual([]);
     expect(m.candado).toBe(false);
   });
-  it("Review Focus 9: sin --guardar-en, 3 sin tomar el candado ni llamar al motor", async () => {
+  it("Review Focus 9: sin --save-to, 3 sin tomar el candado ni llamar al motor", async () => {
     const m = mundo();
     const { d, pedidos } = deps(m, []);
-    expect(await clavesCrear(d, { ...F, guardarEn: null })).toMatchObject({ codigo: 3, json: { error: "falta_guardar_en" } });
+    expect(await clavesCrear(d, { ...F, saveTo: null })).toMatchObject({ codigo: 3, json: { error: "falta_guardar_en" } });
     expect(pedidos).toEqual([]);
   });
   it("vencida: 1, olvida la clave de idempotencia para que el próximo intento cree otra", async () => {
@@ -231,8 +231,8 @@ describe("claves crear: arreglos de la revisión final", () => {
     const m = mundo();
     const nombres: string[] = [];
     const candados = { tomar: (n: string) => { nombres.push(n); return { tipo: "tomado" as const, soltar: () => {} }; } };
-    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, nombre: "CI" });
-    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, nombre: "ci", guardarEn: "/home/u/otra.key" });
+    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, name: "CI" });
+    await clavesCrear(deps(m, [CREADA_A, CONFIRMADA], { candados }).d, { ...F, name: "ci", saveTo: "/home/u/otra.key" });
     expect(nombres[0]).toBe(nombres[1]);
   });
   it("409 idempotency_key_reusada: la clave guardada se olvida (no queda trabada para siempre) y sale 3", async () => {
@@ -250,7 +250,7 @@ describe("claves crear: arreglos de la revisión final", () => {
     const r = await clavesCrear(d, F);
     expect(r.codigo).toBe(1);
     expect(r.texto).toContain(DESTINO);
-    expect(r.texto).toMatch(/Borrá/);
+    expect(r.texto).toMatch(/Delete/);
     expect(JSON.stringify(r)).not.toContain(SECRETO_A);
   });
   it("el clave_id del motor no es el del secreto: 1 respuesta_inesperada, sin guardar ni confirmar ni filtrar", async () => {
@@ -264,7 +264,7 @@ describe("claves crear: arreglos de la revisión final", () => {
   });
   it("un destino que no sirve (dentro de un repo) se rechaza ANTES de pedir nada: cero POST, cero filas", async () => {
     const m = mundo();
-    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { ...deps(m, []).d.secretos, validarDestino: () => ({ error: "cae dentro del repo", codigo: 3 as const }) } });
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { ...deps(m, []).d.secretos, validarDestino: () => ({ error: "it falls inside the repo", codigo: 3 as const }) } });
     const r = await clavesCrear(d, F);
     expect(r).toMatchObject({ codigo: 3, json: { error: "destino_invalido" } });
     expect(pedidos).toEqual([]);
@@ -283,7 +283,7 @@ describe("claves crear: el secreto no sale por ningún lado", () => {
   });
   it("una guarda que no puede escribir: no confirma, y el error no lleva el secreto", async () => {
     const m = mundo();
-    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "cae dentro del repo", codigo: 3 }) } });
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "it falls inside the repo", codigo: 3 }) } });
     const r = await clavesCrear(d, F);
     expect(r).toMatchObject({ codigo: 3, json: { error: "no_se_guardo" } });
     expect(pedidos.map((p) => p.ruta)).toEqual(["/api/proyectos/proj_r-1/claves"]);
@@ -292,7 +292,7 @@ describe("claves crear: el secreto no sale por ningún lado", () => {
   });
   it("carrera por el destino (otro nombre escribió primero): 4, no confirma, la pendiente queda para vencer sola", async () => {
     const m = mundo();
-    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "el archivo ya tiene otra cosa; borralo o elegí otro destino", codigo: 4 }) } });
+    const { d, pedidos } = deps(m, [CREADA_A], { secretos: { validarDestino: () => null, leer: () => ({ estado: "ausente" }), guardar: () => ({ error: "the file already has something else; delete it or pick another destination", codigo: 4 }) } });
     const r = await clavesCrear(d, F);
     expect(r).toMatchObject({ codigo: 4, json: { error: "no_se_guardo" } });
     expect(pedidos.map((p) => p.ruta)).toEqual(["/api/proyectos/proj_r-1/claves"]);
@@ -324,7 +324,7 @@ describe("claves listar y revocar", () => {
     const { d } = deps(mundo(), [{ status: 409, cuerpo: { error: "ya_revocada", message: "…" } }]);
     const r = await clavesRevocar(d, { repo: null, id: ID, dryRun: false });
     expect(r).toMatchObject({ codigo: 0, json: { ya_revocada: true } });
-    expect(r.texto).toContain("ya estaba revocada");
+    expect(r.texto).toContain("was already revoked");
   });
   it("revocar sin --id o con un id mal formado: 3 sin llamar al motor", async () => {
     for (const id of [null, "cla_xyz", "scf_" + "a".repeat(16)]) {

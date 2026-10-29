@@ -118,8 +118,8 @@ describe("el secreto a un archivo", () => {
     f.fs.publicarSinPisar = () => "sin_enlaces";
     const r = crearGuardaDeSecretos(f.fs).guardar("/home/u/ci.key", ID, A);
     expect(r).toMatchObject({ codigo: 3 });
-    expect(JSON.stringify(r)).toMatch(/enlaces duros/);
-    expect(JSON.stringify(r)).not.toMatch(/permiso/);
+    expect(JSON.stringify(r)).toMatch(/hard links/);
+    expect(JSON.stringify(r)).not.toMatch(/permission/);
     expect(renombres).toBe(0);
     expect(f.nodos.has("/home/u/ci.key")).toBe(false);
     expect([...f.nodos.keys()].filter((k) => k.endsWith(".tmp"))).toEqual([]);

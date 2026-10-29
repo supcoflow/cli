@@ -72,7 +72,7 @@ function mismoArchivo(crudo: string, p: Proyecto): boolean {
 
 function resultadoDelProyecto(p: Proyecto, reusado: boolean, raiz: string | null, d: DepsDeProyecto): Resultado {
   const nuevo = { id: p.id, slug: p.slug, repo: p.repo };
-  const queda = reusado ? `El proyecto ${p.id} ya existía y lo reusé` : `Creé el proyecto ${p.id}`;
+  const queda = reusado ? `Project ${p.id} already existed and I reused it` : `I created project ${p.id}`;
   let archivo: string | null = null;
   if (raiz !== null) {
     archivo = path.join(raiz, ".supcoflow", "proyecto.json");
@@ -83,15 +83,15 @@ function resultadoDelProyecto(p: Proyecto, reusado: boolean, raiz: string | null
       // decida. Su contenido NUNCA se copia a la salida (puede traer cualquier cosa, una clave
       // incluida, y `emitir` no sanea): sólo el id, si tiene forma de id.
       const idActual = idDelArchivo(actual);
-      const message = `Ya hay un \`.supcoflow/proyecto.json\` de otro proyecto (${idActual ?? "que no reconozco"}); no lo toqué. `
-        + `${queda} igual (${p.id}): si es el que querés, borrá el archivo y volvé a correr \`supcoflow proyecto crear\`.`;
+      const message = `There is already a \`.supcoflow/proyecto.json\` for another project (${idActual ?? "one I don't recognize"}); I didn't touch it. `
+        + `${queda} anyway: if that's the one you want, delete the file and run \`supcoflow project create\` again.`;
       return fallo(SALIDA.haceFaltaUnaPersona, "archivo_distinto", message, { archivo, id_actual: idActual, nuevo, reusado });
     }
     if (actual === null) {
       try {
         d.archivos.escribir(archivo, contenidoDelArchivo(p));
       } catch {
-        const message = `${queda} (${p.id}), pero no pude escribir ${archivo}. Volvé a correr \`supcoflow proyecto crear\`.`;
+        const message = `${queda}, but I couldn't write ${archivo}. Run \`supcoflow project create\` again.`;
         return fallo(SALIDA.inesperado, "archivo_no_escrito", message, { archivo, nuevo, reusado });
       }
     }
@@ -99,7 +99,7 @@ function resultadoDelProyecto(p: Proyecto, reusado: boolean, raiz: string | null
   return {
     codigo: SALIDA.ok,
     json: { ok: true, proyecto: { id: p.id, slug: p.slug, repo: p.repo, rama: p.rama }, reusado, archivo },
-    texto: `${queda}: ${p.repo}, rama ${p.rama}.${archivo !== null ? ` Lo anoté en ${archivo}.` : ""}`,
+    texto: `${queda}: ${p.repo}, branch ${p.rama}.${archivo !== null ? ` Recorded in ${archivo}.` : ""}`,
   };
 }
 
@@ -132,19 +132,19 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
     if (flags.install !== null || flags.test !== null) {
       // Sin copiar los valores: son texto del usuario y el aviso sólo dice qué pasó con ellos. Callarlo
       // haría creer que el proyecto quedó con los comandos pedidos.
-      d.avisar("El proyecto ya existe: ignoré --install/--test. Para cambiar sus comandos hay que configurarlo.");
+      d.avisar("The project already exists: I ignored --install/--test. To change its commands, it has to be configured.");
     }
     return resultadoDelProyecto(existente, true, raiz, d);
   }
 
   if (conexion === null || conexion.estado !== "conectado") {
-    return fallo(SALIDA.haceFaltaUnaPersona, "repo_sin_conectar", "Conectá el repo primero: `supcoflow repo conectar`.", {
+    return fallo(SALIDA.haceFaltaUnaPersona, "repo_sin_conectar", "Connect the repo first: `supcoflow repo connect`.", {
       repo, ...(conexion !== null ? { estado: conexion.estado } : {}),
     });
   }
   if (flags.dryRun) {
     const haria = `POST /api/conexiones/${conexion.id}/proyecto`;
-    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, repo, haria }, texto: `Con --dry-run no hago nada; sin él, crearía el proyecto de ${repo} (${haria}).` };
+    return { codigo: SALIDA.ok, json: { ok: true, dry_run: true, repo, haria }, texto: `With --dry-run I do nothing; without it: create the project for ${repo} (${haria}).` };
   }
 
   const cuerpo: { install_command?: string; test_command?: string } = {};
@@ -169,28 +169,28 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
       await d.idempotencia.olvidar(OPERACION, repo);
       const install = flags.install ?? "…";
       const test = flags.test ?? "…";
-      const message = `${alta.message || "Faltan comandos del proyecto."} Pasalos a mano: \`supcoflow proyecto crear --install ${comillas(install)} --test ${comillas(test)}\`.`;
+      const message = `${alta.message || "The project is missing commands."} Pass them yourself: \`supcoflow project create --install ${comillas(install)} --test ${comillas(test)}\`.`;
       return fallo(SALIDA.entradaInvalida, "comandos_faltantes", message, { faltantes: alta.faltantes });
     }
     case "no_conectada":
       await d.idempotencia.olvidar(OPERACION, repo);
-      return fallo(SALIDA.haceFaltaUnaPersona, "repo_sin_conectar", alta.message || "Conectá el repo primero: `supcoflow repo conectar`.", { repo });
+      return fallo(SALIDA.haceFaltaUnaPersona, "repo_sin_conectar", alta.message || "Connect the repo first: `supcoflow repo connect`.", { repo });
     case "en_curso":
       // Se conserva: el pedido en curso puede ser el nuestro y el reintento tiene que poder retomarlo.
-      return fallo(SALIDA.inesperado, "en_curso", "Otro pedido con esta clave está en curso; probá en un minuto.");
+      return fallo(SALIDA.inesperado, "en_curso", "Another request with this key is already in progress; try again in a minute.");
     case "clave_reusada":
       // No debería pasar (la clave es por repo y un reintento manda lo mismo); olvidarla deja reintentar limpio.
       await d.idempotencia.olvidar(OPERACION, repo);
-      return fallo(SALIDA.inesperado, "clave_reusada", "El motor rechazó la clave de idempotencia guardada; la descarté, probá de nuevo.");
+      return fallo(SALIDA.inesperado, "clave_reusada", "The engine rejected the saved idempotency key; I discarded it, try again.");
     case "rechazo": {
       // La clave se conserva: tras un rechazo el motor ya la soltó, y el próximo intento la reusa sin
       // chocar. Lo que cambia es el código: no todo rechazo es culpa de lo que se escribió.
-      const message = alta.message || "El motor rechazó el pedido.";
+      const message = alta.message || "The engine rejected the request.";
       if (RECHAZOS_DE_UNA_PERSONA.has(alta.error)) {
         // Lo arregla alguien con permisos en GitHub (instalar la App, sumarle el repo): reintentar o
         // cambiar flags no sirve, y un 3 haría que un asistente siguiera probando entradas.
         return fallo(SALIDA.haceFaltaUnaPersona, alta.error,
-          `${message} Revisá la instalación de la App en GitHub y volvé a conectar con \`supcoflow repo conectar\`.`);
+          `${message} Check the App's installation on GitHub and connect again with \`supcoflow repo connect\`.`);
       }
       // Dos altas al mismo tiempo, o un proyecto borrado en el medio: el mismo pedido otra vez anda.
       if (RECHAZOS_TRANSITORIOS.has(alta.error)) return fallo(SALIDA.inesperado, alta.error, message);
@@ -212,14 +212,14 @@ export async function proyectoVer(d: DepsDeProyecto, flags: Pick<Flags, "repo">)
   try {
     const encontrado = await d.buscarProyecto(d.api, clave, repo);
     if (encontrado === null) {
-      return { codigo: SALIDA.ok, json: { ok: true, repo, proyecto: null }, texto: "Este repo todavía no tiene proyecto: `supcoflow proyecto crear`." };
+      return { codigo: SALIDA.ok, json: { ok: true, repo, proyecto: null }, texto: "This repo doesn't have a project yet: `supcoflow project create`." };
     }
     const { proyecto: p, github } = await d.leerProyecto(d.api, clave, encontrado.id);
     const proyecto = { id: p.id, slug: p.slug, repo: p.repo, rama: p.rama, install_command: p.installCommand, test_command: p.testCommand };
     return {
       codigo: SALIDA.ok,
       json: { ok: true, proyecto, github: { estado: github.estado, verificado_en: github.verificadoEn } },
-      texto: `${p.id} (${p.repo}, rama ${p.rama}): instala con \`${p.installCommand}\`, prueba con \`${p.testCommand}\`. GitHub: ${github.estado ?? "sin verificar"}.`,
+      texto: `${p.id} (${p.repo}, branch ${p.rama}): installs with \`${p.installCommand}\`, tests with \`${p.testCommand}\`. GitHub: ${github.estado ?? "not verified"}.`,
     };
   } catch (e) {
     return resultadoDeFallo(e);

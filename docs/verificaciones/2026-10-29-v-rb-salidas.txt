@@ -1,0 +1,616 @@
+# a1: terminal 070, repo repo-es, motor :3100
+$ supcoflow quien-soy --json
+exit: 0
+--- stdout
+{"ok":true,"via":"clave_personal","equipo":"tnt_vrb","usuario":{"id":"usr_vrb","login":"vrb-local","email":null},"proyecto":null,"fuente":"env"}
+--- stderr
+
+# a2: terminal 070, repo repo-es, motor :3100
+$ supcoflow widget --json
+exit: 0
+--- stdout
+{"ok":true,"tenant_id":"tnt_vrb","project_id":"proj_vrb","backend_url":"https://chat.supcoflow.dev","paquete":"@supcoflow/chat","version":"2.2.1","instalar":"npm i @supcoflow/chat@2.2.1 --save-exact","nextjs":{"estado":"probando","archivo_sugerido":"app/_supcoflow/support-chat.tsx","contenido":"\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ChatDeIntake } from \"@supcoflow/chat\";\n\n// Las props llegan del layout (p. ej. `usuario`); los ids ya están fijados acá.\nexport function ChatDeSoporte(props: Omit<ComponentProps<typeof ChatDeIntake>, \"tenantId\" | \"projectId\" | \"backendUrl\">) {\n  return <ChatDeIntake tenantId=\"tnt_vrb\" projectId=\"proj_vrb\" backendUrl=\"https://chat.supcoflow.dev\" {...props} />;\n}\n","uso":"<ChatDeSoporte />"},"script":{"estado":"disponible_sin_soporte","linea":"<script src=\"https://chat.supcoflow.dev/widget.js\" data-tenant=\"tnt_vrb\" data-project=\"proj_vrb\" defer></script>"},"csp":"connect-src 'self' https://chat.supcoflow.dev;"}
+--- stderr
+
+# a3: terminal 070, repo repo-es, motor :3100
+$ supcoflow diagnosticar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"no_listo","message":"Hay algo para arreglar antes de probar local/vrb.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own."},{"punto":"sitios","ok":false,"mensaje":"The allowed sites list is empty: add at least the site where the chat will live."},{"punto":"chat","ok":false,"mensaje":"The support chat is off: a test goes in through it. Turn it on and diagnose again."},{"punto":"guia","ok":false,"mensaje":"There is no current guide: publish the repo's guide or approve the agent's so the triage knows which product it is talking about."},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue."},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No investigations are running."},{"pu
+--- stderr
+
+# a4: terminal 070, repo repo-es, motor :3100
+$ supcoflow probar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"Una prueba corre un relevamiento que gasta hasta US$ 2.00 (saldo del mes US$ 10.00 de US$ 10.00). Para lanzarla: `supcoflow probar --autorizo-gasto`. Antes, `supcoflow diagnosticar` dice si está todo listo.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own."},{"punto":"sitios","ok":false,"mensaje":"The allowed sites list is empty: add at least the site where the chat will live."},{"punto":"chat","ok":false,"mensaje":"The support chat is off: a test goes in through it. Turn it on and diagnose again."},{"punto":"guia","ok":false,"mensaje":"There is no current guide: publish the repo's guide or approve the agent's so the triage knows which product it is talking about."},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue."},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00)."},{"punto":"c
+--- stderr
+
+# a5: terminal 070, repo repo-es, motor :3100
+$ supcoflow guia revisar --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3}
+--- stderr
+
+# a6: terminal 070, repo repo-es, motor :3100
+$ supcoflow guia publicar --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"ya_publicada":false,"reemplaza":null,"commit_declarado":"929de18d42b18d2b040eb3e21d312faa88168408"}
+--- stderr
+
+# a7: terminal 070, repo repo-es, motor :3100
+$ supcoflow guia ver --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"otra":null,"al_dia":null,"rama":{"al_dia":null,"commit":null}}
+--- stderr
+
+# a8: terminal 070, repo repo-es, motor :3100
+$ supcoflow diagnosticar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"no_listo","message":"Hay algo para arreglar antes de probar local/vrb.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own."},{"punto":"sitios","ok":false,"mensaje":"The allowed sites list is empty: add at least the site where the chat will live."},{"punto":"chat","ok":false,"mensaje":"The support chat is off: a test goes in through it. Turn it on and diagnose again."},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product."},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue."},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No investigations are running."},{"punto":"prueba_abierta","ok":true,"mensaje":"There are no open tests."},{"punto":"despachos
+--- stderr
+
+# a9: terminal 070, repo repo-es, motor :3100
+$ supcoflow probar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"Una prueba corre un relevamiento que gasta hasta US$ 2.00 (saldo del mes US$ 10.00 de US$ 10.00). Para lanzarla: `supcoflow probar --autorizo-gasto`. Antes, `supcoflow diagnosticar` dice si está todo listo.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own."},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat."},{"punto":"chat","ok":true,"mensaje":"The support chat is on."},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product."},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue."},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No investigations are running."},{"punto":"prueba_abierta","ok":true,"
+--- stderr
+
+# b1: terminal 070, repo repo-es, motor :3101
+$ supcoflow quien-soy --json
+exit: 0
+--- stdout
+{"ok":true,"via":"clave_personal","equipo":"tnt_vrb","usuario":{"id":"usr_vrb","login":"vrb-local","email":null},"proyecto":null,"fuente":"env"}
+--- stderr
+
+# b2: terminal 070, repo repo-es, motor :3101
+$ supcoflow widget --json
+exit: 0
+--- stdout
+{"ok":true,"tenant_id":"tnt_vrb","project_id":"proj_vrb","backend_url":"https://chat.supcoflow.dev","paquete":"@supcoflow/chat","version":"2.2.1","instalar":"npm i @supcoflow/chat@2.2.1 --save-exact","nextjs":{"estado":"probando","archivo_sugerido":"app/_supcoflow/chat-de-soporte.tsx","contenido":"\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ChatDeIntake } from \"@supcoflow/chat\";\n\n// Las props llegan del layout (p. ej. `usuario`); los ids ya están fijados acá.\nexport function ChatDeSoporte(props: Omit<ComponentProps<typeof ChatDeIntake>, \"tenantId\" | \"projectId\" | \"backendUrl\">) {\n  return <ChatDeIntake tenantId=\"tnt_vrb\" projectId=\"proj_vrb\" backendUrl=\"https://chat.supcoflow.dev\" {...props} />;\n}\n","uso":"<ChatDeSoporte />"},"script":{"estado":"disponible_sin_soporte","linea":"<script src=\"https://chat.supcoflow.dev/widget.js\" data-tenant=\"tnt_vrb\" data-project=\"proj_vrb\" defer></script>"},"csp":"connect-src 'self' https://chat.supcoflow.dev;"}
+--- stderr
+
+# b3: terminal 070, repo repo-es, motor :3101
+$ supcoflow diagnosticar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"no_listo","message":"Hay algo para arreglar antes de probar local/vrb.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"La instalación de GitHub no reporta problemas."},{"punto":"sitios","ok":false,"mensaje":"La lista de sitios está vacía: cargá al menos el sitio donde va a vivir el chat."},{"punto":"chat","ok":false,"mensaje":"El chat de soporte está apagado: la prueba entra por él. Prendelo y volvé a diagnosticar."},{"punto":"guia","ok":false,"mensaje":"No hay guía vigente: publicá la guía del repo o aprobá la del agente para que el relevamiento sepa de qué producto habla."},{"punto":"politica","ok":true,"mensaje":"La política es `relevar`: la prueba corre un relevamiento y termina en un issue."},{"punto":"saldo","ok":true,"mensaje":"Saldo del mes US$ 10.00, alcanza para el techo de la prueba (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 de 40 relevamientos usados en las últimas 24 horas."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No hay relevamientos corriendo."},{"punto":"prueba_abierta","ok":true,"mensaje":"No hay pruebas abiertas."},{"punto":"despachos","ok":true,"mensaj
+--- stderr
+
+# b4: terminal 070, repo repo-es, motor :3101
+$ supcoflow probar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"Una prueba corre un relevamiento que gasta hasta US$ 2.00 (saldo del mes US$ 10.00 de US$ 10.00). Para lanzarla: `supcoflow probar --autorizo-gasto`. Antes, `supcoflow diagnosticar` dice si está todo listo.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"La instalación de GitHub no reporta problemas."},{"punto":"sitios","ok":false,"mensaje":"La lista de sitios está vacía: cargá al menos el sitio donde va a vivir el chat."},{"punto":"chat","ok":false,"mensaje":"El chat de soporte está apagado: la prueba entra por él. Prendelo y volvé a diagnosticar."},{"punto":"guia","ok":false,"mensaje":"No hay guía vigente: publicá la guía del repo o aprobá la del agente para que el relevamiento sepa de qué producto habla."},{"punto":"politica","ok":true,"mensaje":"La política es `relevar`: la prueba corre un relevamiento y termina en un issue."},{"punto":"saldo","ok":true,"mensaje":"Saldo del mes US$ 10.00, alcanza para el techo de la prueba (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 de 40 relevamientos usados en las últimas 24 horas."},{"punto":"run_en_vuelo",
+--- stderr
+
+# b5: terminal 070, repo repo-es, motor :3101
+$ supcoflow guia revisar --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3}
+--- stderr
+
+# b6: terminal 070, repo repo-es, motor :3101
+$ supcoflow guia publicar --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_3313c8f954def5bf","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:50:11.742Z","publicada_por":"usr_vrb"},"ya_publicada":false,"reemplaza":null,"commit_declarado":"929de18d42b18d2b040eb3e21d312faa88168408"}
+--- stderr
+
+# b7: terminal 070, repo repo-es, motor :3101
+$ supcoflow guia ver --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_3313c8f954def5bf","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:50:11.742Z","publicada_por":"usr_vrb"},"otra":null,"al_dia":null,"rama":{"al_dia":null,"commit":null}}
+--- stderr
+
+# c1: terminal 070, repo repo-es, motor :3100
+$ supcoflow sitios agregar --sitio http://localhost:3000 --json
+exit: 0
+--- stdout
+{"ok":true,"sitios":["http://localhost:3000"]}
+--- stderr
+
+# c2: terminal 070, repo repo-es, motor :3100
+$ supcoflow chat prender --json
+exit: 0
+--- stdout
+{"ok":true,"habilitado":true}
+--- stderr
+
+# c3: terminal 070, repo repo-es, motor :3100
+$ supcoflow diagnosticar --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own."},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat."},{"punto":"chat","ok":true,"mensaje":"The support chat is on."},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product."},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue."},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No investigations are running."},{"punto":"prueba_abierta","ok":true,"mensaje":"There are no open tests."},{"punto":"despachos","ok":true,"mensaje":"Dispatches are active."},{"punto":"modelo","ok":true,"mensaje":"The investigation will use anthropic/claude-sonnet-5."},{"punto":"acuerdo","ok":true,"mensaje":"No data ag
+--- stderr
+
+# d1: terminal 080, repo repo-en, motor :3101
+$ supcoflow whoami --json
+exit: 0
+--- stdout
+{"ok":true,"via":"clave_personal","equipo":"tnt_vrb","usuario":{"id":"usr_vrb","login":"vrb-local","email":null},"proyecto":null,"fuente":"env"}
+--- stderr
+
+# d2: terminal 080, repo repo-en, motor :3101
+$ supcoflow widget --json
+exit: 0
+--- stdout
+{"ok":true,"tenant_id":"tnt_vrb","project_id":"proj_vrb","backend_url":"https://chat.supcoflow.dev","paquete":"@supcoflow/chat","version":"2.2.1","instalar":"npm i @supcoflow/chat@2.2.1 --save-exact","nextjs":{"estado":"probando","archivo_sugerido":"app/_supcoflow/chat-de-soporte.tsx","archivos_anteriores":[],"contenido":"\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ChatDeIntake } from \"@supcoflow/chat\";\n\n// Las props llegan del layout (p. ej. `usuario`); los ids ya están fijados acá.\nexport function ChatDeSoporte(props: Omit<ComponentProps<typeof ChatDeIntake>, \"tenantId\" | \"projectId\" | \"backendUrl\">) {\n  return <ChatDeIntake tenantId=\"tnt_vrb\" projectId=\"proj_vrb\" backendUrl=\"https://chat.supcoflow.dev\" {...props} />;\n}\n","uso":"<ChatDeSoporte />"},"script":{"estado":"disponible_sin_soporte","linea":"<script src=\"https://chat.supcoflow.dev/widget.js\" data-tenant=\"tnt_vrb\" data-project=\"proj_vrb\" defer></script>"},"csp":"connect-src 'self' https://chat.supcoflow.dev;"}
+--- stderr
+
+# d3: terminal 080, repo repo-en, motor :3101
+$ supcoflow diagnose --json
+exit: 4
+--- stdout
+{"ok":false,"error":"no_listo","message":"Something needs fixing before testing local/vrb.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto":"repo","ok":true,"mensaje":"The origin of this folder is local/vrb, the project's repo.","grupo":"instalacion"},{"punto":"instalacion","ok":true,"mensaje":"La instalación de GitHub no reporta problemas.","grupo":"instalacion"},{"punto":"sitios","ok":false,"mensaje":"La lista de sitios está vacía: cargá al menos el sitio donde va a vivir el chat.","grupo":"instalacion"},{"punto":"chat","ok":false,"mensaje":"El chat de soporte está apagado: la prueba entra por él. Prendelo y volvé a diagnosticar.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"Hay una guía vigente del producto.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"La política es `relevar`: la prueba corre un relevamiento y termina en un issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Saldo del mes US$ 10.00, alcanza para el techo de la prueba (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario",
+--- stderr
+
+# d4: terminal 080, repo repo-en, motor :3101
+$ supcoflow test --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"A test runs an investigation that spends up to US$ 2.00 (monthly balance US$ 10.00 of US$ 10.00). To launch it: `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`. `supcoflow diagnose` first says whether everything is ready.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":false,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"La instalación de GitHub no reporta problemas."},{"punto":"sitios","ok":false,"mensaje":"La lista de sitios está vacía: cargá al menos el sitio donde va a vivir el chat."},{"punto":"chat","ok":false,"mensaje":"El chat de soporte está apagado: la prueba entra por él. Prendelo y volvé a diagnosticar."},{"punto":"guia","ok":true,"mensaje":"Hay una guía vigente del producto."},{"punto":"politica","ok":true,"mensaje":"La política es `relevar`: la prueba corre un relevamiento y termina en un issue."},{"punto":"saldo","ok":true,"mensaje":"Saldo del mes US$ 10.00, alcanza para el techo de la prueba (US$ 2.00)."},{"punto":"cupo_diario","ok":true,"mensaje":"0 de 40 relevamientos usados en las últimas 24 horas."},{"punto":"run_en_vuelo","ok":true,"mensaje":"No hay relevamientos corr
+--- stderr
+
+# d5: terminal 080, repo repo-en, motor :3101
+$ supcoflow guide check --json
+exit: 3
+--- stdout
+{"ok":false,"error":"guia_mal_armada","message":"La guía está mal armada: corregí las líneas que dice `errores`.","errores":[{"linea":3,"motivo":"falta «Para qué sirve:» en la sección «Catalog»"},{"linea":3,"motivo":"falta «Qué puede hacer el usuario:» en la sección «Catalog»"},{"linea":4,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":5,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":6,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":7,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":8,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":9,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":11,"motivo":"falta «Para qué sirve:» en la sección «Cart»"},{"linea":11,"motivo":"falta «Qué puede hacer el usuario:» en la sección «Cart»"},{"linea":12,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":13,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":14,"motivo":"texto en la sección que no pertenece a ninguna etiqueta"},{"linea":15,"motivo":"texto en la sección que no pertenec
+--- stderr
+
+# d6: terminal 080, repo repo-en, motor :3101
+$ supcoflow guide publish --json
+exit: 3
+--- stdout
+{"ok":false,"error":"invalid_body","message":"Mandá {contenido: \"<texto de .supcoflow/guia.md>\"}, y si querés commit (SHA de 40 hex en minúsculas) y rama (sin espacios); nada más."}
+--- stderr
+
+# d7: terminal 080, repo repo-es, motor :3101
+$ supcoflow guide check --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3,"ruta":".supcoflow/guia.md","aviso":"nombre_viejo"}
+--- stderr
+
+# d8: terminal 080, repo repo-es, motor :3101
+$ supcoflow guide publish --json
+exit: 3
+--- stdout
+{"ok":false,"error":"invalid_body","message":"Mandá {contenido: \"<texto de .supcoflow/guia.md>\"}, y si querés commit (SHA de 40 hex en minúsculas) y rama (sin espacios); nada más."}
+--- stderr
+
+# d9: terminal 080, repo repo-en, motor :3101
+$ supcoflow guide show --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_3313c8f954def5bf","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:50:11.742Z","publicada_por":"usr_vrb"},"otra":null,"al_dia":null,"rama":{"al_dia":null,"commit":null}}
+--- stderr
+
+# d10: terminal 080, repo repo-en, motor :3101
+$ supcoflow guide versions --json
+exit: 1
+--- stdout
+{"ok":false,"error":"respuesta_inesperada","message":"The engine answered 404 without JSON."}
+--- stderr
+
+# e1: terminal 080, repo repo-en, motor :3100
+$ supcoflow whoami --json
+exit: 0
+--- stdout
+{"ok":true,"via":"clave_personal","equipo":"tnt_vrb","usuario":{"id":"usr_vrb","login":"vrb-local","email":null},"proyecto":null,"fuente":"env"}
+--- stderr
+
+# e2: terminal 080, repo repo-en, motor :3100
+$ supcoflow widget --json
+exit: 0
+--- stdout
+{"ok":true,"tenant_id":"tnt_vrb","project_id":"proj_vrb","backend_url":"https://chat.supcoflow.dev","paquete":"@supcoflow/chat","version":"2.2.1","instalar":"npm i @supcoflow/chat@2.2.1 --save-exact","nextjs":{"estado":"probando","archivo_sugerido":"app/_supcoflow/support-chat.tsx","archivos_anteriores":["app/_supcoflow/chat-de-soporte.tsx"],"contenido":"\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ChatDeIntake } from \"@supcoflow/chat\";\n\n// Las props llegan del layout (p. ej. `usuario`); los ids ya están fijados acá.\nexport function ChatDeSoporte(props: Omit<ComponentProps<typeof ChatDeIntake>, \"tenantId\" | \"projectId\" | \"backendUrl\">) {\n  return <ChatDeIntake tenantId=\"tnt_vrb\" projectId=\"proj_vrb\" backendUrl=\"https://chat.supcoflow.dev\" {...props} />;\n}\n","uso":"<ChatDeSoporte />"},"script":{"estado":"disponible_sin_soporte","linea":"<script src=\"https://chat.supcoflow.dev/widget.js\" data-tenant=\"tnt_vrb\" data-project=\"proj_vrb\" defer></script>"},"csp":"connect-src 'self' https://chat.supcoflow.dev;"}
+--- stderr
+
+# e3: terminal 080, repo repo-en, motor :3100
+$ supcoflow diagnose --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto":"repo","ok":true,"mensaje":"The origin of this folder is local/vrb, the project's repo.","grupo":"instalacion"},{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"The support chat is on.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours.","grupo":
+--- stderr
+
+# e4: terminal 080, repo repo-en, motor :3100
+$ supcoflow test --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"A test runs an investigation that spends up to US$ 2.00 (monthly balance US$ 10.00 of US$ 10.00). To launch it: `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`. `supcoflow diagnose` first says whether everything is ready.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"The support chat is on.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario","ok":true,"mensaje":"0 o
+--- stderr
+
+# e5: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide check --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3,"ruta":".supcoflow/guide.md"}
+--- stderr
+
+# e6: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide publish --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb"},"ya_publicada":false,"reemplaza":null,"commit_declarado":"df92e4b1a43d93af7a8abf2fa52f240264ce0896"}
+--- stderr
+
+# e7: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide show --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb"},"otra":null,"al_dia":null,"rama":{"al_dia":null,"commit":null}}
+--- stderr
+
+# e8: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide versions --json
+exit: 0
+--- stdout
+{"ok":true,"vigente":{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb"},"publicaciones":[{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb","estado":"live"},{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb","estado":"published"}]}
+--- stderr
+
+# e9: terminal 080, repo repo-es, motor :3100
+$ supcoflow guide check --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3,"ruta":".supcoflow/guia.md","aviso":"nombre_viejo"}
+--- stderr
+
+# e10: terminal 080, repo repo-es, motor :3100
+$ supcoflow guide publish --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"ya_publicada":true,"reemplaza":null,"commit_declarado":"929de18d42b18d2b040eb3e21d312faa88168408","aviso":"nombre_viejo"}
+--- stderr
+
+# e11: terminal 080, repo repo-en, motor :3100
+$ supcoflow test --authorize-spend --json
+exit: 3
+--- stdout
+{"ok":false,"error":"falta_techo","message":"--authorize-spend needs --ceiling <usd>, the number you were shown: `supcoflow test --authorize-spend --ceiling <usd> --expect-policy investigate|save`."}
+--- stderr
+
+# e12: terminal 080, repo repo-en, motor :3100
+$ supcoflow test --authorize-spend --ceiling 1 --expect-policy investigate --json
+exit: 4
+--- stdout
+{"ok":false,"error":"techo_distinto","message":"The ceiling for a test changed: it's now US$ 2.00, and you authorized US$ 1.00. Nothing was started. Ask again with the new number.","techo_usd":2,"autorizado_usd":1}
+--- stderr
+
+# e13: terminal 080, repo repo-en, motor :3100
+$ supcoflow test --authorize-spend --ceiling 2 --expect-policy save --json
+exit: 4
+--- stdout
+{"ok":false,"error":"politica_distinta","message":"The project's policy changed: it's now `investigate`, and you authorized a test under `save`. Nothing was started. Ask again with the current policy.","politica":"relevar","politica_esperada":"guardar"}
+--- stderr
+
+# e14: terminal 080, repo repo-en, motor :3100
+$ supcoflow config --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":"proj_vrb","chat":{"habilitado":true,"tope_mensajes_dia":200},"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"guia_aprobada":true,"marca":null,"sitios":["http://localhost:3000"],"acuerdo":null,"politica":{"modo":"relevar","fijada_en":null}}
+--- stderr
+
+# e15: terminal 080, repo repo-en, motor :3100
+$ supcoflow catalog --json
+exit: 0
+--- stdout
+{"ok":true,"version":1,"supcoflow":[{"clave":"marca.titulo","para_que":"El título del chat.","valores":"Texto de 1 a 60 caracteres.","por_defecto":null,"consecuencias":"Se ve arriba del chat.","donde_vive":"supcoflow","gana":"Si el código de la app también lo fija, gana el código de la app.","decide":"modelo","comando":"supcoflow chat marca --titulo …"},{"clave":"marca.saludo","para_que":"El primer mensaje del chat.","valores":"Texto de 1 a 140 caracteres.","por_defecto":null,"consecuencias":"Es lo primero que lee el usuario.","donde_vive":"supcoflow","gana":"Si el código de la app también lo fija, gana el código de la app.","decide":"modelo","comando":"supcoflow chat marca --saludo …"},{"clave":"marca.tema","para_que":"Colores, radio y fuente del chat.","valores":"Claves acento, fondo, texto, textoSuave, radio, fuente; cada valor de 1 a 80 caracteres, sin ; { }.","por_defecto":null,"consecuencias":"Cambia cómo se ve el chat en la app.","donde_vive":"supcoflow","gana":"Si el código de la app también lo fija, gana el código de la app.","decide":"modelo","comando":"supcoflow chat marca --tema clave=valor"},{"clave":"marca.logo","para_que":"El logo del chat.","valores":"image/png, ima
+--- stderr
+
+# e16: terminal 080, repo repo-en, motor :3100
+$ supcoflow policy set --mode save --json
+exit: 0
+--- stdout
+{"ok":true,"politica":{"modo":"guardar","fijada_en":"2026-10-29T12:51:34.688Z"}}
+--- stderr
+
+# e17: terminal 080, repo repo-en, motor :3100
+$ supcoflow diagnose --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto":"repo","ok":true,"mensaje":"The origin of this folder is local/vrb, the project's repo.","grupo":"instalacion"},{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"The support chat is on.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"The policy is `save`: a test will go as far as the saved case in the inbox, without investigating or spending. To test the whole path, change the policy to `investigate`.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00 (test ceiling US$ 2.00); with the `save` policy it doesn't block, the te
+--- stderr
+
+# e18: terminal 080, repo repo-en, motor :3100
+$ supcoflow policy set --mode investigate --json
+exit: 0
+--- stdout
+{"ok":true,"politica":{"modo":"relevar","fijada_en":"2026-10-29T12:51:35.159Z"}}
+--- stderr
+
+# e19: terminal 080, repo repo-en, motor :3100
+$ supcoflow install record --skill 0.3.0 --file app/_supcoflow/support-chat.tsx --json
+exit: 0
+--- stdout
+{"ok":true,"ruta":".supcoflow/instalacion.json","instalacion":{"version":2,"skill":"0.3.0","terminal":"0.8.0","chat":{"declarado":null,"instalado":null},"configuracion":{"acuerdo_version":null,"politica":"relevar","guia":{"origen":"repo","procedencia":"terminal","commit":"929de18d42b18d2b040eb3e21d312faa88168408"}},"archivo":"app/_supcoflow/support-chat.tsx"},"archivo":"app/_supcoflow/support-chat.tsx","sin_cambios":false}
+--- stderr
+
+# e20: terminal 080, repo repo-en, motor :3100
+$ supcoflow describe --json
+exit: 0
+--- stdout
+{"ok":true,"version":"0.8.0","comandos":[{"nombre":"login","resumen":"Signs in by approving a code from the console. Without an interactive terminal, in two steps: --start and then --wait.","flags":["--start: asks for the code and exits 5 with the URL to approve it","--wait: waits for the approval up to 90 s; exits 5 if it hasn't arrived yet (call it again)","--dry-run: says what it would do without asking for anything (not valid with --wait)","--json"],"ejemplos":["supcoflow login","supcoflow login --start --json","supcoflow login --wait --json"],"codigos":[0,1,2,3,4,5]},{"nombre":"logout","resumen":"Revokes the key in use and deletes it from this machine; retries the ones left to revoke.","flags":["--dry-run: says what it would revoke without revoking anything","--json"],"ejemplos":["supcoflow logout","supcoflow logout --json"],"codigos":[0,1,3]},{"nombre":"whoami","resumen":"Shows which key the terminal runs with, on whose behalf and in which team.","flags":["--json"],"ejemplos":["supcoflow whoami","supcoflow whoami --json"],"codigos":[0,1,2,3]},{"nombre":"describe","resumen":"Describes commands, flags, capabilities and exit codes, for an assistant.","flags":["--json"],"ejemplos
+--- stderr
+
+# f1: terminal 080, repo repo-en, motor :3100
+$ supcoflow chat brand --title Mi Tienda --greeting Hola --theme acento=#0a7 --json
+exit: 0
+--- stdout
+{"ok":true,"marca":{"logo_url":null,"titulo":"Mi Tienda","saludo":"Hola","tema":{"acento":"#0a7"}}}
+--- stderr
+
+# f2: terminal 080, repo repo-en, motor :3100
+$ supcoflow chat brand --theme accent=#0a7 --json
+exit: 3
+--- stdout
+{"ok":false,"error":"invalid_body","message":"El tema no admite estas variables: accent."}
+--- stderr
+
+# f3: terminal 080, repo repo-en, motor :3100
+$ supcoflow sites add --site http://localhost:4000 --json
+exit: 0
+--- stdout
+{"ok":true,"sitios":["http://localhost:3000","http://localhost:4000"]}
+--- stderr
+
+# f4: terminal 080, repo repo-en, motor :3100
+$ supcoflow sites remove --site http://localhost:4000 --json
+exit: 0
+--- stdout
+{"ok":true,"sitios":["http://localhost:3000"]}
+--- stderr
+
+# f5: terminal 080, repo repo-en, motor :3100
+$ supcoflow data set --allow user_id,page_and_browser --json
+exit: 0
+--- stdout
+{"ok":true,"acuerdo":{"version":1,"permitido":{"usuario_id":true,"usuario_rol":false,"atributos":[],"pagina_y_navegador":true,"capturas":false,"elementos":false,"email":false},"fijado_en":"2026-10-29T12:51:52.105Z","fijado_por":"usr_vrb","fijado_con":"cla_255bf32bc6d7de07"},"alcance":"guardado_y_relevamiento"}
+--- stderr
+
+# f6: terminal 080, repo repo-en, motor :3100
+$ supcoflow data set --allow nothing --json
+exit: 0
+--- stdout
+{"ok":true,"acuerdo":{"version":2,"permitido":{"usuario_id":false,"usuario_rol":false,"atributos":[],"pagina_y_navegador":false,"capturas":false,"elementos":false,"email":false},"fijado_en":"2026-10-29T12:51:52.313Z","fijado_por":"usr_vrb","fijado_con":"cla_255bf32bc6d7de07"},"alcance":"guardado_y_relevamiento"}
+--- stderr
+
+# f7: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys create --name vrb --json
+exit: 3
+--- stdout
+{"ok":false,"error":"falta_guardar_en","message":"Say where to save the key: `supcoflow keys create --name ci --save-to ~/ci.key` (outside a repo)."}
+--- stderr
+
+# f8: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys list --json
+exit: 0
+--- stdout
+{"ok":true,"claves":[]}
+--- stderr
+
+# f9: terminal 080, repo repo-en, motor :3100
+$ supcoflow project show --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","slug":"vrb","repo":"local/vrb","rama":"main","install_command":"npm ci","test_command":"npm test"},"github":{"estado":null,"verificado_en":null}}
+--- stderr
+
+# f10: terminal 080, repo repo-en, motor :3100
+$ supcoflow chat off --json
+exit: 0
+--- stdout
+{"ok":true,"habilitado":false}
+--- stderr
+
+# f11: terminal 080, repo repo-en, motor :3100
+$ supcoflow chat on --json
+exit: 0
+--- stdout
+{"ok":true,"habilitado":true}
+--- stderr
+
+# f12: terminal 080, repo repo-en, motor :3100
+$ supcoflow config --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":"proj_vrb","chat":{"habilitado":true,"tope_mensajes_dia":200},"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"guia_aprobada":true,"marca":{"logo_url":null,"titulo":"Mi Tienda","saludo":"Hola","tema":{"acento":"#0a7"}},"sitios":["http://localhost:3000"],"acuerdo":{"version":2,"permitido":{"usuario_id":false,"usuario_rol":false,"atributos":[],"pagina_y_navegador":false,"capturas":false,"elementos":false,"email":false},"fijado_en":"2026-10-29T12:51:52.313Z","fijado_por":"usr_vrb","fijado_con":"cla_255bf32bc6d7de07"},"politica":{"modo":"relevar","fijada_en":"2026-10-29T12:51:35.159Z"}}
+--- stderr
+
+# f13: terminal 080, repo repo-en, motor :3100
+$ supcoflow logout --dry-run --json
+exit: 0
+--- stdout
+{"ok":true,"dry_run":true,"haria":"revoke the key in SUPCOFLOW_TOKEN at http://localhost:3100"}
+--- stderr
+
+# f14: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide use --source agent --json
+exit: 4
+--- stdout
+{"ok":false,"error":"sin_guia_del_agente","message":"No hay una guía de nuestro agente aprobada: generala y aprobala en Brain."}
+--- stderr
+
+# f15: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide use --source repo --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb"}}
+--- stderr
+
+# f16: terminal 080, repo repo-en, motor :3100
+$ supcoflow test --wait --test-id prb_0000 --json
+exit: 3
+--- stdout
+{"ok":false,"error":"prueba_invalida","message":"--test-id is the id `supcoflow test` printed (prb_ and 16 characters)."}
+--- stderr
+
+# g1: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys create --name vrb --save-to /tmp/fm-e1-terminal/vrb/clave-consulta.key --json
+exit: 0
+--- stdout
+{"ok":true,"clave_id":"cla_1670c6174d30ee48","archivo":"/tmp/fm-e1-terminal/vrb/clave-consulta.key"}
+--- stderr
+
+# g2: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys list --json
+exit: 0
+--- stdout
+{"ok":true,"claves":[{"id":"cla_1670c6174d30ee48","nombre":"vrb","creada_en":"2026-10-29T12:52:06.974Z"}]}
+--- stderr
+
+# g3: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys revoke --help --json
+exit: 0
+--- stdout
+{"ok":true,"ayuda":"Usage: supcoflow keys revoke [flags]\n\nCommand:\n  keys revoke: Revokes a read-only key by its id; revoking twice leaves the same result.\n      --id cla_…: the key (`keys list` gives it)\n      --repo owner/repo: the repo, if it isn't this folder's «origin»\n      --dry-run: says what it would do without doing it\n      --json\n\nFlags for every command:\n  --json: the result as a line of JSON on stdout; warnings go to stderr\n  --help, -h: the help with examples\n\nExamples:\n  supcoflow keys revoke --id cla_0123456789abcdef --json\n\nExit codes:\n  0  ok\n  1  unexpected\n  2  login needed\n  3  invalid input\n  4  a person is needed\n  5  waiting for a person (call again)\n  6  limit reached"}
+--- stderr
+
+# g4: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys revoke --id cla_1670c6174d30ee48 --json
+exit: 0
+--- stdout
+{"ok":true,"clave_id":"cla_1670c6174d30ee48"}
+--- stderr
+
+# g5: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys revoke cla_1670c6174d30ee48 --json
+exit: 3
+--- stdout
+{"ok":false,"error":"argumentos_de_mas","message":"You passed more than one command. Try `supcoflow --help`."}
+--- stderr
+
+# g6: terminal 080, repo repo-en, motor :3100
+$ supcoflow keys list --json
+exit: 0
+--- stdout
+{"ok":true,"claves":[]}
+--- stderr
+
+# h1: terminal 080, repo repo-es, motor :3100
+$ supcoflow quien-soy --json
+exit: 0
+--- stdout
+{"ok":true,"via":"clave_personal","equipo":"tnt_vrb","usuario":{"id":"usr_vrb","login":"vrb-local","email":null},"proyecto":null,"fuente":"env"}
+--- stderr
+
+# h2: terminal 080, repo repo-es, motor :3100
+$ supcoflow diagnosticar --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto":"repo","ok":true,"mensaje":"The origin of this folder is local/vrb, the project's repo.","grupo":"instalacion"},{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"The support chat is on.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario","ok":true,"mensaje":"0 of 40 investigations used in the last 24 hours.","grupo":
+--- stderr
+
+# h3: terminal 080, repo repo-es, motor :3100
+$ supcoflow probar --json
+exit: 4
+--- stdout
+{"ok":false,"error":"falta_autorizacion","message":"A test runs an investigation that spends up to US$ 2.00 (monthly balance US$ 10.00 of US$ 10.00). To launch it: `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`. `supcoflow diagnose` first says whether everything is ready.","proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"instalacion","ok":true,"mensaje":"The GitHub App reports no problems. This is the last state we saw, when the repo was connected or on the last run: Supcoflow does not probe GitHub on its own.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 allowed site(s) for the chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"The support chat is on.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"There is a current guide for the product.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"The policy is `investigate`: a test runs an investigation and ends as an issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Balance for the month US$ 10.00, enough for the test ceiling (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario","ok":true,"mensaje":"0 o
+--- stderr
+
+# h4: terminal 080, repo repo-es, motor :3100
+$ supcoflow probar --autorizo-gasto --json
+exit: 3
+--- stdout
+{"ok":false,"error":"falta_techo","message":"`probar --autorizo-gasto` now needs --ceiling <usd>, the number you were shown: an alias can't widen what you authorized. Use `supcoflow test --authorize-spend --ceiling <usd> --expect-policy investigate|save`. (The old behaviour is in supcoflow 0.7.0.)"}
+--- stderr
+
+# h5: terminal 080, repo repo-es, motor :3100
+$ supcoflow guia revisar --json
+exit: 0
+--- stdout
+{"ok":true,"secciones":3,"ruta":".supcoflow/guia.md","aviso":"nombre_viejo"}
+--- stderr
+
+# h6: terminal 080, repo repo-es, motor :3100
+$ supcoflow guia publicar --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"ya_publicada":true,"reemplaza":null,"commit_declarado":"929de18d42b18d2b040eb3e21d312faa88168408","aviso":"nombre_viejo"}
+--- stderr
+
+# h7: terminal 080, repo repo-es, motor :3100
+$ supcoflow guia versiones --json
+exit: 3
+--- stdout
+{"ok":false,"error":"comando_desconocido","message":"Unknown command «guia». Try `supcoflow --help`."}
+--- stderr
+
+# h8: terminal 080, repo repo-es, motor :3100
+$ supcoflow politica fijar --modo guardar --json
+exit: 0
+--- stdout
+{"ok":true,"politica":{"modo":"guardar","fijada_en":"2026-10-29T12:52:09.278Z"}}
+--- stderr
+
+# h9: terminal 080, repo repo-es, motor :3100
+$ supcoflow politica fijar --modo relevar --json
+exit: 0
+--- stdout
+{"ok":true,"politica":{"modo":"relevar","fijada_en":"2026-10-29T12:52:09.476Z"}}
+--- stderr
+
+# h10: terminal 080, repo repo-es, motor :3100
+$ supcoflow chat marca --tema acento=#0a7 --json
+exit: 0
+--- stdout
+{"ok":true,"marca":{"logo_url":null,"titulo":"Mi Tienda","saludo":"Hola","tema":{"acento":"#0a7"}}}
+--- stderr
+
+# i1: terminal 070, repo repo-es, motor :3101
+$ supcoflow sitios agregar --sitio http://localhost:3000 --json
+exit: 0
+--- stdout
+{"ok":true,"sitios":["http://localhost:3000"]}
+--- stderr
+
+# i2: terminal 070, repo repo-es, motor :3101
+$ supcoflow chat prender --json
+exit: 0
+--- stdout
+{"ok":true,"habilitado":true}
+--- stderr
+
+# i3: terminal 080, repo repo-en, motor :3101
+$ supcoflow diagnose --json
+exit: 0
+--- stdout
+{"ok":true,"proyecto":{"id":"proj_vrb","repo":"local/vrb"},"listo":true,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto":"repo","ok":true,"mensaje":"The origin of this folder is local/vrb, the project's repo.","grupo":"instalacion"},{"punto":"instalacion","ok":true,"mensaje":"La instalación de GitHub no reporta problemas.","grupo":"instalacion"},{"punto":"sitios","ok":true,"mensaje":"1 sitio(s) admitido(s) para el chat.","grupo":"instalacion"},{"punto":"chat","ok":true,"mensaje":"El chat de soporte está prendido.","grupo":"instalacion"},{"punto":"guia","ok":true,"mensaje":"Hay una guía vigente del producto.","grupo":"instalacion"},{"punto":"politica","ok":true,"mensaje":"La política es `relevar`: la prueba corre un relevamiento y termina en un issue.","grupo":"prueba"},{"punto":"saldo","ok":true,"mensaje":"Saldo del mes US$ 10.00, alcanza para el techo de la prueba (US$ 2.00).","grupo":"prueba"},{"punto":"cupo_diario","ok":true,"mensaje":"0 de 40 relevamientos usados en las últimas 24 horas.","grupo":"prueba"},{"punto":"run_en_vuelo","ok":true,"mensaje":"No hay relevamientos corriendo.","grupo":"pru
+--- stderr
+
+# i4: terminal 080, repo repo-en, motor :3101
+$ supcoflow test --authorize-spend --ceiling 1 --expect-policy investigate --json
+exit: 3
+--- stdout
+{"ok":false,"error":"invalid_body","message":"Unrecognized key: \"politica_esperada\""}
+--- stderr
+
+# j1: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide versions --json
+exit: 0
+--- stdout
+{"ok":true,"vigente":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"publicaciones":[{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb","estado":"published"},{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb","estado":"live"}]}
+--- stderr
+
+# j2: terminal 080, repo repo-es, motor :3100
+$ supcoflow guide publish --json
+exit: 0
+--- stdout
+{"ok":true,"guia":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"ya_publicada":true,"reemplaza":null,"commit_declarado":"929de18d42b18d2b040eb3e21d312faa88168408","aviso":"nombre_viejo"}
+--- stderr
+
+# j3: terminal 080, repo repo-en, motor :3100
+$ supcoflow guide versions --json
+exit: 0
+--- stdout
+{"ok":true,"vigente":{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb"},"publicaciones":[{"origen":"repo","id":"gpb_d0c16189f4122c9a","version":2,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"df92e4b1a43d93af7a8abf2fa52f240264ce0896","ruta":".supcoflow/guide.md","huella":"5a3e96c98f5a7fe05791084bf56520f17cfcc696f135045584515024f9e897ad","secciones":3,"publicada_en":"2026-10-29T12:51:29.183Z","publicada_por":"usr_vrb","estado":"published"},{"origen":"repo","id":"gpb_d4e59473c17e9ced","version":1,"repo":"local/vrb","procedencia":"terminal","rama":"main","commit":"929de18d42b18d2b040eb3e21d312faa88168408","ruta":".supcoflow/guia.md","huella":"cf6189313894995b9715def5f6b9df94b0501717f056bd0317ffa8a7225095dd","secciones":3,"publicada_en":"2026-10-29T12:49:17.709Z","publicada_por":"usr_vrb","estado":"live"}]}
+--- stderr
+

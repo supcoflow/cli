@@ -10,7 +10,7 @@ const CONTENIDO = '"use client";\nimport { ChatDeIntake } from "@supcoflow/chat"
 const W: Widget = {
   tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
   paquete: "@supcoflow/chat", version: "2.2.1", instalar: "npm i @supcoflow/chat@2.2.1 --save-exact",
-  nextjs: { estado: "probando", archivo_sugerido: "app/supcoflow-chat.tsx", contenido: CONTENIDO, uso: "<SupcoflowChat />" },
+  nextjs: { estado: "probando", archivo_sugerido: "app/_supcoflow/support-chat.tsx", archivos_anteriores: ["app/_supcoflow/chat-de-soporte.tsx"], contenido: CONTENIDO, uso: "<SupcoflowChat />" },
   script: { estado: "disponible_sin_soporte", linea: '<script src="https://chat.supcoflow.dev/widget.js" data-project="proj_1"></script>' },
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
@@ -41,10 +41,11 @@ describe("supcoflow widget", () => {
     const { texto } = await widget(deps(), F);
     expect(texto).toContain(W.instalar);
     expect(texto).toContain(W.nextjs.archivo_sugerido);
+    expect(texto).toContain("If the chat is already installed in app/_supcoflow/chat-de-soporte.tsx, update that file in place instead of creating a second one.");
     expect(texto).toContain(CONTENIDO); // ningún reemplazo de ids en la terminal
     expect(texto).toContain(W.nextjs.uso);
     expect(texto).toContain(W.csp);
-    const i = texto.indexOf("disponible, no probada en una app real");
+    const i = texto.indexOf("available, not tested in a real app");
     expect(i).toBeGreaterThan(-1);
     expect(texto.indexOf(W.script.linea)).toBeGreaterThan(i);
     expect(texto.indexOf(W.script.linea)).toBeGreaterThan(texto.indexOf(W.csp));
@@ -64,7 +65,7 @@ describe("supcoflow widget", () => {
   });
 
   it("un fallo del motor sale por resultadoDeFallo, sin el mensaje crudo con secretos", async () => {
-    const r = await widget(deps({ leerWidget: async () => { throw new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", "El motor respondió 200 con algo que no esperaba."); } }), F);
+    const r = await widget(deps({ leerWidget: async () => { throw new FalloDeLaTerminal(SALIDA.inesperado, "respuesta_inesperada", "The engine answered 200 with something it did not expect."); } }), F);
     expect(r.codigo).toBe(SALIDA.inesperado);
     expect(r.json).toMatchObject({ ok: false, error: "respuesta_inesperada" });
   });

@@ -16,7 +16,7 @@ const fs = { realpath: (p: string) => p, existe: () => false };
 const armar = (almacen: Almacen, existe = fs.existe, origen = "http://localhost:3000") => crearRegistroDePruebas({
   origen, almacen, rutaDelArchivo: "/h/.config/supcoflow/pruebas.json", fs: { ...fs, existe }, ahora: () => 1, avisar: () => {},
 });
-const INTENTO = { clave: "k-1", mensaje: null, techoUsd: 2 };
+const INTENTO = { clave: "k-1", mensaje: null, techoUsd: 2, politicaEsperada: null };
 
 describe("lo guardado de las pruebas (intento + última, por origen y proyecto)", () => {
   it("vacío al principio; abrir guarda el intento ENTERO; confirmar deja la última y cierra el intento en una sola escritura", async () => {
@@ -63,7 +63,18 @@ describe("lo guardado de las pruebas (intento + última, por origen y proyecto)"
     expect(await r.leer("proj_1")).toEqual({ intento: INTENTO, ultima: null });
   });
 
+  it("la política esperada se guarda con el intento y vuelve igual; un intento de la 0.7.0 (sin ella) vuelve con null", async () => {
+    const m = memoria();
+    const r = armar(m);
+    await r.abrir("proj_1", { ...INTENTO, politicaEsperada: "guardar" });
+    expect((await r.leer("proj_1")).intento).toEqual({ ...INTENTO, politicaEsperada: "guardar" });
+    m.datos.set("http://localhost:3000#prueba#proj_2", { valor: JSON.stringify({ intento: { clave: "k-9", mensaje: null, techo_usd: 2 }, ultima: null }), escritoEn: 1 });
+    expect((await r.leer("proj_2")).intento).toEqual({ clave: "k-9", mensaje: null, techoUsd: 2, politicaEsperada: null });
+    m.datos.set("http://localhost:3000#prueba#proj_3", { valor: JSON.stringify({ intento: { clave: "k-9", mensaje: null, techo_usd: 2, politica_esperada: "otra" }, ultima: null }), escritoEn: 1 });
+    await expect(r.leer("proj_3")).rejects.toMatchObject({ error: "prueba_no_guardada" });
+  });
   it("un archivo que no se lee no es «no hay intento»: lanza", async () => {
+    await expect(armar(memoria({ leerLanza: true })).leer("proj_1")).rejects.toMatchObject({ error: "prueba_no_guardada", message: expect.stringMatching(/^I couldn.t read \/h\/.config\/supcoflow\/pruebas.json; without that, a retry could ask for another test/) });
     await expect(armar(memoria({ leerLanza: true })).leer("proj_1")).rejects.toMatchObject({ error: "prueba_no_guardada" });
   });
 
