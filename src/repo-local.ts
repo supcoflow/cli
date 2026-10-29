@@ -55,12 +55,25 @@ export function aliasDelOrigin(url: string): { host: string; repo: string } | nu
   return null;
 }
 
-// Lo que se muestra de un `origin`: nunca el usuario:clave@ de una URL (podría ser un token).
+// Lo que se muestra de un `origin`: nunca el usuario:clave@ de una URL (podría ser un token). Las credenciales se quitan de la
+// URL ENTERA y recién después se limita el tamaño (recortar antes dejaría pasar un `@` lejano con su clave a medias). Lo que no se
+// puede interpretar con seguridad no se muestra crudo: sale un marcador neutro.
+const TOPE_DEL_ORIGEN_MOSTRADO = 200;
 export function origenParaMostrar(url: string): string {
-  const limpia = url.trim().slice(0, 200);
-  const m = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:([^/:@\s]*)(?::[^/@\s]*)?@)?(.*)$/.exec(limpia);
-  if (!m) return limpia;
-  return `${m[1]}${m[2] === "git" ? "git@" : ""}${m[3]}`;
+  const limpia = url.trim();
+  const url_ = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)([^/\s]*)(.*)$/s.exec(limpia);
+  let mostrable: string | null = null;
+  if (url_) {
+    // La autoridad llega hasta la primera `/`; el usuario:clave es todo lo anterior al ÚLTIMO `@` de la autoridad.
+    const arroba = url_[2]!.lastIndexOf("@");
+    const usuario = arroba === -1 ? "" : url_[2]!.slice(0, arroba).split(":")[0]!;
+    const host = arroba === -1 ? url_[2]! : url_[2]!.slice(arroba + 1);
+    mostrable = `${url_[1]}${usuario === "git" ? "git@" : ""}${host}${url_[3]}`;
+  } else if (/^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:/.test(limpia)) {
+    mostrable = limpia; // `git@host:o/r`: el usuario de un scp no lleva clave
+  }
+  if (mostrable === null || /\s/.test(mostrable)) return "(an address I don't recognize)";
+  return mostrable.length > TOPE_DEL_ORIGEN_MOSTRADO ? mostrable.slice(0, TOPE_DEL_ORIGEN_MOSTRADO) + "…" : mostrable;
 }
 
 export type MotivoLocal = "sin_git" | "sin_origin" | "origin_no_es_github" | "origin_alias_ssh";

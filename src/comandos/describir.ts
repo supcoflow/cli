@@ -78,10 +78,10 @@ export const DESCRIPCION: {
     },
     {
       nombre: "project show",
-      resumen: "Shows the repo's project: branch, commands and the GitHub App's state; null if it has none yet. It starts with who you are: `contexto` { equipo, identidad (the GitHub login, or «email», or «clave_de_consulta»), identidad_tipo, fuente, repo, proyecto (id or null), en_el_clon { estado: ausente|valido|ilegible, id } }, said as «You're @login in team T; repo O/R; project P (existing)». Exits 4 contexto_incoherente (proyecto_del_clon_distinto / archivo_del_clon_ilegible) if this clone's .supcoflow/proyecto.json doesn't match what your key sees. The repo comes from the «origin» of this clone; if origin is an SSH alias or not GitHub, from a remote called `supcoflow` that points at https://github.com/owner/repo.git (the first time, `git remote add supcoflow https://github.com/owner/repo.git`: it is never fetched and ssh is never run).",
+      resumen: "Shows the repo's project: branch, commands and the GitHub App's state; null if it has none yet. It starts with who you are: `contexto` { equipo, identidad (the GitHub login, or «email», or «clave_de_consulta»), identidad_tipo, fuente, repo, proyecto (id or null), en_el_clon { estado: ausente|valido|ilegible, id } }, said as «You're @login in team T; repo O/R; project P (existing)». Exits 4 contexto_incoherente if this clone's .supcoflow/proyecto.json doesn't match what your key sees (proyecto_del_clon_distinto / archivo_del_clon_ilegible) or, when the repo has no project yet, if the account can't create one for it (dueno_distinto_del_login, a possible mismatch / sin_github): it stops BEFORE `repo connect`. The repo comes from the «origin» of this clone; if origin is an SSH alias or not GitHub, from a remote called `supcoflow` that points at https://github.com/owner/repo.git (the first time, `git remote add supcoflow https://github.com/owner/repo.git`: it is never fetched and ssh is never run).",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json"],
       ejemplos: ["supcoflow project show --json"],
-      codigos: [0, 1, 2, 3],
+      codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "catalog",

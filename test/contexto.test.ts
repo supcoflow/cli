@@ -204,3 +204,31 @@ describe("V-7 (7)-(9): lo que no frena y la línea del contexto", () => {
       .toMatchObject({ identidad: "email", identidad_tipo: "github" });
   });
 });
+
+describe("revisión 1, hallazgo 2: project show frena ANTES de repo connect cuando la cuenta no puede crear el proyecto", () => {
+  it("sin proyecto y dueño distinto del login: show sale 4 dueno_distinto_del_login (no 0 con proyecto null)", async () => {
+    const m = mundo({ yo: yo({ usuario: { id: "usr_1", login: "dueno-b", email: null } }) });
+    const r = await proyectoVer(depsDeProyecto(m), { repo: null });
+    incoherente(r, "dueno_distinto_del_login");
+    expect(m.llamadas).toEqual(["buscar", "quien"]);
+  });
+  it("sin proyecto y persona por email: show sale 4 sin_github", async () => {
+    incoherente(await proyectoVer(depsDeProyecto(mundo({ yo: EMAIL })), { repo: null }), "sin_github");
+  });
+  it("sin proyecto con SUPCOFLOW_TOKEN: el mensaje la nombra", async () => {
+    const r = await proyectoVer(depsDeProyecto(mundo({ fuente: "env", yo: yo({ usuario: { id: "u", login: "otra", email: null } }) })), { repo: null });
+    expect(r.texto).toContain("SUPCOFLOW_TOKEN");
+  });
+  it("las excepciones siguen: proyecto existente de otra persona, clave de consulta y dueño = login no frenan", async () => {
+    expect((await proyectoVer(depsDeProyecto(mundo({ yo: EMAIL, proyecto: PROY_A })), { repo: null })).codigo).toBe(0);
+    expect((await proyectoVer(depsDeProyecto(mundo({ yo: CONSULTA })), { repo: null })).codigo).toBe(0);
+    expect((await proyectoVer(depsDeProyecto(mundo()), { repo: null })).codigo).toBe(0);
+  });
+  it("el recorrido show → connect: tras ese 4 no se inicia ninguna conexión", async () => {
+    // La skill sólo sigue con `repo connect` si `project show` salió 0; con 4 se detiene, y el 4 no tocó el motor más que para leer.
+    const m = mundo({ yo: yo({ usuario: { id: "usr_1", login: "dueno-b", email: null } }) });
+    const r = await proyectoVer(depsDeProyecto(m), { repo: null });
+    expect(r.codigo).toBe(4);
+    expect(m.llamadas.filter((l) => NADA_DE_ESCRIBIR.includes(l))).toEqual([]);
+  });
+});

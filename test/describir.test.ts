@@ -213,4 +213,12 @@ describe("los ejemplos publicados sirven", () => {
     const mal = await chatMarca(d, { ...flags, theme: ["sin-igual"] });
     for (const m of mal.texto.matchAll(/\(for example (\w+)=/g)) expect(CLAVES_DEL_TEMA).toContain(m[1]);
   });
+
+  it("revisión 1, hallazgo 3: todo comando que actúa sobre el proyecto del repo declara la salida 4 (contexto_incoherente)", () => {
+    for (const n of ["project create", "project show", "config", "chat on", "chat off", "chat brand", "chat logo", "sites add", "sites remove", "data set", "policy set",
+      "keys create", "keys list", "keys revoke", "guide check", "guide publish", "guide show", "guide use", "guide versions", "widget", "install record", "diagnose", "test"]) {
+      expect(DESCRIPCION.comandos.find((c) => c.nombre === n)!.codigos, n).toContain(4);
+    }
+    expect(DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen).toMatch(/BEFORE `repo connect`/);
+  });
 });

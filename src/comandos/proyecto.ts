@@ -219,6 +219,10 @@ export async function proyectoVer(d: DepsDeProyecto, flags: Pick<Flags, "repo">)
     const contexto = armarElContexto({ yo, fuente: leida.vigente.fuente, repo, proyecto: encontrado, archivo });
     const linea = lineaDelContexto(contexto, yo.proyecto);
     if (encontrado === null) {
+      // Sin proyecto, el recorrido sigue con `repo connect`: el freno por cuenta (dueño distinto, sin GitHub) tiene que llegar ANTES,
+      // no al crear. Con proyecto existente no se compara nada, y con una clave de consulta tampoco.
+      const alCrear = coherenciaAlCrear({ yo, fuente: leida.vigente.fuente, repo });
+      if (alCrear !== null) return alCrear;
       return { codigo: SALIDA.ok, json: { ok: true, repo, proyecto: null, contexto }, texto: `${linea} This repo doesn't have a project yet: \`supcoflow project create\`.` };
     }
     const { proyecto: p, github } = await d.leerProyecto(d.api, clave, encontrado.id);

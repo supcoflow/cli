@@ -118,3 +118,30 @@ describe("--repo con un clon que no se puede atar (2b): el mensaje dice la verda
     expect((await repoPedido({ flagRepo: "e/r", git, cwd: "/w" })).sinClon).not.toContain("scf_secreto");
   });
 });
+
+describe("revisión 1, hallazgo 1: las credenciales se quitan ANTES de recortar", () => {
+  const FALSA = "FAKE_TOKEN_";
+  it.each([150, 190, 199, 200, 201, 260, 400])("el `@` queda en la posición %i de la URL: no sale nada de la clave", (pos) => {
+    const prefijo = "https://alice:";
+    const clave = FALSA.repeat(Math.ceil((pos - prefijo.length) / FALSA.length)).slice(0, Math.max(1, pos - prefijo.length));
+    const url = `${prefijo}${clave}@gitlab.com/o/r.git`;
+    const m = origenParaMostrar(url);
+    expect(m).not.toContain("FAKE");
+    expect(m).not.toContain("alice");
+    expect(m).toBe("https://gitlab.com/o/r.git");
+  });
+  it("una clave con `@` adentro y otra sin usuario tampoco salen", () => {
+    expect(origenParaMostrar("https://u:cla@ve@gitlab.com/o/r")).toBe("https://gitlab.com/o/r");
+    expect(origenParaMostrar("https://:" + "x".repeat(300) + "@gitlab.com/o/r")).toBe("https://gitlab.com/o/r");
+  });
+  it("lo que no se interpreta no se muestra crudo; lo largo se recorta DESPUÉS", () => {
+    expect(origenParaMostrar("algo raro con scf_secreto")).toBe("(an address I don't recognize)");
+    expect(origenParaMostrar("https://gitlab.com/" + "a".repeat(500)).length).toBeLessThanOrEqual(201);
+  });
+  it("en el mensaje final de un comando que exige clon", async () => {
+    const git = gitFalso({ ...TOP, "remote get-url origin": { codigo: 0, stdout: "https://alice:" + FALSA.repeat(25) + "@gitlab.com/o/r.git\n" }, ...SIN_REMOTO });
+    const r = await repoPedido({ flagRepo: "o/r", git, cwd: "/w" });
+    expect(r.sinClon).not.toContain("FAKE");
+    expect(r.sinClon).toContain("`https://gitlab.com/o/r.git`");
+  });
+});
