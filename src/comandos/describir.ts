@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 
 export const DESCRIPCION: {
   version: string;
@@ -65,11 +65,11 @@ export const DESCRIPCION: {
     },
     {
       nombre: "project create",
-      resumen: "Creates (or reuses) the already connected repo's project and records it in .supcoflow/proyecto.json; a different existing file is never overwritten (exits 4).",
+      resumen: "Creates (or reuses) the already connected repo's project and records it in .supcoflow/proyecto.json; a different existing file is never overwritten (exits 4). Before connecting or creating anything it checks what it can see and exits 4 contexto_incoherente (motivo proyecto_del_clon_distinto: the clone notes a project your account doesn't see for this repo; archivo_del_clon_ilegible: .supcoflow/proyecto.json can't be read; dueno_distinto_del_login: a possible mismatch, the repo's owner on GitHub isn't the GitHub login of your key; sin_github: the account isn't signed in with GitHub) without touching anything.",
       flags: [
         "--install \"…\": the install command, when the engine can't work it out",
         "--test \"…\": the test command, same",
-        "--repo owner/repo: the repo, if it isn't this folder's «origin» (without writing the file)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin» (without reading or writing this clone's file)",
         "--dry-run: says what it would create without creating anything",
         "--json",
       ],
@@ -78,7 +78,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "project show",
-      resumen: "Shows the repo's project: branch, commands and the GitHub App's state; null if it has none yet.",
+      resumen: "Shows the repo's project: branch, commands and the GitHub App's state; null if it has none yet. It starts with who you are: `contexto` { equipo, identidad (the GitHub login, or «email», or «clave_de_consulta»), identidad_tipo, fuente, repo, proyecto (id or null), en_el_clon { estado: ausente|valido|ilegible, id } }, said as «You're @login in team T; repo O/R; project P (existing)». Exits 4 contexto_incoherente (proyecto_del_clon_distinto / archivo_del_clon_ilegible) if this clone's .supcoflow/proyecto.json doesn't match what your key sees. The repo comes from the «origin» of this clone; if origin is an SSH alias or not GitHub, from a remote called `supcoflow` that points at https://github.com/owner/repo.git (the first time, `git remote add supcoflow https://github.com/owner/repo.git`: it is never fetched and ssh is never run).",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json"],
       ejemplos: ["supcoflow project show --json"],
       codigos: [0, 1, 2, 3],
@@ -92,7 +92,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "config",
-      resumen: "Shows the repo's project configuration: chat, sites, brand, problem policy and data agreement. The agreement limits what is saved and what the investigating AI reads; it doesn't cover what the chat's AI sees while it talks.",
+      resumen: "Shows the repo's project configuration: chat, sites, brand, problem policy and data agreement. The agreement limits what is saved and what the investigating AI reads; it doesn't cover what the chat's AI sees while it talks. Like every command that acts on the repo's project, it exits 4 contexto_incoherente without doing anything if this clone's .supcoflow/proyecto.json notes another project than the one your key sees (proyecto_del_clon_distinto) or can't be read (archivo_del_clon_ilegible).",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json"],
       ejemplos: ["supcoflow config --json"],
       codigos: [0, 1, 2, 3, 4],
@@ -195,14 +195,14 @@ export const DESCRIPCION: {
     {
       nombre: "guide check",
       resumen: "Checks .supcoflow/guide.md (this clone's root) against the engine, without publishing anything: says whether it's well formed and how many sections it has. It's the step before the commit. If guide.md doesn't exist it reads the old name .supcoflow/guia.md and says so.",
-      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin» (without a local clone it exits 3 falta_guia: the guide is read from the file)", "--dry-run: says what it would send without sending it", "--json"],
+      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin» (the guide is read from this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 falta_guia saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)", "--dry-run: says what it would send without sending it", "--json"],
       ejemplos: ["supcoflow guide check --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "guide publish",
       resumen: "Uploads .supcoflow/guide.md directly (or the old name guia.md, only if guide.md doesn't exist): sends the content, the file it read and the commit and branch this clone declares (if there's git and commits; otherwise, no commit). The engine checks it and makes it the active guide; the commit is kept as «declared by the terminal, not verified in GitHub». With --from-github it keeps the earlier route: it sends the fingerprint and the engine compares it with the main branch's; if it isn't pushed to that branch yet (or it's another one), it exits 5.",
-      flags: ["--from-github: doesn't upload the file; verifies against GitHub's main branch (exits 5 guia_no_subida / guia_distinta if it doesn't match)", "--repo owner/repo: the repo, if it isn't this folder's «origin» (without a local clone it exits 3 falta_guia: the guide is read from the file)", "--dry-run: says what it would send (or the fingerprint with --from-github), without requesting anything", "--json"],
+      flags: ["--from-github: doesn't upload the file; verifies against GitHub's main branch (exits 5 guia_no_subida / guia_distinta if it doesn't match)", "--repo owner/repo: the repo, if it isn't this folder's «origin» (the guide is read from this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 falta_guia saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)", "--dry-run: says what it would send (or the fingerprint with --from-github), without requesting anything", "--json"],
       ejemplos: ["supcoflow guide publish --json"],
       codigos: [0, 1, 2, 3, 4, 5],
     },
@@ -241,23 +241,23 @@ export const DESCRIPCION: {
         "--skill version: the metadata.version of the skill that installs it (semver, required; without it exits 3 falta_skill without requesting anything)",
         "--file path: the chat file, relative to the repo root (no `..`, not absolute, not a symlink or through one; otherwise exits 3 archivo_invalido and writes nothing)",
         "--app folder: the app's folder, relative to the repo root (the root by default; outside the repo it exits 3 app_fuera_del_repo)",
-        "--repo owner/repo: the repo, if it isn't this folder's «origin» (without a local clone it exits 3 sin_clon: the file goes in the clone)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin» (the file goes in this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 sin_clon saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)",
         "--dry-run: shows the file and the difference without writing anything",
         "--json",
       ],
-      ejemplos: ["supcoflow install record --skill 0.3.0 --app web --file web/app/_supcoflow/support-chat.tsx --json"],
+      ejemplos: ["supcoflow install record --skill 0.3.1 --app web --file web/app/_supcoflow/support-chat.tsx --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "diagnose",
-      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat and guide: N of 6) and, apart, whether a test of the project would go in and how far it would get: policy, monthly balance against the test's ceiling, open tests and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each point.",
-      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { instalacion: { ok, total: 6, puntos }, prueba: { listo, puntos }, … }"],
+      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat and guide: N of 6) and, apart, whether a test of the project would go in and how far it would get: policy, monthly balance against the test's ceiling, open tests, whether THIS machine can save the test request (the local point `maquina`, checked without writing anything) and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each point; if `maquina` isn't ok, `listo` and `prueba.listo` are false and the N of 6 doesn't change.",
+      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { instalacion: { ok, total: 6, puntos }, prueba: { listo, puntos }, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, … }"],
       ejemplos: ["supcoflow diagnose --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "test",
-      resumen: "Tests the installation end to end: a problem comes in through the same door as the chat and ends up as an issue. It spends one investigation (up to the ceiling you authorize; with the save policy it goes as far as the saved case and doesn't spend). Without --authorize-spend it sends nothing: it exits 4 falta_autorizacion with techo_usd, saldo_usd, tope_usd and comprometido_usd. With --authorize-spend, --ceiling and --expect-policy it requests the test with exactly those values (it doesn't re-read anything to choose them) and exits 5 with prueba_id; then --wait follows it. If the ceiling or the policy changed in the meantime it exits 4 techo_distinto / politica_distinta with the new values and doesn't retry: ask again. Others: 4 prueba_en_curso (with its id), chat_deshabilitado, requiere_api_key, intento_pendiente; 6 tope_mensual; 1 with intento_pendiente: true if the answer didn't arrive (repeating resumes the same test).",
+      resumen: "Tests the installation end to end: a problem comes in through the same door as the chat and ends up as an issue. It spends one investigation (up to the ceiling you authorize; with the save policy it goes as far as the saved case and doesn't spend). Without --authorize-spend it sends nothing: it exits 4 falta_autorizacion with techo_usd, saldo_usd, tope_usd and comprometido_usd, and, checked before you say yes and without writing anything, `maquina` { ok, impedimentos: [{ codigo, detalle }] } (whether this machine can save the test request: if it isn't ok the message says why first) and `intento_pendiente` { techo_usd, politica } | null (a request waiting for confirmation: only its ceiling and policy, never its message or key). With --authorize-spend, --ceiling and --expect-policy it requests the test with exactly those values (it doesn't re-read anything to choose them) and exits 5 with prueba_id; then --wait follows it. If the ceiling or the policy changed in the meantime it exits 4 techo_distinto / politica_distinta with the new values and doesn't retry: ask again. Others: 4 prueba_en_curso (with its id), chat_deshabilitado, requiere_api_key, intento_pendiente; 6 tope_mensual; 1 with intento_pendiente: true if the answer didn't arrive (repeating resumes the same test).",
       flags: [
         "--authorize-spend: authorizes the spend of ONE test; without it nothing that writes is sent",
         "--ceiling usd: the ceiling you authorize, the number you were shown (required with --authorize-spend)",

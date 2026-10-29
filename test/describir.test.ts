@@ -103,10 +103,10 @@ describe("describe --json", () => {
     }
   });
 
-  it("la versión es la del package.json, y es la 0.8.0", () => {
+  it("la versión es la del package.json, y es la 0.8.1", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.8.0");
+    expect(pkg.version).toBe("0.8.1");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -174,8 +174,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.8.0", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.0" });
+  it("describe --json se escribe en una sola línea con la versión 0.8.1", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.1" });
   });
 });
 
