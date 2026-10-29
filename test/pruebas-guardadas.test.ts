@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FalloDeLaTerminal } from "../src/contrato.ts";
 import type { Almacen, Registro } from "../src/guardado/index.ts";
+import { SinProteccionDeGit } from "../src/guardado/protegido.ts";
 import { crearRegistroDePruebas } from "../src/pruebas-guardadas.ts";
 
 function memoria(o: { escribirLanza?: (valor: string) => boolean; leerLanza?: boolean } = {}): Almacen & { datos: Map<string, Registro> } {
@@ -12,9 +13,8 @@ function memoria(o: { escribirLanza?: (valor: string) => boolean; leerLanza?: bo
     async borrar(c) { datos.delete(c); },
   };
 }
-const fs = { realpath: (p: string) => p, existe: () => false };
-const armar = (almacen: Almacen, existe = fs.existe, origen = "http://localhost:3000") => crearRegistroDePruebas({
-  origen, almacen, rutaDelArchivo: "/h/.config/supcoflow/pruebas.json", fs: { ...fs, existe }, ahora: () => 1, avisar: () => {},
+const armar = (almacen: Almacen, origen = "http://localhost:3000") => crearRegistroDePruebas({
+  origen, almacen, rutaDelArchivo: "/h/.config/supcoflow/pruebas.json", ahora: () => 1, avisar: () => {},
 });
 const INTENTO = { clave: "k-1", mensaje: null, techoUsd: 2, politicaEsperada: null };
 
@@ -41,13 +41,16 @@ describe("lo guardado de las pruebas (intento + última, por origen y proyecto)"
 
   it("separa por origen: lo pedido contra un motor local no existe para producción", async () => {
     const m = memoria();
-    await armar(m, fs.existe, "http://127.0.0.1:4555").abrir("proj_1", INTENTO);
-    expect(await armar(m, fs.existe, "https://app.supcoflow.dev").leer("proj_1")).toEqual({ intento: null, ultima: null });
+    await armar(m, "http://127.0.0.1:4555").abrir("proj_1", INTENTO);
+    expect(await armar(m, "https://app.supcoflow.dev").leer("proj_1")).toEqual({ intento: null, ultima: null });
   });
 
-  it("estricto: dentro de un repo no guarda y lanza; un disco que falla lanza", async () => {
-    const m = memoria();
-    await expect(armar(m, (p) => p === "/h/.git").abrir("proj_1", INTENTO)).rejects.toMatchObject({ error: "prueba_no_guardada" });
+  it("estricto: un almacén que git no deja proteger no guarda y lanza con lo que hay que hacer; un disco que falla lanza", async () => {
+    const m = memoria({ escribirLanza: () => { throw new SinProteccionDeGit({ codigo: "git_lo_sigue", detalle: "Git tracks /h/.config/supcoflow/pruebas.json in the repo /h. Take it out of the repo with `git -C /h rm --cached -- .config/supcoflow/pruebas.json` or have git ignore it." }); } });
+    await expect(armar(m).abrir("proj_1", INTENTO)).rejects.toMatchObject({
+      error: "prueba_no_guardada", codigo: 1,
+      message: expect.stringMatching(/^I'm not saving the test request in \/h\/.config\/supcoflow\/pruebas.json; without saving it I won't send it\. Git tracks .*git -C \/h rm --cached/),
+    });
     expect(m.datos.size).toBe(0);
     await expect(armar(memoria({ escribirLanza: () => true })).abrir("proj_1", INTENTO)).rejects.toBeInstanceOf(FalloDeLaTerminal);
   });

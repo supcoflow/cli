@@ -25,6 +25,7 @@ import type { DepsDeProyecto } from "./comandos/proyecto.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
+import { almacenProtegido } from "./guardado/protegido.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
@@ -409,19 +410,21 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   // Al lado de las credenciales y con el mismo almacén (carpeta 0700, archivo 0600, `.tmp` en
   // exclusiva): nunca dentro del repo donde se corre el comando, que la publicaría con un `git add -A`.
   const rutaDeIdempotencia = join(dirname(rutaDelArchivo), "idempotencia.json");
+  // Estos dos registros (y sólo estos) pueden vivir bajo una carpeta personal que es un repo de git: el almacén
+  // protegido comprueba con git, antes de cada escritura y cada borrado, que los deja afuera del repo.
+  const protegido = (ruta: string) => almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal });
   const idempotencia = crearRegistroDeIdempotencia({
     origen: api.origin,
-    almacen: almacenDeArchivo(rutaDeIdempotencia, fsReal),
+    almacen: protegido(rutaDeIdempotencia),
     rutaDelArchivo: rutaDeIdempotencia,
-    fs: fsReal,
     generar: randomUUID,
     ahora: Date.now,
     avisar,
   });
-  // El pedido de `probar` (intento + última prueba), con el mismo almacén y la misma regla: fuera de un repo.
+  // El pedido de `probar` (intento + última prueba), con el mismo almacén protegido.
   const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
   const pruebas = crearRegistroDePruebas({
-    origen: api.origin, almacen: almacenDeArchivo(rutaDePruebas, fsReal), rutaDelArchivo: rutaDePruebas, fs: fsReal, ahora: Date.now, avisar,
+    origen: api.origin, almacen: protegido(rutaDePruebas), rutaDelArchivo: rutaDePruebas, ahora: Date.now, avisar,
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();

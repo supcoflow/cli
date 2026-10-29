@@ -14,10 +14,9 @@
 //
 // Estricto en todo, como `claves crear` en el registro de idempotencia: una prueba no tiene clave natural
 // del lado de la terminal, así que mandar sin el intento guardado arriesga una segunda prueba (que gasta).
-import path from "node:path";
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
-import { dentroDeUnWorkingTree } from "./guardado/repo.ts";
+import { SinProteccionDeGit } from "./guardado/protegido.ts";
 
 // `politicaEsperada` es la que la persona vio al autorizar (valor de la API); null si no se pasó (alias viejo) o si el
 // intento lo guardó la 0.7.0, que no la mandaba. El reintento reenvía el mismo cuerpo, así que se guarda con el intento.
@@ -49,7 +48,6 @@ export function crearRegistroDePruebas(d: {
   origen: string;
   almacen: Almacen;
   rutaDelArchivo: string;
-  fs: { realpath(p: string): string; existe(p: string): boolean };
   ahora: () => number;
   avisar: (s: string) => void;
 }): RegistroDePruebas {
@@ -58,7 +56,7 @@ export function crearRegistroDePruebas(d: {
   const cuenta = (proyectoId: string) => `${d.origen}#prueba#${proyectoId}`;
   const noGuardada = (que: string) => new FalloDeLaTerminal(
     SALIDA.inesperado, "prueba_no_guardada",
-    `I couldn't ${que} ${d.rutaDelArchivo}; without that, a retry could ask for another test (and spend twice). Check that file (it can't be inside a repo) and try again.`,
+    `I couldn't ${que} ${d.rutaDelArchivo}; without that, a retry could ask for another test (and spend twice). Check that file and try again.`,
   );
 
   async function leer(proyectoId: string): Promise<LoGuardado> {
@@ -87,18 +85,6 @@ export function crearRegistroDePruebas(d: {
   }
 
   async function escribir(proyectoId: string, g: LoGuardado): Promise<void> {
-    // Misma regla que las credenciales: un destino dentro de un repo se publicaría con un `git add -A`.
-    // No saber dónde cae (un enlace roto) es otro «no se puede guardar».
-    let raiz: string | null;
-    try {
-      raiz = dentroDeUnWorkingTree(path.dirname(d.rutaDelArchivo), d.fs);
-    } catch {
-      throw noGuardada("resolve the path of");
-    }
-    if (raiz !== null) {
-      throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
-        `I'm not saving the test request inside a git repo (${raiz}); without saving it I won't send it. Point XDG_CONFIG_HOME outside a repo.`);
-    }
     const valor = JSON.stringify({
       intento: g.intento === null
         ? null
@@ -107,7 +93,13 @@ export function crearRegistroDePruebas(d: {
     });
     try {
       await d.almacen.escribir(cuenta(proyectoId), { valor, escritoEn: d.ahora() });
-    } catch {
+    } catch (e) {
+      // El almacén protegido no escribe dentro de un repo si git no garantiza que lo deja afuera (fricción 2c):
+      // el mensaje dice qué archivo, qué repo y qué hacer.
+      if (e instanceof SinProteccionDeGit) {
+        throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
+          `I'm not saving the test request in ${d.rutaDelArchivo}; without saving it I won't send it. ${e.message}`);
+      }
       throw noGuardada("save to");
     }
   }
