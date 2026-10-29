@@ -29,20 +29,55 @@ the English ones.
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
 | `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it gives you a link and you confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the commands, `--install "…" --test "…"`. |
-| `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App. |
+| `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks `.supcoflow/guide.md` against the engine without publishing anything. |
 | `supcoflow guide publish` | Uploads `.supcoflow/guide.md` directly (with the commit and branch your clone declares, not verified in GitHub). `--from-github` verifies against the main branch instead of uploading the file. |
 | `supcoflow guide show` | Shows the active guide, where it comes from, which file it was read from and whether the branch is still up to date. |
 | `supcoflow guide use --source repo\|agent` | Chooses which guide is active. |
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
-| `supcoflow install record --skill 0.3.0 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with and which file it lives in. |
-| `supcoflow diagnose` | Free: how far the installation is (N of 6) and whether a test would go in. |
+| `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with and which file it lives in. |
+| `supcoflow diagnose` | Free: how far the installation is (N of 6) and whether a test would go in (including whether this machine can save the test request). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
 | `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. |
 
 `supcoflow --help` (or `supcoflow <command> --help`) shows the help with examples. The repo and project commands
 take the repo from the folder's `origin`; `--repo owner/repo` picks it by hand.
+
+### When the `origin` isn't a GitHub address
+
+The terminal only recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
+`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`) or
+another server, it never runs `ssh` or reads your SSH configuration (it could run programs of yours). You tell it
+once, in your own clone, which GitHub repo this is:
+
+```bash
+git remote add supcoflow https://github.com/owner/repo.git   # it's never fetched
+```
+
+A remote called `supcoflow` with those same strict forms ties the clone to that repo for every command. If `origin`
+is a GitHub address, `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
+that read or write a file of the clone (`guide check`, `guide publish`, `install record`) only use this clone if it is
+that repo; otherwise they exit 3 saying what the clone is, without asking the engine. (`project create --repo` keeps
+creating or reusing the project; when this clone is not that repo it does so without reading or writing this clone's
+`.supcoflow/proyecto.json`, and when it is that repo it reads and records the file as usual.)
+
+### Is this repo the one for this account?
+
+Every command that acts on the repo's project first checks what it can see, and exits 4 `contexto_incoherente` (with a
+`motivo`) without touching anything when it doesn't add up:
+
+- `proyecto_del_clon_distinto`: `.supcoflow/proyecto.json` notes a project your key doesn't see for this repo. Check
+  which account you signed in with (`supcoflow whoami`), or review that old file.
+- `archivo_del_clon_ilegible`: that file exists but can't be read or understood (its content is never printed).
+- `dueno_distinto_del_login` (only when this repo has no project yet, in `project show` and `project create`; `show` stops the walk-through before `repo connect`): the repo's owner on GitHub isn't the GitHub login of your
+  key. It is a *possible* mismatch (the engine compares GitHub's number, and a login can be renamed): sign in to the
+  console with GitHub again, or as the owner. If your key comes from `SUPCOFLOW_TOKEN`, that variable wins over a new
+  login, and the terminal doesn't touch it.
+- `sin_github` (only when this repo has no project yet, in `project show` and `project create`): the account was signed in by email; connecting a repo needs GitHub.
+
+A project that already exists is never blocked for belonging to another person of the team. This doesn't see a project
+of the same repo in another team when the clone doesn't note it.
 
 ### From zero to a project
 
@@ -112,9 +147,9 @@ badly formed, that is an error: it never falls back to the old one.
 `supcoflow guide show` shows the active guide, the file it was read from and whether the branch is still up to date
 (`al_dia` in the JSON); `supcoflow guide versions` lists the guide that governs now and the repo's publications;
 `supcoflow guide use --source repo|agent` chooses which one is active when there is one from the repo and one from
-our agent. All of them take the repo from the `origin`, or `--repo owner/repo` (with `check` and `publish`, without a
-local clone of that repo it exits 3 `falta_guia`: the guide is read from the file); `check`, `publish` and `use`
-accept `--dry-run`; `--from-github` is only for `publish`.
+our agent. All of them take the repo from the `origin` (or a `supcoflow` remote, see above), or `--repo owner/repo`
+(with `check` and `publish`, if this clone isn't that repo it exits 3 `falta_guia` saying what the clone is: the guide
+is read from the file); `check`, `publish` and `use` accept `--dry-run`; `--from-github` is only for `publish`.
 
 The format of `.supcoflow/guide.md`:
 
@@ -172,7 +207,7 @@ the repo from the `origin`, or `--repo owner/repo`.
 | Command | What it does |
 |---|---|
 | `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat and guide: N of 6, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the month's balance and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 6, puntos }` and `prueba: { listo, puntos }`. |
-| `supcoflow test` | Without `--authorize-spend` it sends nothing: it exits 4 with the test's ceiling, the balance, the cap and what is committed this month, and the exact command to launch it. |
+| `supcoflow test` | Without `--authorize-spend` it sends nothing: it exits 4 with the test's ceiling, the balance, the cap and what is committed this month, and the exact command to launch it. It also says, before you authorize anything, whether this machine can save the test request (`maquina: { ok, impedimentos }`) and any request still waiting for confirmation (`intento_pendiente: { techo_usd, politica }`). |
 | `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate` | Requests the test: the problem comes in through the same door as the chat and runs an investigation that **spends** up to the ceiling you authorize (with the `save` policy it goes as far as the saved case and doesn't spend). Exits 5 with the id. `--message "…"` uses your own text. |
 | `supcoflow test --wait` | Follows the last test up to 90 s: 5 while it runs (call it again), 0 with the issue, 4 if it needs a look in the console (it brings the link). The charge is shown as it is: `pendiente` right at the close, never 0. `--test-id prb_…` follows another one. |
 | `supcoflow test --dry-run --authorize-spend --ceiling 2 --expect-policy investigate` | What it would do (project, ceiling, balance, policy), without requesting anything. |
@@ -189,6 +224,17 @@ requesting another. While a request is unconfirmed, another `--message`, `--ceil
 `intento_pendiente`. The test goes with the personal key of `supcoflow login`; a read-only key can't request it. One
 open test per project: another one exits 4 `prueba_en_curso` with the id of the open one. A test's issue stays open and
 is marked as a test.
+
+**If your home folder is a git repo.** The request is saved in `~/.config/supcoflow/pruebas.json` (it carries the
+ceiling, the policy and, if you passed one, your `--message`). That is allowed inside a repo only when git itself says
+it ignores the file and doesn't track it: the first time, the terminal creates a `.gitignore` containing `*` in that
+folder (only if there isn't one; it never edits yours), and then asks git (`git check-ignore`) about the file and its
+`.tmp`, for every repo that contains the written or the real path. A file that is already tracked or added to the index
+is refused with the exact `git rm --cached …` to run (the terminal never runs it or deletes anything of yours), and so
+is a missing or failing git. The same goes for every write or delete of `idempotencia.json`. `diagnose` and `test`
+check all this (and permissions, broken links and unreadable files) **before** you authorize, without writing
+anything: «no obstacle found» is a check, not a promise that the disk won't fill up later. The credentials don't use
+this exception: inside a repo they are still refused.
 
 ## With an assistant
 
@@ -231,11 +277,13 @@ Made to be read by a program, not only by a person:
 - If there is no keychain, in `~/.config/supcoflow/credenciales.json` (or `$XDG_CONFIG_HOME/supcoflow/…`) with `0600`
   permissions, and the terminal warns you.
 - **Never inside a git repo**: if that file would land inside one (a `HOME` that is a dotfiles repo, for example), it
-  saves nothing and asks you to use the keychain or `SUPCOFLOW_TOKEN`.
+  saves nothing and asks you to use the keychain or `SUPCOFLOW_TOKEN`. (The test request and the idempotency key are
+  the only things with an exception: see «Test the installation».)
 - **`SUPCOFLOW_TOKEN`** takes priority over what is saved: it is for CI and the cloud.
 - The key never appears in a log or in a `--json` output.
 - `project create` keeps its idempotency key (it isn't a secret: it only avoids creating twice if the answer is lost)
-  in `idempotencia.json`, next to the credentials and with the same permissions.
+  in `idempotencia.json`, next to the credentials and with the same permissions. Inside a repo it is saved only if git
+  ignores it and doesn't track it; otherwise the terminal says so and goes on without saving it.
 
 When you sign in again, the previous key is revoked only after the new one is saved; if it couldn't be revoked, it is
 noted down and retried on the next `login` or `logout`.

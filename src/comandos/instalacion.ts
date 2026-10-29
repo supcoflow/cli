@@ -158,12 +158,13 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
 
   // ─── La raíz y la app, antes de cualquier pedido ───
   let raizGit: string | null;
+  let sinClon: string | undefined;
   try {
-    raizGit = (await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd })).raiz;
+    ({ raiz: raizGit, sinClon } = await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd }));
   } catch (e) {
     return resultadoDeFallo(e);
   }
-  if (raizGit === null) return fallo(SALIDA.entradaInvalida, "sin_clon", `I don't have that repo's clone here, and ${RUTA_DE_LA_INSTALACION} goes in the clone: stand in the repo's clone.`);
+  if (raizGit === null) return fallo(SALIDA.entradaInvalida, "sin_clon", `${sinClon ?? "I don't have that repo's clone here."} ${RUTA_DE_LA_INSTALACION} goes in the repo's clone: stand in it.`);
   const raiz = d.rutaReal(raizGit);
   if (raiz === null) return fallo(SALIDA.inesperado, "inesperado", "I couldn't resolve the repo's root.");
   // `realpath` DESPUÉS de resolver: un `--app` que es un enlace hacia afuera tiene que quedar afuera (Review Focus 4).

@@ -96,7 +96,7 @@ function deps(m: Motor, almacen = memoria(), o: Partial<DepsDePrueba> = {}) {
     },
     pruebas: crearRegistroDePruebas({
       origen: "http://localhost:3000", almacen, rutaDelArchivo: "/h/.config/supcoflow/pruebas.json",
-      fs: { realpath: (p) => p, existe: () => false }, ahora: () => 1, avisar: () => {},
+      ahora: () => 1, avisar: () => {},
     }),
     generar: () => `clave-${++clave}`,
     ahora: () => reloj,
@@ -158,8 +158,10 @@ describe("diagnose", () => {
     expect(inst.puntos.map((p) => p.punto)).toEqual(["sign-in", "repo", "instalacion", "sitios", "chat", "guia"]);
     expect(inst.puntos.every((p) => p.grupo === "instalacion" && p.ok)).toBe(true);
     const prueba = r.json.prueba as { listo: boolean; puntos: { punto: string }[] };
-    expect(prueba.puntos.map((p) => p.punto)).toEqual(["despachos"]);
-    expect((r.json.puntos as unknown[]).length).toBe(6 + 1);
+    // `maquina` es el punto local de la prueba (1A.1): va primero en su grupo y no cuenta en el «N of 6».
+    expect(prueba.puntos.map((p) => p.punto)).toEqual(["maquina", "despachos"]);
+    expect((r.json.puntos as unknown[]).length).toBe(6 + 2);
+    expect(r.json).toMatchObject({ maquina: { ok: true, impedimentos: [] }, intento_pendiente: null });
   });
 
   it("agrupa por el nombre del punto si el motor viejo no manda `grupo`", async () => {

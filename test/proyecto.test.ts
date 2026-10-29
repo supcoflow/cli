@@ -6,6 +6,8 @@ const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
 const PROY = { id: "proj_r-1", slug: "r", repo: "D/r", rama: "main", installCommand: "npm ci", testCommand: "npm test" };
 const CONECTADO = { id: "cnx_0123456789abcdef", repo: "d/r", estado: "conectado" as const, url: "u", venceEn: "v", repoCanonico: "D/r", fallo: null };
 
+const YO = { via: "api_key", equipo: "tnt_x", usuario: { id: "usr_1", login: "d", email: null }, proyecto: null };
+
 function deps(o: Partial<DepsDeProyecto> = {}) {
   const archivos = new Map<string, string>();
   const claves: string[] = [];
@@ -23,6 +25,8 @@ function deps(o: Partial<DepsDeProyecto> = {}) {
       olvidar: async (op, alcance) => { olvidos.push(`${op}#${alcance}`); if (claves.length > 0) olvidadas.push(claves.at(-1)!); },
     },
     buscarProyecto: async () => null,
+    // El dueño `d` del repo `d/r`: nada que frenar salvo que el test lo pida.
+    quienSoy: async () => YO,
     ultimaConexion: async () => CONECTADO,
     crearProyecto: async () => ({ tipo: "ok", proyecto: PROY, reusado: false }),
     leerProyecto: async () => ({ proyecto: PROY, github: { estado: "ok", verificadoEn: "2026-10-15T00:00:00.000Z" } }),
@@ -113,24 +117,33 @@ describe("proyecto crear", () => {
     expect(r).toMatchObject({ codigo: 3, json: { error: "comandos_faltantes", faltantes: ["test_command"] } });
     expect(r.texto).toContain("--test");
   });
-  it("un proyecto.json distinto no se pisa: 4", async () => {
+  it("un proyecto.json del mismo proyecto pero con otro slug o repo no se pisa: 4 archivo_distinto", async () => {
+    const { d, archivos } = deps({ buscarProyecto: async () => PROY });
+    const crudo = '{"id":"proj_r-1","slug":"otro","repo":"d/otro"}\n';
+    archivos.set("/w/r/.supcoflow/proyecto.json", crudo);
+    expect(await proyectoCrear(d, sinFlags)).toMatchObject({ codigo: 4, json: { error: "archivo_distinto", id_actual: "proj_r-1", nuevo: { id: "proj_r-1" } } });
+    expect(archivos.get("/w/r/.supcoflow/proyecto.json")).toBe(crudo);
+  });
+  it("un proyecto.json de OTRO proyecto frena antes de crear nada (1A.1: contexto_incoherente, no un archivo_distinto tardío)", async () => {
     const { d, archivos } = deps();
     archivos.set("/w/r/.supcoflow/proyecto.json", '{"id":"proj_otro"}\n');
-    expect(await proyectoCrear(d, sinFlags)).toMatchObject({ codigo: 4, json: { error: "archivo_distinto", id_actual: "proj_otro", nuevo: { id: "proj_r-1" } } });
+    expect(await proyectoCrear(d, sinFlags)).toMatchObject({ codigo: 4, json: { error: "contexto_incoherente", motivo: "proyecto_del_clon_distinto" } });
     expect(archivos.get("/w/r/.supcoflow/proyecto.json")).toBe('{"id":"proj_otro"}\n');
   });
-  it("Review Focus 11: un archivo distinto con secretos adentro no los copia a ninguna salida", async () => {
+  it("Review Focus 11: un archivo con secretos adentro no los copia a ninguna salida (no se entiende: frena sin crear)", async () => {
     const secreto = `scf_${"c".repeat(16)}_${"d".repeat(64)}`;
     const codigo = "e".repeat(64);
     const avisos: string[] = [];
-    const { d, archivos } = deps({ avisar: (s) => avisos.push(s) });
+    let creados = 0;
+    const { d, archivos } = deps({ avisar: (s) => avisos.push(s), crearProyecto: async () => { creados++; return { tipo: "ok", proyecto: PROY, reusado: false }; } });
     const crudo = JSON.stringify({ id: secreto, token: secreto, device_code: codigo }) + "\n";
     archivos.set("/w/r/.supcoflow/proyecto.json", crudo);
     const r = await proyectoCrear(d, sinFlags);
-    expect(r).toMatchObject({ codigo: 4, json: { error: "archivo_distinto", id_actual: null } });
-    const todo = JSON.stringify(r) + avisos.join("\n");
+    expect(r).toMatchObject({ codigo: 4, json: { error: "contexto_incoherente", motivo: "archivo_del_clon_ilegible" } });
+    const todo = JSON.stringify(r) + r.texto + avisos.join("\n");
     expect(todo).not.toContain(secreto);
     expect(todo).not.toContain(codigo);
+    expect(creados).toBe(0);
     expect(archivos.get("/w/r/.supcoflow/proyecto.json")).toBe(crudo);
   });
   it("con --repo de otro repo no escribe ningún archivo", async () => {

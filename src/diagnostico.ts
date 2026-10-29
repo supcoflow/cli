@@ -2,7 +2,7 @@
 // Los cuatro primeros puntos del grupo `instalacion` son del motor; los otros dos sólo los ve la terminal: que
 // la llamada autenticó (`sign-in`) y que el `origin` de esta carpeta es el repo del proyecto (`repo`).
 import type { Diagnostico } from "./api.ts";
-import type { leerRepoLocal } from "./repo-local.ts";
+import { frasePorQueNoAtaClon, type leerRepoLocal } from "./repo-local.ts";
 
 export type Punto = { punto: string; ok: boolean; mensaje: string; grupo: "instalacion" | "prueba" };
 
@@ -32,6 +32,7 @@ export function puntoDelRepo(local: Awaited<ReturnType<typeof leerRepoLocal>>, r
   if (local.repo === null) {
     if (local.motivo === "sin_git") return mal("This folder isn't a git repo, so I can't tell which repo it is.");
     if (local.motivo === "sin_origin") return mal("This repo has no «origin» remote, so I can't tell which repo it is.");
+    if (local.motivo === "origin_alias_ssh") return mal(`The «origin» of this repo isn't a GitHub repo. ${frasePorQueNoAtaClon(local, null)}`);
     return mal("The «origin» of this repo isn't a GitHub repo.");
   }
   if (local.repo.toLowerCase() !== repoDelProyecto.toLowerCase()) {

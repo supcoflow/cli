@@ -103,10 +103,10 @@ describe("describe --json", () => {
     }
   });
 
-  it("la versión es la del package.json, y es la 0.8.0", () => {
+  it("la versión es la del package.json, y es la 0.8.1", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.8.0");
+    expect(pkg.version).toBe("0.8.1");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -174,8 +174,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.8.0", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.0" });
+  it("describe --json se escribe en una sola línea con la versión 0.8.1", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.1" });
   });
 });
 
@@ -212,5 +212,13 @@ describe("los ejemplos publicados sirven", () => {
     }
     const mal = await chatMarca(d, { ...flags, theme: ["sin-igual"] });
     for (const m of mal.texto.matchAll(/\(for example (\w+)=/g)) expect(CLAVES_DEL_TEMA).toContain(m[1]);
+  });
+
+  it("revisión 1, hallazgo 3: todo comando que actúa sobre el proyecto del repo declara la salida 4 (contexto_incoherente)", () => {
+    for (const n of ["project create", "project show", "config", "chat on", "chat off", "chat brand", "chat logo", "sites add", "sites remove", "data set", "policy set",
+      "keys create", "keys list", "keys revoke", "guide check", "guide publish", "guide show", "guide use", "guide versions", "widget", "install record", "diagnose", "test"]) {
+      expect(DESCRIPCION.comandos.find((c) => c.nombre === n)!.codigos, n).toContain(4);
+    }
+    expect(DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen).toMatch(/BEFORE `repo connect`/);
   });
 });

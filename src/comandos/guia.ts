@@ -51,13 +51,14 @@ type Leida = { ok: true; texto: string; raiz: string; ruta: string; aviso: Aviso
 // error: nunca motivo para leer el viejo). Si están los dos manda `guide.md` y se avisa que el otro se ignora.
 async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promise<Leida | { ok: false; resultado: Resultado }> {
   let raiz: string | null;
+  let sinClon: string | undefined;
   try {
-    raiz = (await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd })).raiz;
+    ({ raiz, sinClon } = await repoPedido({ flagRepo: flags.repo, git: d.git, cwd: d.cwd }));
   } catch (e) {
     return { ok: false, resultado: resultadoDeFallo(e) };
   }
   if (raiz === null) {
-    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `I don't have that repo's clone here, and the guide is read from ${RUTA_DE_LA_GUIA}: stand in the repo's clone.`) };
+    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${sinClon ?? "I don't have that repo's clone here."} The guide is read from ${RUTA_DE_LA_GUIA} in the repo's clone: stand in it.`) };
   }
   let ruta = RUTA_DE_LA_GUIA;
   let aviso: AvisoDelNombre | null = null;

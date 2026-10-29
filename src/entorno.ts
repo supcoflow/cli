@@ -3,7 +3,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
+  accessSync, chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, statSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
 } from "node:fs";
 import { NO_LEIDO } from "./lectura.ts";
 import { homedir, hostname } from "node:os";
@@ -25,6 +25,8 @@ import type { DepsDeProyecto } from "./comandos/proyecto.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
+import { almacenProtegido } from "./guardado/protegido.ts";
+import { revisarElLugar, type FsDelLugar } from "./guardado/lugar.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
@@ -73,6 +75,28 @@ export const fsReal: FsMinimo = {
   existe(p) {
     try {
       lstatSync(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
+// Lo que el prechequeo de la máquina (src/guardado/lugar.ts) ve del disco, sin escribir. `estado` sigue los enlaces (`stat`): un
+// enlace roto es «no existe» para él, y `existe` (que es `lstat`) lo distingue.
+export const fsDelLugarReal: FsDelLugar = {
+  ...fsReal,
+  estado(p) {
+    try {
+      const st = statSync(p);
+      return { existe: true, tipo: st.isDirectory() ? "carpeta" : st.isFile() ? "archivo" : "otro", propio: typeof process.getuid !== "function" || st.uid === process.getuid() };
+    } catch {
+      return { existe: false };
+    }
+  },
+  puede(p, que) {
+    try {
+      accessSync(p, que === "leer" ? constants.R_OK : constants.W_OK | constants.X_OK);
       return true;
     } catch {
       return false;
@@ -409,27 +433,31 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   // Al lado de las credenciales y con el mismo almacén (carpeta 0700, archivo 0600, `.tmp` en
   // exclusiva): nunca dentro del repo donde se corre el comando, que la publicaría con un `git add -A`.
   const rutaDeIdempotencia = join(dirname(rutaDelArchivo), "idempotencia.json");
+  // Estos dos registros (y sólo estos) pueden vivir bajo una carpeta personal que es un repo de git: el almacén
+  // protegido comprueba con git, antes de cada escritura y cada borrado, que los deja afuera del repo.
+  const protegido = (ruta: string) => almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal });
   const idempotencia = crearRegistroDeIdempotencia({
     origen: api.origin,
-    almacen: almacenDeArchivo(rutaDeIdempotencia, fsReal),
+    almacen: protegido(rutaDeIdempotencia),
     rutaDelArchivo: rutaDeIdempotencia,
-    fs: fsReal,
     generar: randomUUID,
     ahora: Date.now,
     avisar,
   });
-  // El pedido de `probar` (intento + última prueba), con el mismo almacén y la misma regla: fuera de un repo.
+  // El pedido de `probar` (intento + última prueba), con el mismo almacén protegido.
   const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
   const pruebas = crearRegistroDePruebas({
-    origen: api.origin, almacen: almacenDeArchivo(rutaDePruebas, fsReal), rutaDelArchivo: rutaDePruebas, fs: fsReal, ahora: Date.now, avisar,
+    origen: api.origin, almacen: protegido(rutaDePruebas), rutaDelArchivo: rutaDePruebas, ahora: Date.now, avisar,
+    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal }),
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();
   // Los candados de `claves crear` viven al lado de las credenciales, nunca en un repo.
   const candados = crearCandados(fsDelCandadoReal, join(dirname(rutaDelArchivo), "candados"), process.pid, procesoVivo);
   const secretos = crearGuardaDeSecretos(fsDeSecretosReal);
+  // `archivos`: `proyectoDelRepo` lee `.supcoflow/proyecto.json` del clon con él (fricción 6).
   const configurarEnElMotor = {
-    api, guardado, git: gitReal, cwd, avisar,
+    api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar),
     buscarProyecto: (a: URL, clave: string, repo: string) => buscarProyecto(a, clave, repo, fetch),
     leerConfiguracion: (a: URL, clave: string, id: string) => leerConfiguracion(a, clave, id, fetch),
     configurar: (a: URL, clave: string, ruta: string, cuerpo: unknown, extra?: { idempotencyKey?: string }) => configurar(a, clave, ruta, cuerpo, fetch, extra),
@@ -468,6 +496,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     proyecto: {
       api, guardado, git: gitReal, cwd, idempotencia, archivos: archivosDelRepo(avisar), avisar,
       buscarProyecto: (a, clave, repo) => buscarProyecto(a, clave, repo, fetch),
+      quienSoy: (a, clave) => quienSoy(a, clave, fetch),
       ultimaConexion: (a, clave, repo, plazoMs) => ultimaConexion(a, clave, repo, fetch, plazoMs),
       crearProyecto: (a, clave, conexionId, cuerpo, key) => crearProyecto(a, clave, conexionId, cuerpo, key, fetch),
       leerProyecto: (a, clave, id) => leerProyecto(a, clave, id, fetch),
@@ -490,7 +519,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       idempotencia, candados, secretos,
     },
     widget: {
-      api, guardado, git: gitReal, cwd,
+      api, guardado, git: gitReal, cwd, archivos: archivosDelRepo(avisar),
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch),
     },
@@ -503,7 +532,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       terminal: DESCRIPCION.version,
     },
     prueba: {
-      api, guardado, git: gitReal, cwd, avisar, pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
+      api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar), pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
       pedirPrueba: (a, clave, id, intento) => pedirPrueba(a, clave, id, intento, fetch),
