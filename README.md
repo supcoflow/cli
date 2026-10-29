@@ -59,7 +59,8 @@ A remote called `supcoflow` with those same strict forms ties the clone to that 
 is a GitHub address, `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
 that read or write a file of the clone (`guide check`, `guide publish`, `install record`) only use this clone if it is
 that repo; otherwise they exit 3 saying what the clone is, without asking the engine. (`project create --repo` keeps
-creating or reusing the project, but never reads or writes the clone.)
+creating or reusing the project; when this clone is not that repo it does so without reading or writing this clone's
+`.supcoflow/proyecto.json`, and when it is that repo it reads and records the file as usual.)
 
 ### Is this repo the one for this account?
 
@@ -69,11 +70,11 @@ Every command that acts on the repo's project first checks what it can see, and 
 - `proyecto_del_clon_distinto`: `.supcoflow/proyecto.json` notes a project your key doesn't see for this repo. Check
   which account you signed in with (`supcoflow whoami`), or review that old file.
 - `archivo_del_clon_ilegible`: that file exists but can't be read or understood (its content is never printed).
-- `dueno_distinto_del_login` (only when creating a project): the repo's owner on GitHub isn't the GitHub login of your
+- `dueno_distinto_del_login` (only when this repo has no project yet, in `project show` and `project create`; `show` stops the walk-through before `repo connect`): the repo's owner on GitHub isn't the GitHub login of your
   key. It is a *possible* mismatch (the engine compares GitHub's number, and a login can be renamed): sign in to the
   console with GitHub again, or as the owner. If your key comes from `SUPCOFLOW_TOKEN`, that variable wins over a new
   login, and the terminal doesn't touch it.
-- `sin_github` (only when creating): the account was signed in by email; connecting a repo needs GitHub.
+- `sin_github` (only when this repo has no project yet, in `project show` and `project create`): the account was signed in by email; connecting a repo needs GitHub.
 
 A project that already exists is never blocked for belonging to another person of the team. This doesn't see a project
 of the same repo in another team when the clone doesn't note it.
