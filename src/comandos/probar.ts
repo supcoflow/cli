@@ -25,7 +25,7 @@ import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento } fro
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
 import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeSesion, puntoDelRepo, TOTAL_DE_INSTALACION, type Punto } from "../diagnostico.ts";
-import type { PoliticaEsperada, RegistroDePruebas } from "../pruebas-guardadas.ts";
+import type { PoliticaEsperada, RegistroDePruebas, RevisionDeLaMaquina } from "../pruebas-guardadas.ts";
 import { leerRepoLocal } from "../repo-local.ts";
 import { PLAZO_MINIMO_DE_SONDEO_MS, TRAMO_MAXIMO_MS } from "../sondeo.ts";
 import { fallo, rutaDe } from "./configurar.ts";
@@ -96,6 +96,26 @@ function datosDelDiagnostico(g: Diagnostico) {
 
 const lineasDePuntos = (puntos: Punto[], nombre = (p: string) => p) => puntos.map((p) => `  [${p.ok ? "ok" : "missing"}] ${nombre(p.punto)}: ${p.mensaje}`);
 
+// Lo que esta máquina puede o no hacer con el pedido de la prueba, visto ANTES del OK de gasto y sin escribir nada. Un
+// prechequeo que falla es «no ok», nunca un error: avisar tarde es justo lo que esto evita.
+async function revisarLaMaquina(d: DepsDePrueba, proyectoId: string): Promise<RevisionDeLaMaquina> {
+  try {
+    return await d.pruebas.revisar(proyectoId);
+  } catch {
+    return { maquina: { ok: false, impedimentos: [{ codigo: "no_se_pudo_revisar", detalle: "I couldn't check whether this machine can save the test request." }] }, intentoPendiente: null };
+  }
+}
+const datosDeLaMaquina = (r: RevisionDeLaMaquina) => ({ maquina: r.maquina });
+const datosDelIntentoPendiente = (r: RevisionDeLaMaquina) => ({
+  intento_pendiente: r.intentoPendiente === null ? null : { techo_usd: r.intentoPendiente.techoUsd, politica: r.intentoPendiente.politica },
+});
+const detalles = (r: RevisionDeLaMaquina) => r.maquina.impedimentos.map((i) => i.detalle).join(" ");
+function puntoDeLaMaquina(r: RevisionDeLaMaquina): Punto {
+  return r.maquina.ok
+    ? { punto: "maquina", ok: true, mensaje: "No obstacle found to saving the test request on this machine.", grupo: "prueba" }
+    : { punto: "maquina", ok: false, mensaje: `This machine can't save the test request yet: ${detalles(r)}`, grupo: "prueba" };
+}
+
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
@@ -113,16 +133,23 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   } catch {
     local = { repo: null, raiz: null, motivo: "sin_git" };
   }
-  const { instalacion, prueba } = agruparPuntos(g, [puntoDeSesion(), puntoDelRepo(local, p.proyecto.repo)]);
+  const agrupados = agruparPuntos(g, [puntoDeSesion(), puntoDelRepo(local, p.proyecto.repo)]);
+  const instalacion = agrupados.instalacion;
+  // El punto local de la prueba (1A.1): ¿esta máquina puede guardar el pedido? Si no, la prueba no entra, y se dice acá y
+  // no después del OK de gasto. No cuenta en el «N of 6» de la instalación.
+  const revision = await revisarLaMaquina(d, p.proyecto.id);
+  const prueba = [puntoDeLaMaquina(revision), ...agrupados.prueba];
   const buenos = contarBuenos(instalacion);
-  const listo = g.listo && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
+  const listo = g.listo && revision.maquina.ok && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
   const datos = {
     proyecto: { id: p.proyecto.id, repo: p.proyecto.repo },
     ...datosDelDiagnostico(g),
     listo,
     puntos: [...instalacion, ...prueba],
     instalacion: { ok: buenos, total: TOTAL_DE_INSTALACION, puntos: instalacion },
-    prueba: { listo: g.listo, puntos: prueba },
+    prueba: { listo: g.listo && revision.maquina.ok, puntos: prueba },
+    ...datosDeLaMaquina(revision),
+    ...datosDelIntentoPendiente(revision),
   };
   const resumen = `Monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}; a test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
   const motivos = [
@@ -203,7 +230,9 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     } catch (e) {
       return resultadoDeFallo(e);
     }
-    const datos = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g) };
+    // Lo que esta máquina puede hacer con el pedido, visto ANTES del sí de gasto (fricción 3).
+    const revision = await revisarLaMaquina(d, proyecto.id);
+    const datos = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const gasto = g.politica === "guardar"
       ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
       : `A test runs an investigation that spends up to ${usd(g.techoUsd)} (monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}).`;
@@ -227,8 +256,13 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
       };
     }
     const lanzar = `supcoflow test --authorize-spend --ceiling ${g.techoUsd} --expect-policy ${enInglesLaPolitica(g.politica)}`;
-    const message = `${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.`;
-    return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "falta_autorizacion", message, ...datos }, texto: message };
+    // Primero lo que impide, si algo: es lo que la persona tiene que saber antes de decir que sí.
+    const impide = revision.maquina.ok ? "" : `This machine can't save the test request yet: ${detalles(revision)} Fix that before authorizing. `;
+    const previo = revision.intentoPendiente;
+    const pendiente = previo === null ? ""
+      : ` There's a test request waiting for confirmation (ceiling ${usd(previo.techoUsd)}, policy ${enInglesLaPolitica(previo.politica)}): to recover that same request, repeat \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}\`.`;
+    const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.${pendiente}`;
+    return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "falta_autorizacion", message, ...datos, ...datosDelIntentoPendiente(revision) }, texto: message };
   }
 
   // ── Con --authorize-spend: el ciclo de la clave.

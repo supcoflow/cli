@@ -3,7 +3,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
+  accessSync, chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, statSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
 } from "node:fs";
 import { NO_LEIDO } from "./lectura.ts";
 import { homedir, hostname } from "node:os";
@@ -26,6 +26,7 @@ import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenProtegido } from "./guardado/protegido.ts";
+import { revisarElLugar, type FsDelLugar } from "./guardado/lugar.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
@@ -74,6 +75,28 @@ export const fsReal: FsMinimo = {
   existe(p) {
     try {
       lstatSync(p);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
+
+// Lo que el prechequeo de la máquina (src/guardado/lugar.ts) ve del disco, sin escribir. `estado` sigue los enlaces (`stat`): un
+// enlace roto es «no existe» para él, y `existe` (que es `lstat`) lo distingue.
+export const fsDelLugarReal: FsDelLugar = {
+  ...fsReal,
+  estado(p) {
+    try {
+      const st = statSync(p);
+      return { existe: true, tipo: st.isDirectory() ? "carpeta" : st.isFile() ? "archivo" : "otro", propio: typeof process.getuid !== "function" || st.uid === process.getuid() };
+    } catch {
+      return { existe: false };
+    }
+  },
+  puede(p, que) {
+    try {
+      accessSync(p, que === "leer" ? constants.R_OK : constants.W_OK | constants.X_OK);
       return true;
     } catch {
       return false;
@@ -425,6 +448,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
   const pruebas = crearRegistroDePruebas({
     origen: api.origin, almacen: protegido(rutaDePruebas), rutaDelArchivo: rutaDePruebas, ahora: Date.now, avisar,
+    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal }),
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();

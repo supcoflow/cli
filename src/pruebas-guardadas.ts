@@ -17,6 +17,7 @@
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
 import { SinProteccionDeGit } from "./guardado/protegido.ts";
+import type { Impedimento } from "./guardado/repo.ts";
 
 // `politicaEsperada` es la que la persona vio al autorizar (valor de la API); null si no se pasó (alias viejo) o si el
 // intento lo guardó la 0.7.0, que no la mandaba. El reintento reenvía el mismo cuerpo, así que se guarda con el intento.
@@ -24,7 +25,15 @@ export type PoliticaEsperada = "relevar" | "guardar";
 export type Intento = { clave: string; mensaje: string | null; techoUsd: number; politicaEsperada: PoliticaEsperada | null };
 export type LoGuardado = { intento: Intento | null; ultima: string | null };
 
+/** Lo que se ve SIN escribir: si esta máquina va a poder guardar el pedido, y el pedido pendiente (sólo su techo y su política). */
+export type RevisionDeLaMaquina = {
+  maquina: { ok: boolean; impedimentos: Impedimento[] };
+  intentoPendiente: { techoUsd: number; politica: PoliticaEsperada | null } | null;
+};
+
 export type RegistroDePruebas = {
+  /** Nunca escribe ni lanza: «no se detectaron impedimentos» (`ok`) no es «se va a poder escribir». */
+  revisar(proyectoId: string): Promise<RevisionDeLaMaquina>;
   /** Lanza `prueba_no_guardada` si no puede leer: «no sé» no es «no hay intento». */
   leer(proyectoId: string): Promise<LoGuardado>;
   /** Guarda el intento entero; lanza si no puede (y entonces no se manda nada). */
@@ -48,6 +57,8 @@ export function crearRegistroDePruebas(d: {
   origen: string;
   almacen: Almacen;
   rutaDelArchivo: string;
+  /** El prechequeo del disco y de git, sin escribir (`revisarElLugar`); sin él, no hay impedimentos que ver. */
+  revisarElLugar?: () => Promise<Impedimento[]>;
   ahora: () => number;
   avisar: (s: string) => void;
 }): RegistroDePruebas {
@@ -104,8 +115,26 @@ export function crearRegistroDePruebas(d: {
     }
   }
 
+  async function revisar(proyectoId: string): Promise<RevisionDeLaMaquina> {
+    const impedimentos: Impedimento[] = [];
+    try {
+      impedimentos.push(...(await d.revisarElLugar?.() ?? []));
+    } catch {
+      impedimentos.push({ codigo: "no_se_pudo_revisar", detalle: `I couldn't check whether ${d.rutaDelArchivo} can be saved.` });
+    }
+    let intentoPendiente: RevisionDeLaMaquina["intentoPendiente"] = null;
+    try {
+      const { intento } = await leer(proyectoId);
+      if (intento !== null) intentoPendiente = { techoUsd: intento.techoUsd, politica: intento.politicaEsperada };
+    } catch {
+      impedimentos.push({ codigo: "archivo_ilegible", detalle: `I can't read or understand ${d.rutaDelArchivo}.` });
+    }
+    return { maquina: { ok: impedimentos.length === 0, impedimentos }, intentoPendiente };
+  }
+
   return {
     leer,
+    revisar,
     async abrir(proyectoId, intento) {
       const antes = await leer(proyectoId);
       await escribir(proyectoId, { intento, ultima: antes.ultima });
