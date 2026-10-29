@@ -193,7 +193,7 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
   } catch (e) {
     return resultadoDeFallo(e);
   }
-  const deLaApp = leerJson(d, path.join(app, "package.json"), "el package.json de la app");
+  const deLaApp = leerJson(d, path.join(app, "package.json"), "the app's package.json");
   if (!deLaApp.ok && !deLaApp.noExiste) return deLaApp.resultado;
   const avisos: string[] = [];
   const instalado = paqueteInstalado(d, raiz, app, avisos);
