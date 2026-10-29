@@ -127,7 +127,7 @@ export async function chatMarca(d: DepsDeConfigurar, flags: Pick<Flags, "repo" |
   const tema: Record<string, string> = {};
   for (const t of flags.theme) {
     const i = t.indexOf("=");
-    if (i <= 0 || i === t.length - 1) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--theme goes as key=value (for example accent=#0a7); I got «${t}».`);
+    if (i <= 0 || i === t.length - 1) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--theme goes as key=value (for example acento=#0a7); I got «${t}».`);
     const clave = t.slice(0, i);
     if (clave in tema) return fallo(SALIDA.entradaInvalida, "tema_invalido", `--theme ${clave} can only be given once.`);
     tema[clave] = t.slice(i + 1);

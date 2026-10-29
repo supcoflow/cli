@@ -72,9 +72,14 @@ const enInglesLaPolitica = (p: string | null) => (p === null ? "none" : (POLITIC
 const aLaPoliticaDeLaApi = (p: string): PoliticaEsperada | null =>
   p === "investigate" || p === "relevar" ? "relevar" : p === "save" || p === "guardar" ? "guardar" : null;
 
-// El comando exacto para retomar un pedido guardado: con lo que se autorizó, no con lo que haya ahora.
+// El comando exacto para retomar un pedido guardado: con lo que se autorizó, no con lo que haya ahora. Un pedido SIN
+// política (lo guardó la 0.7.0, o se pidió con el alias viejo) sólo se retoma por el alias: el comando canónico exige
+// `--expect-policy` (3 falta_politica) y, con una política, ya no es el mismo pedido (4 intento_pendiente). No se inventa
+// una política para él: cambiaría su cuerpo y su clave.
 const comandoDeReintento = (i: IntentoDePrueba) =>
-  `supcoflow test --authorize-spend --ceiling ${i.techoUsd}${i.politicaEsperada !== null ? ` --expect-policy ${enInglesLaPolitica(i.politicaEsperada)}` : ""}`;
+  i.politicaEsperada === null
+    ? `supcoflow probar --autorizo-gasto --ceiling ${i.techoUsd}`
+    : `supcoflow test --authorize-spend --ceiling ${i.techoUsd} --expect-policy ${enInglesLaPolitica(i.politicaEsperada)}`;
 
 function datosDelDiagnostico(g: Diagnostico) {
   return {

@@ -117,12 +117,12 @@ export const DESCRIPCION: {
       flags: [
         "--title \"…\": the chat's title",
         "--greeting \"…\": the opening greeting",
-        "--theme key=value: a color or theme setting (repeatable, one per key)",
+        "--theme key=value: a color or theme setting (repeatable, one per key); the keys are the API's: acento, fondo, texto, textoSuave, radio, fuente",
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
         "--dry-run: says what it would do without doing it",
         "--json",
       ],
-      ejemplos: ["supcoflow chat brand --title \"Help\" --theme accent=#0a7"],
+      ejemplos: ["supcoflow chat brand --title \"Help\" --theme acento=#0a7"],
       codigos: [0, 1, 2, 3, 4],
     },
     {

@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { chatMarca } from "../src/comandos/configurar.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "../src/comandos/describir.ts";
+import { leerArgumentos } from "../src/argumentos.ts";
 
 describe("describe --json", () => {
   it("lista los comandos, los siete códigos y las facultades que la clave no tiene", () => {
@@ -174,5 +176,41 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
   });
   it("describe --json se escribe en una sola línea con la versión 0.8.0", () => {
     expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.0" });
+  });
+});
+
+// ─── Revisión 1, hallazgo 2: los ejemplos publicados se ejecutan, y sus claves son las que acepta la API ───
+describe("los ejemplos publicados sirven", () => {
+  // Las claves de `tema` que acepta el motor (`TemaSchema`, estricto): cualquier otra es 400 invalid_body.
+  const CLAVES_DEL_TEMA = ["acento", "fondo", "texto", "textoSuave", "radio", "fuente"];
+  const troceo = (e: string) => [...e.replace(/^supcoflow /, "").matchAll(/"([^"]*)"|(\S+)/g)].map((m) => m[1] ?? m[2]!);
+
+  it("`chat brand`: el ejemplo de describe, de la ayuda y del README manda sólo claves de tema que la API admite", async () => {
+    const ejemplo = DESCRIPCION.comandos.find((c) => c.nombre === "chat brand")!.ejemplos[0]!;
+    const { comando, flags } = leerArgumentos(troceo(ejemplo));
+    expect(comando).toBe("chat brand");
+    let enviado: Record<string, unknown> = {};
+    const d = {
+      api: new URL("http://localhost:3000"),
+      guardado: { leerClaveCompleta: async () => ({ valor: { clave: `scf_${"a".repeat(16)}_${"b".repeat(64)}`, fuente: "llavero" }, completa: true }) } as never,
+      git: async (a: string[]) => (a[0] === "rev-parse" ? { codigo: 0, stdout: "/w/r\n" } : { codigo: 0, stdout: "git@github.com:d/r.git\n" }),
+      cwd: "/w/r",
+      buscarProyecto: async () => ({ id: "proj_r-1", slug: "r", repo: "d/r", rama: "main", installCommand: "x", testCommand: "y" }),
+      leerConfiguracion: async () => ({ marca: null }),
+      configurar: async (_a: URL, _c: string, _r: string, cuerpo: unknown) => { enviado = cuerpo as Record<string, unknown>; return { status: 200, cuerpo: { marca: cuerpo } } as never; },
+      subirLogo: async () => ({}) as never, leerArchivoChico: () => ({ error: "x" }), avisar: () => {},
+    };
+    const r = await chatMarca(d, flags);
+    expect(r.codigo).toBe(0);
+    const claves = Object.keys((enviado.tema ?? {}) as object);
+    expect(claves.length).toBeGreaterThan(0);
+    for (const k of claves) expect(CLAVES_DEL_TEMA, `la clave de tema «${k}» del ejemplo`).toContain(k);
+    // Lo mismo, textual, en el README y en el aviso de formato del comando.
+    const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    for (const [donde, texto] of [["README", readme], ["ayuda", ayuda("chat brand")]] as const) {
+      for (const m of texto.matchAll(/--theme (?!key=)(\w+)=/g)) expect(CLAVES_DEL_TEMA, `${donde}: --theme ${m[1]}`).toContain(m[1]);
+    }
+    const mal = await chatMarca(d, { ...flags, theme: ["sin-igual"] });
+    for (const m of mal.texto.matchAll(/\(for example (\w+)=/g)) expect(CLAVES_DEL_TEMA).toContain(m[1]);
   });
 });

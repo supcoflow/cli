@@ -2,6 +2,7 @@
 // REAL (src/pruebas-guardadas.ts) sobre un almacén en memoria: lo que se prueba es el ciclo de la clave.
 import { describe, expect, it } from "vitest";
 import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento } from "../src/api.ts";
+import { leerArgumentos } from "../src/argumentos.ts";
 import { diagnosticar, probar, type DepsDePrueba } from "../src/comandos/probar.ts";
 import { FalloDeLaTerminal, SALIDA } from "../src/contrato.ts";
 import type { Almacen, Registro } from "../src/guardado/index.ts";
@@ -439,12 +440,11 @@ describe("test --authorize-spend exige --ceiling y --expect-policy, y manda esos
       expect(r.codigo).toBe(SALIDA.esperandoAUnaPersona);
       expect(m.posts).toEqual([{ key: "clave-1", mensaje: null, techoUsd: 2, politicaEsperada: null }]);
     });
-    it("el reintento del alias retoma el pedido guardado sin política y dice el comando sin --expect-policy", async () => {
+    it("el reintento del alias retoma el pedido guardado sin política", async () => {
       const m = motor();
       m.guion = ["pierde"];
       const { d } = deps(m);
-      const primero = await probar(d, { ...V, ceiling: "2" });
-      expect(primero.texto).toContain("`supcoflow test --authorize-spend --ceiling 2`");
+      await probar(d, { ...V, ceiling: "2" });
       expect((await probar(d, { ...V, ceiling: "2" })).codigo).toBe(SALIDA.esperandoAUnaPersona);
       expect(m.pruebas.size).toBe(1);
     });
@@ -772,6 +772,79 @@ describe("test --wait (R25)", () => {
       expect(m.posts).toEqual([]);
       expect(m.gets).toEqual([]);
       expect(m.diagnosticos).toBe(0);
+    }
+  });
+});
+
+// ─── Revisión 1, hallazgo 1: la orden que el mensaje recomienda tiene que SERVIR (se ejecuta de verdad, por el parser y el alias) ───
+describe("la orden de recuperación que imprime un mensaje se puede ejecutar", () => {
+  // Lo que escribiría la persona: se parte la orden recomendada, se pasa por `leerArgumentos` y se despacha como `cli.ts`.
+  const ordenes = (texto: string) => [...texto.matchAll(/`(supcoflow [^`]+)`/g)].map((x) => x[1]!).filter((o) => /--authorize-spend|--autorizo-gasto/.test(o));
+  async function ejecutar(d: DepsDePrueba, orden: string) {
+    const { comando, flags, viejos } = leerArgumentos(orden.replace(/^supcoflow /, "").split(" "));
+    expect(["test"], orden).toContain(comando);
+    return probar(d, { ...flags, viejo: viejos.includes("probar") || viejos.includes("--autorizo-gasto") });
+  }
+
+  it("un intento NUEVO (con política): la orden es la canónica y recupera la misma prueba", async () => {
+    const m = motor();
+    m.guion = ["pierde"];
+    const { d } = deps(m);
+    const primero = await probar(d, AUT);
+    const [orden] = ordenes(primero.texto);
+    expect(orden).toBe("supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate");
+    const r = await ejecutar(d, orden!);
+    expect(r.codigo).toBe(SALIDA.esperandoAUnaPersona);
+    expect(m.posts.map((p) => p.key)).toEqual(["clave-1", "clave-1"]);
+    expect(m.pruebas.size).toBe(1);
+  });
+
+  it("un intento SIN política (alias viejo, o guardado por la 0.7.0): la orden es la del alias y recupera la misma prueba (no 3 falta_politica ni 4 intento_pendiente)", async () => {
+    const m = motor();
+    m.guion = ["pierde"];
+    const { d } = deps(m);
+    const primero = await probar(d, { ...F, authorizeSpend: true, ceiling: "2", viejo: true });
+    const [orden] = ordenes(primero.texto);
+    expect(orden).toBe("supcoflow probar --autorizo-gasto --ceiling 2");
+    const r = await ejecutar(d, orden!);
+    expect(r.codigo, r.texto).toBe(SALIDA.esperandoAUnaPersona);
+    expect(m.posts.map((p) => [p.key, p.politicaEsperada])).toEqual([["clave-1", null], ["clave-1", null]]);
+    expect(m.pruebas.size).toBe(1);
+  });
+
+  it("un intento de la 0.7.0 guardado en disco (sin politica_esperada) se recupera con la orden que dicen los tres mensajes", async () => {
+    const m = motor();
+    const almacen = memoria();
+    almacen.datos.set("http://localhost:3000#prueba#proj_r-1", { valor: JSON.stringify({ intento: { clave: "vieja", mensaje: null, techo_usd: 2 }, ultima: null }), escritoEn: 1 });
+    const { d } = deps(m, almacen);
+    // 1) --wait con un pedido sin confirmar
+    const espera = await probar(d, { ...F, wait: true });
+    expect(espera.json.error).toBe("intento_pendiente");
+    // 2) un --ceiling distinto
+    const otro = await probar(d, { ...AUT, ceiling: "3" });
+    expect(otro.json.error).toBe("intento_pendiente");
+    for (const texto of [espera.texto, otro.texto]) {
+      const [orden] = ordenes(texto);
+      expect(orden, texto).toBe("supcoflow probar --autorizo-gasto --ceiling 2");
+    }
+    const r = await ejecutar(d, ordenes(espera.texto)[0]!);
+    expect(r.codigo, r.texto).toBe(SALIDA.esperandoAUnaPersona);
+    expect(m.posts).toEqual([{ key: "vieja", mensaje: null, techoUsd: 2, politicaEsperada: null }]);
+  });
+
+  it("cuando falla guardar la confirmación, la orden que se imprime también sirve (intento con y sin política)", async () => {
+    for (const [flags, esperada] of [[AUT, "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate"], [{ ...F, authorizeSpend: true, ceiling: "2", viejo: true }, "supcoflow probar --autorizo-gasto --ceiling 2"]] as const) {
+      const m = motor();
+      const almacen = memoria();
+      almacen.romper = (valor) => valor.includes("prb_");
+      const { d } = deps(m, almacen);
+      const r = await probar(d, flags);
+      expect(r.json.error).toBe("prueba_no_guardada");
+      expect(ordenes(r.texto)[0]).toBe(esperada);
+      almacen.romper = () => false;
+      const otra = await ejecutar(d, ordenes(r.texto)[0]!);
+      expect(otra.codigo, r.texto).toBe(SALIDA.esperandoAUnaPersona);
+      expect(m.pruebas.size).toBe(1);
     }
   });
 });

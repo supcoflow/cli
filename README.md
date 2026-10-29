@@ -82,7 +82,7 @@ owner/repo`, and the ones that write accept `--dry-run`.
 | `supcoflow catalog` | What can be configured and with which values. |
 | `supcoflow config` | The project's chat, sites, brand and data agreement. |
 | `supcoflow chat on` / `chat off` | Turns the chat on or off (a guide is needed: publish the repo's with `supcoflow guide publish`, or generate and approve our agent's in Brain). |
-| `supcoflow chat brand --title "Help" --theme accent=#0a7` | Title, greeting and colors; whatever isn't named stays as it was. |
+| `supcoflow chat brand --title "Help" --theme acento=#0a7` | Title, greeting and colors; whatever isn't named stays as it was. The `--theme` keys are the API's: `acento`, `fondo`, `texto`, `textoSuave`, `radio`, `fuente`. |
 | `supcoflow chat logo --file logo.png` | Uploads the logo (.png, .jpg or .webp, up to 200 KB). |
 | `supcoflow sites add\|remove --site https://app.example.com` | Sites the chat loads from. |
 | `supcoflow data set --allow user_id,attribute:plan` | Data agreement: it limits what is saved and what the AI that investigates reads; it doesn't cover what the chat's AI sees while it talks. The values are `user_id`, `user_role`, `page_and_browser`, `screenshots`, `elements`, `email`, `attribute:<name>` or `nothing`. |
