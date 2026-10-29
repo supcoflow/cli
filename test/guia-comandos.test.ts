@@ -58,7 +58,7 @@ describe("guide check", () => {
     const { d, pedidos } = deps();
     const r = await guiaRevisar(d, { repo: "otro/repo", dryRun: false });
     expect(r).toMatchObject({ codigo: 3, json: { error: "falta_guia" } });
-    expect(r.texto).toMatch(/stand in the repo's clone/);
+    expect(r.texto).toMatch(/This clone is github\.com\/d\/r, not otro\/repo\. The guide is read from .*in the repo's clone: stand in it\./);
     expect(pedidos).toEqual([]);
   });
   it("archivo enorme: 3 guia_muy_grande sin pedido; enlace: 3 guia_ilegible", async () => {
