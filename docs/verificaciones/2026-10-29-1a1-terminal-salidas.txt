@@ -1,0 +1,130 @@
+=== V-1(a) alias sin remoto
+{"ok":false,"error":"sin_repo","message":"I couldn't find a GitHub repo here (the \"origin\" remote isn't a GitHub repo). Your origin uses the SSH alias `github-gf0`, which I don't resolve. If this is dueno-a/app on GitHub, tell me once: `git remote add supcoflow https://github.com/dueno-a/app.git` (it's never fetched). Pass --repo owner/repo."}
+exit=3
+{"ok":false,"error":"sin_repo","message":"I couldn't find a GitHub repo here (the \"origin\" remote isn't a GitHub repo). Your origin uses the SSH alias `github-gf0`, which I don't resolve. If this is dueno-a/app on GitHub, tell me once: `git remote add supcoflow https://github.com/dueno-a/app.git` 
+=== V-1(b) con remoto supcoflow, sin --repo
+{"ok":true,"proyecto":"proj_app-a-00000001","chat":{"habilitado":false,"tope_mensajes_dia":200},"guia":null,"guia_aprobada":false,"marca":null,"sitios":[],"acuerdo":null,"politica":{"modo":"relevar","fijada_en":null}}
+exit=0
+
+{"ok":false,"error":"no_listo","message":"Something needs fixing before testing dueno-a/app.","proyecto":{"id":"proj_app-a-00000001","repo":"dueno-a/app"},"listo":false,"puntos":[{"punto":"sign-in","ok":true,"mensaje":"This request was authenticated: you're signed in.","grupo":"instalacion"},{"punto
+{"ok":true,"secciones":1,"ruta":".supcoflow/guide.md"}
+exit=0
+{"ok":true,"guia":{"origen":"repo","id":"gpb_5917896ec4704fc9","version":1,"repo":"dueno-a/app","procedencia":"terminal","rama":"main","commit":"f5a458251d81eef56d76812c302cb7f141974454","ruta":".supcoflow/guide.md","huella":"566326934cc292feee01a0acc60a87d6c6868efcaf1c06fee0cbbdaac9561795","seccion
+{"ok":true,"proyecto":{"id":"proj_app-a-00000001","slug":"app","repo":"dueno-a/app","rama":"main","install_command":"npm ci","test_command":"npm test"},"github":{"estado":null,"verificado_en":null},"contexto":{"equipo":"tnt_a","identidad":"dueno-a","identidad_tipo":"github","fuente":"env","repo":"dueno-a/app","proyecto":"proj_app-a-00000001","en_el_clon":{"estado":"ausente","id":null}}}
+exit=0
+
+=== preparar: sitio, chat y política save
+{"ok":true,"sitios":["https://app.example.com"]}
+exit=0
+
+{"ok":true,"habilitado":true}
+exit=0
+
+{"ok":true,"politica":{"modo":"guardar","fijada_en":"2026-10-29T20:23:19.973Z"}}
+exit=0
+
+=== V-1(b) diagnose (punto repo) e install record sin --repo
+{"listo":true,"inst":6,"repo":{"punto":"repo","ok":true,"mensaje":"The origin of this folder is dueno-a/app, the project's repo.","grupo":"instalacion"},"maquina":{"ok":true,"impedimentos":[]}}
+exit=0
+{"ok":true,"ruta":".supcoflow/instalacion.json","instalacion":{"version":2,"skill":"0.3.1","terminal":"0.8.1","chat":{"declarado":null,"instalado":null},"configuracion":{"acuerdo_version":null,"politica":"guardar","guia":{"origen":"repo","procedencia":"terminal","commit":"f5a458251d81eef56d76812c302cb7f141974454"}},"archivo":null},"archivo":null,"sin_cambios":false}
+exit=0
+
+=== V-1(c) clon de gitlab con --repo dueno-a/app
+{"ok":false,"error":"falta_guia","message":"This clone is `https://gitlab.com/dueno-a/app.git`, which I can't tie to github.com/dueno-a/app. If this is dueno-a/app on GitHub, tell me once: `git remote add supcoflow https://github.com/dueno-a/app.git` (it's never fetched). The guide is read from .supcoflow/guide.md in the repo's clone: stand in it."}
+exit=3
+{"ok":false,"error":"falta_guia","message":"This clone is `https://gitlab.com/dueno-a/app.git`, which I can't tie to github.com/dueno-a/app. If this is dueno-a/app on GitHub, tell me once: `git remote add supcoflow https://github.com/dueno-a/app.git` (it's never fetched). The guide is read from .supcoflow/guide.md in the repo's clone: stand in it."}
+exit=3
+{"ok":false,"error":"sin_clon","message":"This clone is `https://gitlab.com/dueno-a/app.git`, which I can't tie to github.com/dueno-a/app. If this is dueno-a/app on GitHub, tell me once: `git remote add supcoflow https://github.com/dueno-a/app.git` (it's never fetched). .supcoflow/instalacion.json goes in the repo's clone: stand in it."}
+exit=3
+--- (d) project create --repo en ese clon
+{"ok":true,"proyecto":{"id":"proj_app-a-00000001","slug":"app","repo":"dueno-a/app","rama":"main"},"reusado":true,"archivo":null}
+exit=0
+. .. .git 
+proyectos tnt_a: 1
+=== V-2: HOME es un repo; test sin autorizar primero (aviso temprano)
+{"error":"falta_autorizacion","techo_usd":2,"politica":"guardar","maquina":{"ok":true,"impedimentos":[]},"intento_pendiente":null}
+exit=4
+techo leído: 2
+{"ok":false,"esperando":"relevamiento","prueba_id":"prb_9fba155df18d4d67","reporte_id":"rpt_682c3e9222f84e59","estado":"guardado"}
+exit=5
+
+--- archivos en ~/.config/supcoflow:
+drwx------@ 4 germanflores  wheel  128 Oct 29 17:23 .
+drwx------@ 3 germanflores  wheel   96 Oct 29 17:23 ..
+-rw-------@ 1 germanflores  wheel   65 Oct 29 17:23 .gitignore
+-rw-------@ 1 germanflores  wheel  166 Oct 29 17:23 pruebas.json
+# Written by supcoflow: nothing in this folder belongs in git.
+*
+índice del home tras git add -A: []
+pruebas en la base: 1
+=== V-2b: pruebas.json ya seguido
+commit ok
+{"maquina":{"ok":false,"impedimentos":[{"codigo":"git_no_lo_ignora","detalle":"Git doesn't ignore /tmp/fm-1a1-terminal/v/home2/.config/supcoflow/pruebas.json in the repo /tmp/fm-1a1-terminal/v/home2 (it is tracked or staged, or a .gitignore doesn't cover it). Take it out of the repo with `git -C /tmp/fm-1a1-terminal/v/home2 rm --cached -- .config/supcoflow/pruebas.json` or have git ignore it; I won't touch your repo myself."}]}}
+exit=4
+{"ok":false,"error":"prueba_no_guardada","message":"I'm not saving the test request in /tmp/fm-1a1-terminal/v/home2/.config/supcoflow/pruebas.json; without saving it I won't send it. Git doesn't ignore /tmp/fm-1a1-terminal/v/home2/.config/supcoflow/pruebas.json in the repo /tmp/fm-1a1-terminal/v/home2 (it is tracked or staged, or a .gitignore doesn't cover it). Take it out of the repo with `git -C /tmp/fm-1a1-terminal/v/home2 rm --cached -- .config/supcoflow/pruebas.json` or have git ignore it; I won't touch your repo myself."}
+exit=1
+
+pruebas en la base (no cambia): 1
+estado del home: []
+--- idempotencia.json seguido y project create que reusa
+{"ok":true,"proyecto":{"id":"proj_app-a-00000001","slug":"app","repo":"dueno-a/app","rama":"main"},"reusado":true,"archivo":"/tmp/fm-1a1-terminal/v/clon-alias/.supcoflow/proyecto.json"}
+exit=0
+
+git diff del home: []
+=== V-7 motor local: clave del equipo B, clon con el archivo del proyecto de A
+{  "id": "proj_app-a-00000001",  "slug": "app",  "repo": "dueno-a/app"}
+ERROR:  aggregate functions are not allowed in GROUP BY
+LINE 1: select tenant_id||':'||count(*) from projects group by 1 ord...
+                               ^
+proyectos antes: 
+{"ok":false,"error":"contexto_incoherente","motivo":"proyecto_del_clon_distinto","message":"The project noted in this clone (proj_app-a-00000001) isn't the one your account sees for this repo (none). Check which account you signed in with (`supcoflow whoami`), or, if that file is old, review it.","repo":"dueno-a/app","en_el_clon":{"estado":"valido","id":"proj_app-a-00000001"},"proyecto":null}
+exit=4
+{"ok":false,"error":"contexto_incoherente","motivo":"proyecto_del_clon_distinto","message":"The project noted in this clone (proj_app-a-00000001) isn't the one your account sees for this repo (none). Check which account you signed in with (`supcoflow whoami`), or, if that file is old, review it.","repo":"dueno-a/app","en_el_clon":{"estado":"valido","id":"proj_app-a-00000001"},"proyecto":null}
+exit=4
+{"ok":false,"error":"contexto_incoherente","motivo":"proyecto_del_clon_distinto","message":"The project noted in this clone (proj_app-a-00000001) isn't the one your account sees for this repo (none). Check which account you signed in with (`supcoflow whoami`), or, if that file is old, review it.","repo":"dueno-a/app","en_el_clon":{"estado":"valido","id":"proj_app-a-00000001"},"proyecto":null}
+exit=4
+{"ok":false,"error":"contexto_incoherente","motivo":"proyecto_del_clon_distinto","message":"The project noted in this clone (proj_app-a-00000001) isn't the one your account sees for this repo (none). Check which account you signed in with (`supcoflow whoami`), or, if that file is old, review it.","repo":"dueno-a/app","en_el_clon":{"estado":"valido","id":"proj_app-a-00000001"},"proyecto":null}
+exit=4
+ERROR:  aggregate functions are not allowed in GROUP BY
+LINE 1: select tenant_id||':'||count(*) from projects group by 1 ord...
+                               ^
+proyectos después:  conexiones: n/a
+--- (4) sin archivo del clon: dueño dueno-a vs login dueno-b
+{"ok":false,"error":"contexto_incoherente","motivo":"dueno_distinto_del_login","message":"This repo's owner on GitHub (@dueno-a) isn't the GitHub account your key shows (@dueno-b). If you renamed your GitHub account, sign in to the Supcoflow console with GitHub again (that updates it) and run this again; otherwise sign in as @dueno-a. Your key comes from SUPCOFLOW_TOKEN, which wins over a new login: unset it or replace it first; I don't touch it.","repo":"dueno-a/app","dueno":"dueno-a","login":"dueno-b","fuente":"env"}
+exit=4
+{"ok":true,"repo":"dueno-a/app","proyecto":null,"contexto":{"equipo":"tnt_b","identidad":"dueno-b","identidad_tipo":"github","fuente":"env","repo":"dueno-a/app","proyecto":null,"en_el_clon":{"estado":"ausente","id":null}}}
+exit=0
+--- (3) archivo roto
+{"ok":false,"error":"contexto_incoherente","motivo":"archivo_del_clon_ilegible","message":"I can't read `.supcoflow/proyecto.json` in this clone; I won't act on this repo until it's readable. Look at it before going on.","repo":"dueno-a/app","en_el_clon":{"estado":"ilegible","id":null}}
+exit=4
+{"ok":false,"error":"contexto_incoherente","motivo":"archivo_del_clon_ilegible","message":"I can't read `.supcoflow/proyecto.json` in this clone; I won't act on this repo until it's readable. Look at it before going on.","repo":"dueno-a/app","en_el_clon":{"estado":"ilegible","id":null}}
+exit=4
+--- equipo A (el mismo archivo coherente): show
+{"ok":true,"proyecto":{"id":"proj_app-a-00000001","slug":"app","repo":"dueno-a/app","rama":"main","install_command":"npm ci","test_command":"npm test"},"github":{"estado":null,"verificado_en":null},"contexto":{"equipo":"tnt_a","identidad":"dueno-a","identidad_tipo":"github","fuente":"env","repo":"dueno-a/app","proyecto":"proj_app-a-00000001","en_el_clon":{"estado":"valido","id":"proj_app-a-00000001"}}}
+exit=0
+
+tnt_a|1
+--- carpeta sin permiso
+  test: maquina.ok=false carpeta_sin_permiso
+  diagnose: listo=false prueba.listo=false N=6/6 error=no_listo
+exit=4
+--- padre no escribible
+  test: maquina.ok=false padre_sin_permiso
+  diagnose: listo=false prueba.listo=false N=6/6 error=no_listo
+exit=4
+--- enlace roto
+  test: maquina.ok=false ruta_irresoluble
+  diagnose: listo=false prueba.listo=false N=6/6 error=no_listo
+exit=4
+--- .tmp es carpeta
+  test: maquina.ok=false tmp_es_carpeta
+  diagnose: listo=false prueba.listo=false N=6/6 error=no_listo
+exit=4
+--- archivo ilegible
+  test: maquina.ok=false archivo_ilegible
+  diagnose: listo=false prueba.listo=false N=6/6 error=no_listo
+exit=4
+--- máquina sana
+  test: maquina.ok=true 
+  diagnose: listo=true prueba.listo=true N=6/6 error=undefined
+exit=0
