@@ -1,5 +1,6 @@
 // Los pedidos de la terminal al motor. Sin dependencias: `fetch` viene de Node y se inyecta.
 import { FalloDeLaTerminal, SALIDA, taparSecretos } from "./contrato.ts";
+import { esSemver } from "./instalacion.ts";
 
 // La URL viene FIJA (§5.2): si un archivo del repo pudiera cambiarla, clonar un repo ajeno y correr
 // `supcoflow` mandaría el token a un servidor ajeno. Sólo el entorno del proceso la mueve, y `http`
@@ -26,7 +27,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.8.1";
+const VERSION = "0.9.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -387,6 +388,16 @@ export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen
 
 // ---- El widget (bloque 6) ----
 
+// T8 (chat agnóstico al estilo): la forma «interfaz propia». El agente de código de la app construye el chat con los
+// componentes de la app; Supcoflow sólo dice qué instalar y qué contrato cumplir. Por eso acá no hay `contenido` ni código para
+// pegar: el paquete con su versión exacta, los ids, el backend, la línea de CSP y la versión del contrato de presentación.
+// El campo es ADITIVO: el motor de antes no lo manda y la forma de siempre sigue valiendo.
+export type InterfazPropia = {
+  paquete: "@supcoflow/chat"; version: string; instalar: string;
+  tenant_id: string; project_id: string; backend_url: string; csp: string;
+  contrato_version: string;
+};
+
 export type Widget = {
   tenant_id: string; project_id: string; backend_url: string;
   paquete: "@supcoflow/chat"; version: string; instalar: string;
@@ -394,6 +405,7 @@ export type Widget = {
   nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; archivos_anteriores: string[]; contenido: string; uso: string };
   script: { estado: "disponible_sin_soporte"; linea: string };
   csp: string;
+  interfaz_propia?: InterfazPropia;
 };
 
 // Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
@@ -411,12 +423,27 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
   if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
     || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
     || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
+  const propia = aInterfazPropia(v.interfaz_propia);
+  if (propia === null) throw inesperada(status);
   return {
     tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, paquete: "@supcoflow/chat", version, instalar,
     nextjs: { estado: n.estado, archivo_sugerido: archivo, archivos_anteriores: anteriores, contenido, uso },
     script: { estado: "disponible_sin_soporte", linea },
     csp,
+    ...(propia === undefined ? {} : { interfaz_propia: propia }),
   };
+}
+
+// `undefined` es «el motor no la manda» (producción de hoy; también `null`); `null` es «la mandó a medias»; y una lista cerrada de
+// campos: lo que el motor sume mañana dentro de `interfaz_propia` no se copia (como el resto del widget).
+function aInterfazPropia(v: unknown): InterfazPropia | undefined | null {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const [version, instalar, tenantId, projectId, backendUrl, csp, contrato] =
+    [o.version, o.instalar, o.tenant_id, o.project_id, o.backend_url, o.csp, o.contrato_version].map(texto);
+  if (!version || !instalar || !tenantId || !projectId || !backendUrl || !csp || !contrato || !esSemver(contrato) || o.paquete !== "@supcoflow/chat") return null;
+  return { paquete: "@supcoflow/chat", version, instalar, tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, csp, contrato_version: contrato };
 }
 
 // Una lista de textos no vacíos; ausente es lista vacía (un motor sin el campo), y cualquier otra forma es null.

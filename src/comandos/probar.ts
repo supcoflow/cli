@@ -21,10 +21,12 @@
 //
 // `--wait` sigue la prueba por tramos (≤ 90 s el comando entero, como `login --wait`): el estado lo deriva
 // el motor en cada llamada y acá sólo se traduce a un código de salida con la tabla de la prueba.
-import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento } from "../api.ts";
+import path from "node:path";
+import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento, Widget } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
-import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeSesion, puntoDelRepo, TOTAL_DE_INSTALACION, type Punto } from "../diagnostico.ts";
+import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeLaInterfaz, puntoDeSesion, puntoDelRepo, TOTAL_DE_INSTALACION, type Punto } from "../diagnostico.ts";
+import { leerInstalacionAnotada, RUTA_DE_LA_INSTALACION, type LecturaDeLaInstalacion } from "../instalacion.ts";
 import type { PoliticaEsperada, RegistroDePruebas, RevisionDeLaMaquina } from "../pruebas-guardadas.ts";
 import { leerRepoLocal } from "../repo-local.ts";
 import { PLAZO_MINIMO_DE_SONDEO_MS, TRAMO_MAXIMO_MS } from "../sondeo.ts";
@@ -33,6 +35,8 @@ import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-rep
 
 export type DepsDePrueba = DepsDelProyectoDelRepo & {
   leerDiagnostico(api: URL, clave: string, proyectoId: string): Promise<Diagnostico>;
+  /** T8: para el punto 7 (¿qué contrato declara el proyecto hoy?). Opcional: sin él, o si falla, no se compara y no se inventa una diferencia. */
+  leerWidget?(api: URL, clave: string, proyectoId: string): Promise<Widget>;
   pedirPrueba(api: URL, clave: string, proyectoId: string, intento: IntentoDePrueba): Promise<RespuestaDePrueba>;
   leerPrueba(api: URL, clave: string, proyectoId: string, pruebaId: string, plazoMs: number): Promise<Seguimiento>;
   pruebas: RegistroDePruebas;
@@ -116,6 +120,38 @@ function puntoDeLaMaquina(r: RevisionDeLaMaquina): Punto {
     : { punto: "maquina", ok: false, mensaje: `This machine can't save the test request yet: ${detalles(r)}`, grupo: "prueba" };
 }
 
+// El punto 7 (T8): lee `.supcoflow/instalacion.json` del clon y, sólo si hay una interfaz propia anotada, mira que sus archivos
+// sigan y le pregunta al proyecto qué contrato declara hoy. Todo lo que no se pueda mirar queda «sin mirar», nunca en contra.
+async function puntoDeLaInterfazDeEsteClon(
+  d: DepsDePrueba, local: Awaited<ReturnType<typeof leerRepoLocal>>, proyecto: { id: string; repo: string }, clave: string,
+): Promise<Punto> {
+  const esElClon = local.raiz !== null && local.repo !== null && local.repo.toLowerCase() === proyecto.repo.toLowerCase();
+  if (!esElClon || d.archivos === undefined) return puntoDeLaInterfaz({ lectura: null, faltan: [], delProyecto: null });
+  let lectura: LecturaDeLaInstalacion;
+  try {
+    lectura = leerInstalacionAnotada(d.archivos.leer(path.join(local.raiz!, RUTA_DE_LA_INSTALACION)));
+  } catch {
+    lectura = { estado: "ilegible" };
+  }
+  if (lectura.estado !== "leida" || lectura.forma !== "interfaz_propia") return puntoDeLaInterfaz({ lectura, faltan: [], delProyecto: null });
+  const faltan = lectura.archivos.filter((f) => {
+    try {
+      return d.archivos!.leer(path.join(local.raiz!, f)) === null;
+    } catch {
+      return true;
+    }
+  });
+  let delProyecto: string | null = null;
+  if (d.leerWidget !== undefined) {
+    try {
+      delProyecto = (await d.leerWidget(d.api, clave, proyecto.id)).interfaz_propia?.contrato_version ?? null;
+    } catch {
+      delProyecto = null; // no se pudo preguntar: no se compara
+    }
+  }
+  return puntoDeLaInterfaz({ lectura, faltan, delProyecto });
+}
+
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
@@ -133,10 +169,10 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   } catch {
     local = { repo: null, raiz: null, motivo: "sin_git" };
   }
-  const agrupados = agruparPuntos(g, [puntoDeSesion(), puntoDelRepo(local, p.proyecto.repo)]);
+  const agrupados = agruparPuntos(g, [puntoDeSesion(), puntoDelRepo(local, p.proyecto.repo), await puntoDeLaInterfazDeEsteClon(d, local, p.proyecto, p.clave)]);
   const instalacion = agrupados.instalacion;
   // El punto local de la prueba (1A.1): ¿esta máquina puede guardar el pedido? Si no, la prueba no entra, y se dice acá y
-  // no después del OK de gasto. No cuenta en el «N of 6» de la instalación.
+  // no después del OK de gasto. No cuenta en el «N of 7» de la instalación.
   const revision = await revisarLaMaquina(d, p.proyecto.id);
   const prueba = [puntoDeLaMaquina(revision), ...agrupados.prueba];
   const buenos = contarBuenos(instalacion);

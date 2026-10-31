@@ -1,4 +1,4 @@
-// `.supcoflow/instalacion.json` (bloque 6, decisión 3; v2 en la 0.8.0): con qué versiones se hizo la instalación, anotado en el
+// `.supcoflow/instalacion.json` (bloque 6, decisión 3; v2 en la 0.8.0; v3 en la 0.9.0): con qué versiones se hizo la instalación, anotado en el
 // repo de quien instala. Supcoflow no lo guarda ni lo ve. Puro: recibe lo ya leído y arma el archivo.
 //
 // El archivo queda en el repo y se commitea: un secreto acá se publica con el primer `push`. Por eso se arma con
@@ -13,21 +13,45 @@ export const PAQUETE_DEL_CHAT = "@supcoflow/chat";
 // y cada campo que se usa se valida acá.
 export type Configuracion = Record<string, unknown>;
 
-// v2 (0.8.0) suma `archivo`: el archivo del chat que ya se instaló, para que re-correr el go lo actualice en su
-// lugar y no monte un segundo chat. Un archivo v1 (sin `version` ni `archivo`) se lee igual y da `archivo: null`.
+// v2 (0.8.0) sumó `archivo`: el archivo del chat que ya se instaló, para que re-correr el go lo actualice en su lugar
+// y no monte un segundo chat. v3 (0.9.0, T8 del chat agnóstico al estilo) lo cambia por tres campos:
+//   · `forma`: qué se instaló: el widget (`"widget"`) o una interfaz construida por el agente de código de la app con los
+//     componentes de la app (`"interfaz_propia"`); `null` si no se sabe.
+//   · `archivos`: los archivos de esa instalación (uno para el widget; varios para una interfaz propia), rutas relativas a
+//     la raíz del repo.
+//   · `contrato`: la versión del contrato de presentación que trae el paquete instalado (su `contract.json`), o `null` si
+//     el paquete no lo trae (un `@supcoflow/chat` anterior al contrato).
+// Un archivo v1 (sin `version` ni `archivo`) y uno v2 se leen igual: el `archivo` de la v2 sólo existió para el widget.
+export type Forma = "widget" | "interfaz_propia";
+export const FORMAS: readonly Forma[] = ["widget", "interfaz_propia"];
+export const MAX_ARCHIVOS_ANOTADOS = 20;
+
 export type Instalacion = {
-  version: 2; skill: string; terminal: string;
+  version: 3; skill: string; terminal: string;
   chat: { declarado: string | null; instalado: string | null };
   configuracion: {
     acuerdo_version: number | null; politica: "relevar" | "guardar";
     guia: { origen: "repo"; procedencia: "terminal" | "github"; commit: string | null } | { origen: "agente"; version: number } | null;
   };
-  archivo: string | null;
+  forma: Forma | null;
+  archivos: string[];
+  contrato: string | null;
 };
 
 // SemVer 2.0 tal cual, con tope de largo: la versión de la skill la escribe un asistente y queda en el repo.
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 export const esSemver = (s: string): boolean => s.length <= 64 && SEMVER.test(s);
+
+/** Compara `major.minor.patch` número a número (1.10.0 > 1.9.0); lo que sigue al guion (prerelease) o al `+` no cuenta. */
+export function compararSemver(a: string, b: string): number {
+  const partes = (v: string) => v.split(/[-+]/)[0]!.split(".").map(Number);
+  const [x, y] = [partes(a), partes(b)];
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0);
+    if (d !== 0) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
 
 const objeto = (v: unknown): Record<string, unknown> | null => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 const entero = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1;
@@ -87,16 +111,28 @@ function guiaDe(c: Configuracion): Instalacion["configuracion"]["guia"] {
   throw inesperada("a guide");
 }
 
+// El `contract.json` del paquete instalado (T1 del sdk): sólo se copia su `version`, nunca el resto. Ausente es null (un
+// paquete anterior al contrato); presente sin una versión que se entienda NO es null: diría que no hay contrato.
+function contratoDe(contrato: unknown): string | null {
+  if (contrato === null || contrato === undefined) return null;
+  const v = objeto(contrato)?.version;
+  if (typeof v !== "string" || !esSemver(v)) throw ilegible(`The contract.json of ${PAQUETE_DEL_CHAT} has no version I understand.`);
+  return v;
+}
+
 export function armarInstalacion(i: {
-  skill: string; terminal: string; paqueteDeLaApp: unknown; paqueteInstalado: unknown; configuracion: Configuracion; archivo?: string | null;
+  skill: string; terminal: string; paqueteDeLaApp: unknown; paqueteInstalado: unknown; configuracion: Configuracion;
+  forma?: Forma | null; archivos?: string[]; contrato?: unknown;
 }): Instalacion {
   return {
-    version: 2,
+    version: 3,
     skill: i.skill,
     terminal: i.terminal,
     chat: { declarado: declaradoEn(i.paqueteDeLaApp), instalado: instaladoEn(i.paqueteInstalado) },
     configuracion: { acuerdo_version: acuerdoDe(i.configuracion), politica: politicaDe(i.configuracion), guia: guiaDe(i.configuracion) },
-    archivo: i.archivo ?? null,
+    forma: i.forma ?? null,
+    archivos: [...(i.archivos ?? [])],
+    contrato: contratoDe(i.contrato),
   };
 }
 
@@ -120,21 +156,66 @@ export function validarElArchivoDelChat(crudo: string): RutaDelChat {
   return { ok: true, ruta: partes.join("/") };
 }
 
-/** El `archivo` anotado en un `instalacion.json` ya existente: v1 y cualquier cosa ilegible o inválida dan null (nunca un error). */
-export function archivoAnotado(texto: string | null): string | null {
-  if (texto === null) return null;
+export type Anotado = { forma: Forma | null; archivos: string[]; contrato: string | null };
+export type LecturaDeLaInstalacion = { estado: "ausente" } | { estado: "ilegible" } | ({ estado: "leida" } & Anotado);
+const SIN_NADA: Anotado = { forma: null, archivos: [], contrato: null };
+
+// Una lista de rutas anotadas: cada una tiene que ser válida Y estar ya normalizada (es como la escribe esta terminal); lo
+// que no, se descarta de a una, sin error. Sin repetidas y con tope.
+function rutasAnotadas(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const rutas: string[] = [];
+  for (const a of v) {
+    if (typeof a !== "string") continue;
+    const r = validarElArchivoDelChat(a);
+    if (r.ok && r.ruta === a && !rutas.includes(a) && rutas.length < MAX_ARCHIVOS_ANOTADOS) rutas.push(a);
+  }
+  return rutas;
+}
+
+/**
+ * Lo que un `instalacion.json` ya existente dice de la forma, los archivos y el contrato. v1 y cualquier cosa ilegible o inválida
+ * dan «nada»; una versión que esta terminal no conoce (4 o más) tampoco se adivina. Nunca un error.
+ */
+export function leerInstalacionAnotada(texto: string | null): LecturaDeLaInstalacion {
+  if (texto === null) return { estado: "ausente" };
   let v: unknown;
   try {
     v = JSON.parse(texto);
   } catch {
-    return null;
+    return { estado: "ilegible" };
   }
-  // AD9: un v1 se reconoce por `version: 1` (lo escribe la terminal 0.7.0) y no tiene archivo, aunque el campo aparezca.
-  if (objeto(v)?.version === 1) return null;
-  const a = objeto(v)?.archivo;
-  if (typeof a !== "string") return null;
-  const r = validarElArchivoDelChat(a);
-  return r.ok && r.ruta === a ? a : null;
+  const o = objeto(v);
+  if (o === null) return { estado: "ilegible" };
+  // v1 se reconoce por `version: 1` (la 0.7.0) y no tiene archivo, aunque el campo aparezca.
+  if (o.version === 2) {
+    const a = typeof o.archivo === "string" ? validarElArchivoDelChat(o.archivo) : null;
+    // El `archivo` de la v2 sólo existió para el widget.
+    return a !== null && a.ok && a.ruta === o.archivo ? { estado: "leida", forma: "widget", archivos: [a.ruta], contrato: null } : { estado: "leida", ...SIN_NADA };
+  }
+  if (o.version === 3) {
+    const forma = FORMAS.find((f) => f === o.forma) ?? null;
+    const contrato = typeof o.contrato === "string" && esSemver(o.contrato) ? o.contrato : null;
+    return { estado: "leida", forma, archivos: rutasAnotadas(o.archivos), contrato };
+  }
+  return { estado: "leida", ...SIN_NADA };
+}
+
+export function anotadoEn(texto: string | null): Anotado {
+  const l = leerInstalacionAnotada(texto);
+  return l.estado === "leida" ? { forma: l.forma, archivos: l.archivos, contrato: l.contrato } : SIN_NADA;
+}
+
+/** Valida y normaliza la lista de `--file`: cada ruta con `validarElArchivoDelChat`, sin repetidas, con tope. */
+export function validarLosArchivos(crudos: string[]): { ok: true; rutas: string[] } | { ok: false; motivo: string } {
+  const rutas: string[] = [];
+  for (const crudo of crudos) {
+    const r = validarElArchivoDelChat(crudo);
+    if (!r.ok) return r;
+    if (!rutas.includes(r.ruta)) rutas.push(r.ruta);
+  }
+  if (rutas.length > MAX_ARCHIVOS_ANOTADOS) return { ok: false, motivo: `--file goes up to ${MAX_ARCHIVOS_ANOTADOS} times: the files of the chat, not the whole app.` };
+  return { ok: true, rutas };
 }
 
 // El orden de las claves es el de `armarInstalacion`: el mismo estado da los mismos bytes, y eso es `sin_cambios`.

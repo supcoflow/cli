@@ -256,6 +256,7 @@ describe("diagnose: el punto 7, la interfaz", () => {
     ...(v === null ? {} : { interfaz_propia: { ...DEL_MOTOR, contrato_version: v } }),
   });
   const archivos = (m: Record<string, string>) => ({ leer: (p: string) => m[p] ?? null });
+  const fuera = { git: async () => ({ codigo: 128, stdout: "" }) };
   const TODOS = { [`${RAIZ}/src/chat/panel.tsx`]: "x", [`${RAIZ}/src/chat/use-chat.ts`]: "x" };
   async function punto(m: Record<string, string>, o: Partial<DepsDePrueba> = {}) {
     const { d } = deps(motor(), undefined, { archivos: archivos(m), ...o });

@@ -31,6 +31,8 @@ const motor = {
   pruebasPorClave: new Map<string, string>(),
   clavesDePrueba: [] as string[],
   estadoDePrueba: "issue_creado",
+  // T8: el contrato que declara la «interfaz propia» del /widget; null es el motor de hoy, que no manda el campo.
+  contratoDeclarado: null as string | null,
 };
 // La clave que el motor falso devuelve al crear una de consulta: nada de lo que imprima la terminal puede contenerla.
 const CLAVE_FALSA = `scf_${"1234567890abcdef"}_${"fedcba0987654321".repeat(4)}`;
@@ -48,6 +50,11 @@ const WIDGET = {
   script: { estado: "disponible_sin_soporte", linea: "<script src=\"https://chat.supcoflow.dev/w.js\"></script>" },
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
+const INTERFAZ_PROPIA = (contrato: string) => ({
+  paquete: "@supcoflow/chat", version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
+  tenant_id: "tnt_1", project_id: PROYECTO.id, backend_url: "https://chat.supcoflow.dev",
+  csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: contrato,
+});
 const pedidosAlMotor: string[] = [];
 let servidor: Server;
 let api: string;
@@ -74,7 +81,9 @@ beforeAll(async () => {
       if (ruta === `${base}/configuracion`) {
         return responder(res, 200, { chat: { habilitado: false }, sitios: [], marca: null, acuerdo: null, politica: { modo: "relevar" }, guia: null });
       }
-      if (metodo === "GET" && ruta === `${base}/widget`) return responder(res, 200, WIDGET);
+      if (metodo === "GET" && ruta === `${base}/widget`) {
+        return responder(res, 200, motor.contratoDeclarado === null ? WIDGET : { ...WIDGET, interfaz_propia: INTERFAZ_PROPIA(motor.contratoDeclarado) });
+      }
       // La guía: el motor falso contesta lo mínimo que la terminal sabe leer.
       if (metodo === "POST" && ruta === `${base}/guia/revisar`) return responder(res, 200, { ok: true, secciones: 1 });
       if (metodo === "POST" && ruta === `${base}/guia/publicar`) {
@@ -487,6 +496,69 @@ describe("supcoflow sin terminal", () => {
       expect(JSON.parse(r.stdout)).toEqual({ ok: true, ...WIDGET });
     });
 
+    it("T8: `widget --json` con un motor que describe la interfaz propia la deja pasar; con el de hoy (sin el campo) no inventa nada", async () => {
+      try {
+        motor.contratoDeclarado = "1.1.0";
+        const con = await correrSinTty(["widget", "--json", "--repo", "d/r"], { conClave: true });
+        expect(con.codigo).toBe(0);
+        expect(JSON.parse(con.stdout)).toEqual({ ok: true, ...WIDGET, interfaz_propia: INTERFAZ_PROPIA("1.1.0") });
+        const texto = await correrSinTty(["widget", "--repo", "d/r"], { conClave: true });
+        expect(texto.stdout).toContain("Own interface");
+        expect(texto.stdout).toContain("Presentation contract: 1.1.0");
+        motor.contratoDeclarado = null;
+        const sin = await correrSinTty(["widget", "--json", "--repo", "d/r"], { conClave: true });
+        expect(JSON.parse(sin.stdout)).toEqual({ ok: true, ...WIDGET });
+        expect(sin.stdout).not.toContain("interfaz_propia");
+      } finally {
+        motor.contratoDeclarado = null;
+      }
+    });
+
+    it("T8, de punta a punta: `install record --shape own-interface --file … --file …` anota v3 y `diagnose` mira el punto 7", async () => {
+      const repo = repoDeGit();
+      const paquete = join(repo, "node_modules", "@supcoflow", "chat");
+      mkdirSync(paquete, { recursive: true });
+      mkdirSync(join(repo, "src", "chat"), { recursive: true });
+      await writeFile(join(paquete, "package.json"), JSON.stringify({ name: "@supcoflow/chat", version: "2.4.0" }));
+      await writeFile(join(paquete, "contract.json"), JSON.stringify({ name: "supcoflow-presentation-contract", version: "1.1.0", points: [] }));
+      await writeFile(join(repo, "src", "chat", "panel.tsx"), "x");
+      await writeFile(join(repo, "src", "chat", "use-chat.ts"), "x");
+      const puntoDe = (stdout: string) => (JSON.parse(stdout).instalacion.puntos as { punto: string; ok: boolean; mensaje: string }[]).find((p) => p.punto === "interfaz")!;
+      try {
+        const r = await correrSinTty(["install", "record", "--skill", "0.4.0", "--shape", "own-interface", "--file", "src/chat/panel.tsx", "--file", "src/chat/use-chat.ts", "--json"], { conClave: true, cwd: repo });
+        expect(r.codigo, r.stdout).toBe(0);
+        expect(JSON.parse(r.stdout)).toMatchObject({ forma: "interfaz_propia", archivos: ["src/chat/panel.tsx", "src/chat/use-chat.ts"], archivo: "src/chat/panel.tsx", contrato: "1.1.0" });
+        expect(JSON.parse(await readFile(join(repo, ".supcoflow", "instalacion.json"), "utf8"))).toMatchObject({
+          version: 3, forma: "interfaz_propia", archivos: ["src/chat/panel.tsx", "src/chat/use-chat.ts"], contrato: "1.1.0",
+        });
+
+        motor.contratoDeclarado = "1.1.0";
+        const bien = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(bien.codigo, bien.stdout).toBe(0);
+        expect(JSON.parse(bien.stdout).instalacion).toMatchObject({ ok: 7, total: 7 });
+        expect(puntoDe(bien.stdout)).toMatchObject({ ok: true });
+        expect(puntoDe(bien.stdout).mensaje).toContain("contract 1.1.0");
+
+        // El proyecto pasa a declarar un contrato más nuevo: un aviso, no un freno de la prueba.
+        motor.contratoDeclarado = "1.2.0";
+        const nuevo = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(nuevo.codigo, nuevo.stdout).toBe(0);
+        expect(puntoDe(nuevo.stdout)).toMatchObject({ ok: false });
+        expect(puntoDe(nuevo.stdout).mensaje).toContain("1.2.0");
+        expect(JSON.parse(nuevo.stdout).instalacion).toMatchObject({ ok: 6, total: 7 });
+
+        // Con el motor de hoy (sin el campo nuevo) no se compara, y un archivo que se borró sí se nota.
+        motor.contratoDeclarado = null;
+        rmSync(join(repo, "src", "chat", "use-chat.ts"));
+        const falta = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(puntoDe(falta.stdout)).toMatchObject({ ok: false });
+        expect(puntoDe(falta.stdout).mensaje).toContain("src/chat/use-chat.ts");
+        expect(r.stdout + falta.stdout).not.toMatch(/scf_[0-9a-f]{16}_/);
+      } finally {
+        motor.contratoDeclarado = null;
+      }
+    }, 60_000);
+
     it("`widget` sin proyecto en el repo sale 4 sin_proyecto", async () => {
       motor.proyectoExiste = false;
       try {
@@ -517,7 +589,7 @@ describe("supcoflow sin terminal", () => {
       expect(r.stdout.trimEnd().split("\n")).toHaveLength(1);
       const anotado = JSON.parse(await readFile(join(repo, ".supcoflow", "instalacion.json"), "utf8"));
       const pkg = JSON.parse(await readFile(join(RAIZ, "package.json"), "utf8")) as { version: string };
-      expect(anotado).toMatchObject({ version: 2, archivo: null, skill: "0.1.0", terminal: pkg.version, chat: { declarado: null, instalado: null } });
+      expect(anotado).toMatchObject({ version: 3, forma: null, archivos: [], contrato: null, skill: "0.1.0", terminal: pkg.version, chat: { declarado: null, instalado: null } });
       expect(anotado.configuracion).toEqual({ acuerdo_version: null, politica: "relevar", guia: null });
       expect(r.stdout + r.stderr).not.toMatch(/scf_[0-9a-f]{16}_/);
       // Repetir sin cambios no toca nada.

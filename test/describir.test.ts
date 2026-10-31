@@ -182,8 +182,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.8.1", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.1" });
+  it("describe --json se escribe en una sola línea con la versión 0.9.0", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.9.0" });
   });
 });
 

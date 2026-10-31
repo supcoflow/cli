@@ -535,6 +535,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar), pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
+      leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch),
       pedirPrueba: (a, clave, id, intento) => pedirPrueba(a, clave, id, intento, fetch),
       leerPrueba: (a, clave, id, pruebaId, plazoMs) => leerPrueba(a, clave, id, pruebaId, fetch, plazoMs),
     },
