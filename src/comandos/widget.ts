@@ -11,21 +11,28 @@ export type DepsDeWidget = DepsDelProyectoDelRepo & {
 };
 
 // La forma «interfaz propia» (T8): sin código para pegar. La app arma el chat con sus propios componentes; esto es lo que
-// hay que instalar y el contrato que la interfaz tiene que cumplir. Todo sale del motor, tal cual.
+// hay que instalar y el contrato que la interfaz tiene que cumplir. Todo sale del motor, tal cual (también las rutas). Con
+// `sin_publicar` la versión todavía no está en npm: no se ofrece el camino (ni un `npm i` que fallaría); el JSON sí lo dice.
 function textoDeLaInterfazPropia(p: InterfazPropia): string[] {
+  if (p.estado !== "disponible") {
+    return ["", `Own interface: not published yet (${p.paquete}@${p.version} is not on npm); use the widget above.`];
+  }
   return [
     "",
     "Own interface (build the chat with the app's own components, instead of steps 2 and 3; there is no code to paste):",
     "   Install the package (the exact version):",
     `   ${p.instalar}`,
-    `   tenantId: ${p.tenant_id}`,
-    `   projectId: ${p.project_id}`,
+    `   tenantId: ${p.opciones_del_nucleo.tenantId}`,
+    `   projectId: ${p.opciones_del_nucleo.projectId}`,
     `   backendUrl: ${p.backend_url}`,
     "   Content Security Policy (CSP): if the app has `connect-src`, add this origin and keep what it already has:",
     `   ${p.csp}`,
-    `   Presentation contract: ${p.contrato_version}. The installed package carries it in node_modules/@supcoflow/chat/contract.json`,
-    "   (and in docs/presentation-contract.md): read it from there, offline. What the interface must do is in the contract;",
-    "   how it looks is the app's.",
+    `   Presentation contract: ${p.contrato.version}. Once the package is installed, read it offline (paths relative to the folder where you ran npm i):`,
+    `   ${p.contrato.archivo}`,
+    `   ${p.contrato.documento}`,
+    "   What the interface must do is in the contract; how it looks is the app's.",
+    `   Entry points: ${p.entradas.nucleo} (core), ${p.entradas.react} (React), ${p.entradas.pruebas} and ${p.entradas.servidor_de_pruebas} (test bench).`,
+    `   Docs: ${p.documentos.nucleo}, ${p.documentos.react}, ${p.documentos.pruebas}, ${p.documentos.conformidad}, ${p.documentos.protocolo}.`,
   ];
 }
 

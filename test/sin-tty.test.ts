@@ -536,12 +536,15 @@ describe("supcoflow sin terminal", () => {
         expect(puntoDe(bien.stdout)).toMatchObject({ ok: true });
         expect(puntoDe(bien.stdout).mensaje).toContain("contract 1.1.0");
 
-        // El proyecto pasa a declarar un contrato más nuevo: un aviso, no un freno de la prueba.
+        // Una versión menor sólo suma lo opcional: sigue ok. Una mayor es un aviso (no un freno de la prueba).
         motor.contratoDeclarado = "1.2.0";
+        const menor = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(puntoDe(menor.stdout)).toMatchObject({ ok: true, aviso: true });
+        motor.contratoDeclarado = "2.0.0";
         const nuevo = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(nuevo.codigo, nuevo.stdout).toBe(0);
         expect(puntoDe(nuevo.stdout)).toMatchObject({ ok: false });
-        expect(puntoDe(nuevo.stdout).mensaje).toContain("1.2.0");
+        expect(puntoDe(nuevo.stdout).mensaje).toContain("2.0.0");
         expect(JSON.parse(nuevo.stdout).instalacion).toMatchObject({ ok: 6, total: 7 });
 
         // Con el motor de hoy (sin el campo nuevo) no se compara, y un archivo que se borró sí se nota.

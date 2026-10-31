@@ -200,15 +200,18 @@ must fulfil. **There is no code to paste** in this form:
 
 | Field (`interfaz_propia`) | What it is |
 |---|---|
+| `estado` | `disponible`, or `sin_publicar` when the package version isn't on npm yet. With `sin_publicar` the text doesn't offer the path (it would be an `npm i` that fails): it says «not published yet; use the widget». The JSON still carries everything. |
 | `paquete`, `version`, `instalar` | The package and its exact version, and the install command. |
-| `tenant_id`, `project_id`, `backend_url` | The ids and the backend, as the engine has them: don't copy them by hand. |
+| `tenant_id`, `project_id`, `backend_url`, `opciones_del_nucleo` | The ids and the backend, as the engine has them: don't copy them by hand. |
 | `csp` | The Content Security Policy line to add to `connect-src`. |
-| `contrato_version` | The version of the presentation contract the interface has to follow. The installed package carries it in `node_modules/@supcoflow/chat/contract.json` (and `docs/presentation-contract.md`), so it can be read offline. |
+| `contrato` (`version`, `archivo`, `documento`) | The presentation contract the interface has to follow: its version, and where the installed package carries it (`contract.json` and `docs/presentation-contract.md`, paths relative to the folder where `npm i` was run), so it can be read offline. |
+| `entradas`, `documentos` | The package entry points (`@supcoflow/chat/core`, `/react`, `/testing`, `/testing/server`) and the docs inside the package. Names and paths, not code. |
 
 The field is additive: an engine that doesn't send it (production, until the engine's T8 ships) gives exactly the
 object it always gave, and the terminal adds nothing. If the engine sends `interfaz_propia` halfway (a field missing,
-a `contrato_version` that isn't a semver, another package), `widget` exits 1 `respuesta_inesperada`: it doesn't show
-half of it. Anything else inside `interfaz_propia` that the terminal doesn't know is not passed on.
+an `estado` it doesn't know, a `contrato.version` that isn't a semver, a path outside the package), the terminal ignores
+that whole part, says so on stderr and shows the widget as always: it never shows half of it, and an optional block never
+takes the widget down. Anything else inside `interfaz_propia` that the terminal doesn't know is not passed on.
 
 Then, `supcoflow install record --skill <version> [--app <folder>] [--shape widget|own-interface] [--file <path>]…` leaves in
 `.supcoflow/instalacion.json` (to commit) which versions it ended up with: the skill, the terminal, the chat declared
@@ -222,18 +225,26 @@ and installed, the project configuration and, from version 3 (0.9.0), what the i
   same way as its `package.json`: the closest `node_modules` going up to the repo root, never outside the repo), or `null`
   if the package has none. A `contract.json` that is there but has no version is an error (`paquete_ilegible`).
 
-Running it again without `--shape` or `--file` keeps the form and the files already recorded. Versions 1 and 2 are read
-without error: the `archivo` of a version 2 file was a widget, so it is read as `forma: "widget"`, `archivos: [archivo]`
-(and rewritten as version 3). The JSON of the command keeps `archivo` (the first file) for the skills before 0.9.0 and adds
+Running it again without `--shape` or `--file` keeps the form and the files already recorded; changing `--shape` without
+`--file` leaves `archivos` empty (the wrapper of the widget isn't the own interface, and the other way round). Versions 1 and
+2 are read without error and as a widget, the only form there was: a version 2 `archivo` is read as `archivos: [archivo]`
+(and rewritten as version 3). A file of version 4 or more (written by a newer supcoflow) is never rewritten: `install record`
+exits 4 `escrito_por_una_terminal_mas_nueva` and `diagnose` says to update supcoflow. The JSON of the command keeps `archivo` (the first file) for the skills before 0.9.0 and adds
 `archivos`, `forma` and `contrato`. It never contains a secret or a date; repeating it without changes doesn't touch it,
 and if the file has uncommitted changes it exits 4 and doesn't overwrite it.
 
 **Point 7 of `diagnose` (`interfaz`).** It is local and only reads. If `.supcoflow/instalacion.json` records an own
 interface, it checks that every recorded file is still there, that a contract is recorded and that it isn't older than the
-one the project declares today (`interfaz_propia.contrato_version`, asked from the engine; if that can't be asked, or the
-engine doesn't send it, nothing is compared). A newer contract says to run the skill again to see what changed and check
-that the interface still conforms. With no own interface recorded (no file, the widget, or nothing said) the point is ok
-(«Not applicable»). It is advice: when it fails it lowers the «N of 7», but it doesn't stop a test.
+one the project declares today (`interfaz_propia.contrato.version`, asked from the engine; if that can't be asked, or the
+engine doesn't send it, nothing is compared). Only a new **major** version fails the point (a new requirement comes only with
+a major one): then it says to run the skill again and check that the interface still conforms. A newer minor or patch only
+adds optional points: the point stays ok and says so. To see that a recorded file is still there it doesn't read it. With no
+own interface recorded (no file, the widget, or nothing said) the point is ok («Not applicable»). It is advice: when it
+fails it lowers the «N of 7», it is marked `aviso: true` in the JSON, and it doesn't stop a test.
+
+**Before publishing 0.9.0.** `diagnose` now says «N of 7», and the skill of today (`SKILL.md`, `referencias/prueba.md`)
+asks literally for «6 of 6»: with a failing point 7 it would stop a test that the terminal says can go on. Publish this
+terminal together with the skill that reads `instalacion.ok` / `listo` (or `aviso`) instead of a fixed number, not before.
 
 ## Test the installation
 

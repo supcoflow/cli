@@ -341,7 +341,8 @@ describe("diagnose: el punto 7, la interfaz", () => {
       leerWidget: widgetConContrato("1.1.0"),
     });
     expect(p.ok).toBe(true);
-    expect(leidos).toEqual([INST]);
+    expect(leidos).toContain(INST);
+    expect(leidos.filter((x) => x.includes("/src/chat/"))).toEqual([]);
   });
   it("P2-5: el punto 7 se marca como aviso en el JSON (`aviso: true`) para que una skill lo distinga de los seis que frenan", async () => {
     const { p, inst } = await punto({ [INST]: instalacion() }); // archivos que faltan: no ok

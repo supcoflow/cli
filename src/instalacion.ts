@@ -157,7 +157,8 @@ export function validarElArchivoDelChat(crudo: string): RutaDelChat {
 }
 
 export type Anotado = { forma: Forma | null; archivos: string[]; contrato: string | null };
-export type LecturaDeLaInstalacion = { estado: "ausente" } | { estado: "ilegible" } | ({ estado: "leida" } & Anotado);
+// `mas_nueva`: lo escribió una terminal que sabe una versión más nueva del formato; esta no la adivina ni la pisa.
+export type LecturaDeLaInstalacion = { estado: "ausente" } | { estado: "ilegible" } | { estado: "mas_nueva" } | ({ estado: "leida" } & Anotado);
 const SIN_NADA: Anotado = { forma: null, archivos: [], contrato: null };
 
 // Una lista de rutas anotadas: cada una tiene que ser válida Y estar ya normalizada (es como la escribe esta terminal); lo
@@ -187,17 +188,19 @@ export function leerInstalacionAnotada(texto: string | null): LecturaDeLaInstala
   }
   const o = objeto(v);
   if (o === null) return { estado: "ilegible" };
-  // v1 se reconoce por `version: 1` (la 0.7.0) y no tiene archivo, aunque el campo aparezca.
+  // Antes de la 0.9.0 la única forma que existía era el widget: una v1 o una v2 son un widget, con el archivo que la v2 anotó (si lo
+  // anotó; la v1 no tiene archivo aunque el campo aparezca).
+  if (o.version === 1) return { estado: "leida", forma: "widget", archivos: [], contrato: null };
   if (o.version === 2) {
     const a = typeof o.archivo === "string" ? validarElArchivoDelChat(o.archivo) : null;
-    // El `archivo` de la v2 sólo existió para el widget.
-    return a !== null && a.ok && a.ruta === o.archivo ? { estado: "leida", forma: "widget", archivos: [a.ruta], contrato: null } : { estado: "leida", ...SIN_NADA };
+    return { estado: "leida", forma: "widget", archivos: a !== null && a.ok && a.ruta === o.archivo ? [a.ruta] : [], contrato: null };
   }
   if (o.version === 3) {
     const forma = FORMAS.find((f) => f === o.forma) ?? null;
     const contrato = typeof o.contrato === "string" && esSemver(o.contrato) ? o.contrato : null;
     return { estado: "leida", forma, archivos: rutasAnotadas(o.archivos), contrato };
   }
+  if (typeof o.version === "number" && Number.isInteger(o.version) && o.version > 3) return { estado: "mas_nueva" };
   return { estado: "leida", ...SIN_NADA };
 }
 

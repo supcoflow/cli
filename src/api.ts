@@ -390,12 +390,18 @@ export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen
 
 // T8 (chat agnóstico al estilo): la forma «interfaz propia». El agente de código de la app construye el chat con los
 // componentes de la app; Supcoflow sólo dice qué instalar y qué contrato cumplir. Por eso acá no hay `contenido` ni código para
-// pegar: el paquete con su versión exacta, los ids, el backend, la línea de CSP y la versión del contrato de presentación.
-// El campo es ADITIVO: el motor de antes no lo manda y la forma de siempre sigue valiendo.
+// pegar: son nombres de paquete, versiones, ids, rutas y una línea de CSP. La forma es la que manda el motor (rama `fm/ui-t8-motor`,
+// `interfazPropiaJson`); esta CLI se adapta a ella. El campo es ADITIVO: el motor de antes no lo manda y la forma de siempre sigue valiendo.
+// `estado: "sin_publicar"` quiere decir que la versión todavía no está en npm: quien lo lea NO ofrece el camino.
 export type InterfazPropia = {
+  estado: "sin_publicar" | "disponible";
   paquete: "@supcoflow/chat"; version: string; instalar: string;
   tenant_id: string; project_id: string; backend_url: string; csp: string;
-  contrato_version: string;
+  opciones_del_nucleo: { tenantId: string; projectId: string };
+  // `archivo` y `documento` son rutas relativas a la carpeta donde se corrió `npm i` (la de la app); el motor lo dice así.
+  contrato: { version: string; archivo: string; documento: string };
+  entradas: { nucleo: string; react: string; pruebas: string; servidor_de_pruebas: string };
+  documentos: { nucleo: string; react: string; pruebas: string; conformidad: string; protocolo: string };
 };
 
 export type Widget = {
@@ -410,7 +416,7 @@ export type Widget = {
 
 // Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
 // ser algo a medias. `contenido` se guarda tal cual, sin tocarlo: los ids ya vienen puestos por el motor.
-function aWidget(v: Record<string, unknown>, status: number): Widget {
+function aWidget(v: Record<string, unknown>, status: number, avisar?: (s: string) => void): Widget {
   const n = (typeof v.nextjs === "object" && v.nextjs !== null ? v.nextjs : {}) as Record<string, unknown>;
   const s = (typeof v.script === "object" && v.script !== null ? v.script : {}) as Record<string, unknown>;
   const [tenantId, projectId, backendUrl, version, instalar, csp] =
@@ -423,8 +429,13 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
   if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
     || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
     || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
-  const propia = aInterfazPropia(v.interfaz_propia);
-  if (propia === null) throw inesperada(status);
+  // Un bloque ADITIVO a medias no tumba el widget de siempre (revisión 1, P2-1): se descarta entero, con un aviso, y no se muestra
+  // nada de él (nunca la mitad).
+  let propia = aInterfazPropia(v.interfaz_propia);
+  if (propia === null) {
+    avisar?.("The engine described the app's own interface halfway; I'm ignoring that part and showing the widget only.");
+    propia = undefined;
+  }
   return {
     tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, paquete: "@supcoflow/chat", version, instalar,
     nextjs: { estado: n.estado, archivo_sugerido: archivo, archivos_anteriores: anteriores, contenido, uso },
@@ -435,15 +446,41 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
 }
 
 // `undefined` es «el motor no la manda» (producción de hoy; también `null`); `null` es «la mandó a medias»; y una lista cerrada de
-// campos: lo que el motor sume mañana dentro de `interfaz_propia` no se copia (como el resto del widget).
+// campos, anidados incluidos: lo que el motor sume mañana dentro de `interfaz_propia` no se copia (como el resto del widget).
+const SIN_ESPACIOS_RAROS = /^[\x21-\x7e]+$/;
+const EN_EL_PAQUETE = "node_modules/@supcoflow/chat/";
+const ENTRADA_DEL_PAQUETE = "@supcoflow/chat/";
+// Una ruta o una entrada: un texto sin espacios ni control, que empiece donde tiene que empezar y no suba con `..`.
+const conPrefijo = (v: unknown, prefijo: string): string | null => {
+  const t = texto(v);
+  return t !== null && SIN_ESPACIOS_RAROS.test(t) && t.startsWith(prefijo) && t.length > prefijo.length && !t.split("/").includes("..") ? t : null;
+};
+const objetoONull = (v: unknown): Record<string, unknown> | null => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+
 function aInterfazPropia(v: unknown): InterfazPropia | undefined | null {
   if (v === undefined || v === null) return undefined;
-  if (typeof v !== "object" || Array.isArray(v)) return null;
-  const o = v as Record<string, unknown>;
-  const [version, instalar, tenantId, projectId, backendUrl, csp, contrato] =
-    [o.version, o.instalar, o.tenant_id, o.project_id, o.backend_url, o.csp, o.contrato_version].map(texto);
-  if (!version || !instalar || !tenantId || !projectId || !backendUrl || !csp || !contrato || !esSemver(contrato) || o.paquete !== "@supcoflow/chat") return null;
-  return { paquete: "@supcoflow/chat", version, instalar, tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, csp, contrato_version: contrato };
+  const o = objetoONull(v);
+  const c = objetoONull(o?.contrato), e = objetoONull(o?.entradas), d = objetoONull(o?.documentos), n = objetoONull(o?.opciones_del_nucleo);
+  if (o === null || c === null || e === null || d === null || n === null) return null;
+  const [version, instalar, tenantId, projectId, backendUrl, csp, nucleoTenant, nucleoProyecto] =
+    [o.version, o.instalar, o.tenant_id, o.project_id, o.backend_url, o.csp, n.tenantId, n.projectId].map(texto);
+  const cVersion = texto(c.version);
+  const [cArchivo, cDocumento] = [c.archivo, c.documento].map((x) => conPrefijo(x, EN_EL_PAQUETE));
+  const entradas = [e.nucleo, e.react, e.pruebas, e.servidor_de_pruebas].map((x) => conPrefijo(x, ENTRADA_DEL_PAQUETE));
+  const docs = [d.nucleo, d.react, d.pruebas, d.conformidad, d.protocolo].map((x) => conPrefijo(x, EN_EL_PAQUETE));
+  if ((o.estado !== "sin_publicar" && o.estado !== "disponible") || o.paquete !== "@supcoflow/chat"
+    || !version || !instalar || !tenantId || !projectId || !backendUrl || !csp || !nucleoTenant || !nucleoProyecto
+    || !cVersion || !esSemver(cVersion) || cArchivo === null || cDocumento === null
+    || entradas.includes(null) || docs.includes(null)) return null;
+  const [eNucleo, eReact, ePruebas, eServidor] = entradas as string[];
+  const [dNucleo, dReact, dPruebas, dConformidad, dProtocolo] = docs as string[];
+  return {
+    estado: o.estado, paquete: "@supcoflow/chat", version, instalar, tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, csp,
+    opciones_del_nucleo: { tenantId: nucleoTenant, projectId: nucleoProyecto },
+    contrato: { version: cVersion, archivo: cArchivo, documento: cDocumento },
+    entradas: { nucleo: eNucleo!, react: eReact!, pruebas: ePruebas!, servidor_de_pruebas: eServidor! },
+    documentos: { nucleo: dNucleo!, react: dReact!, pruebas: dPruebas!, conformidad: dConformidad!, protocolo: dProtocolo! },
+  };
 }
 
 // Una lista de textos no vacíos; ausente es lista vacía (un motor sin el campo), y cualquier otra forma es null.
@@ -454,10 +491,11 @@ function listaDeTextos(v: unknown): string[] | null {
   return textos.every((t): t is string => t !== null && t !== "") ? textos : null;
 }
 
-export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Widget> {
+// `avisar` recibe lo que la terminal descarta sin tumbar el comando (hoy: una `interfaz_propia` a medias).
+export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch, avisar?: (s: string) => void): Promise<Widget> {
   const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/widget`, { method: "GET" }, f);
   if (r.status !== 200) throw rechazada(r);
-  return aWidget(r.cuerpo, r.status);
+  return aWidget(r.cuerpo, r.status, avisar);
 }
 
 // ---- La prueba (bloque 7) ----

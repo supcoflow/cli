@@ -35,6 +35,8 @@ import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-rep
 
 export type DepsDePrueba = DepsDelProyectoDelRepo & {
   leerDiagnostico(api: URL, clave: string, proyectoId: string): Promise<Diagnostico>;
+  /** ¿Existe este camino? Sin leerlo ni seguir enlaces (el punto 7 no lee los archivos de la interfaz, sólo ve que sigan). Sin él se usa `archivos.leer`. */
+  existe?(p: string): boolean;
   /** T8: para el punto 7 (¿qué contrato declara el proyecto hoy?). Opcional: sin él, o si falla, no se compara y no se inventa una diferencia. */
   leerWidget?(api: URL, clave: string, proyectoId: string): Promise<Widget>;
   pedirPrueba(api: URL, clave: string, proyectoId: string, intento: IntentoDePrueba): Promise<RespuestaDePrueba>;
@@ -136,7 +138,8 @@ async function puntoDeLaInterfazDeEsteClon(
   if (lectura.estado !== "leida" || lectura.forma !== "interfaz_propia") return puntoDeLaInterfaz({ lectura, faltan: [], delProyecto: null });
   const faltan = lectura.archivos.filter((f) => {
     try {
-      return d.archivos!.leer(path.join(local.raiz!, f)) === null;
+      const completo = path.join(local.raiz!, f);
+      return d.existe !== undefined ? !d.existe(completo) : d.archivos!.leer(completo) === null;
     } catch {
       return true;
     }
@@ -144,7 +147,7 @@ async function puntoDeLaInterfazDeEsteClon(
   let delProyecto: string | null = null;
   if (d.leerWidget !== undefined) {
     try {
-      delProyecto = (await d.leerWidget(d.api, clave, proyecto.id)).interfaz_propia?.contrato_version ?? null;
+      delProyecto = (await d.leerWidget(d.api, clave, proyecto.id)).interfaz_propia?.contrato.version ?? null;
     } catch {
       delProyecto = null; // no se pudo preguntar: no se compara
     }

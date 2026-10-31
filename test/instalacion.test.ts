@@ -713,7 +713,7 @@ describe("install record: forma, archivos y contrato (v3)", () => {
     m.archivos.set(ARCHIVO, futuro);
     const r = await instalacionAnotar(deps(m), { ...F, shape: "widget" });
     expect(r).toMatchObject({ codigo: 4, json: { error: "escrito_por_una_terminal_mas_nueva" } });
-    expect(r.texto).toMatch(/update supcoflow/);
+    expect(r.texto).toMatch(/update supcoflow/i);
     expect(m.escritos).toEqual([]);
     expect(m.archivos.get(ARCHIVO)).toBe(futuro);
   });

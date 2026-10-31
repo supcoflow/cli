@@ -7,7 +7,8 @@ import { compararSemver, RUTA_DE_LA_INSTALACION } from "./instalacion.ts";
 import type { Diagnostico } from "./api.ts";
 import { frasePorQueNoAtaClon, type leerRepoLocal } from "./repo-local.ts";
 
-export type Punto = { punto: string; ok: boolean; mensaje: string; grupo: "instalacion" | "prueba" };
+// `aviso: true` marca un punto que baja la cuenta pero no frena una prueba (hoy: `interfaz`); una skill lo distingue así de los demás.
+export type Punto = { punto: string; ok: boolean; mensaje: string; grupo: "instalacion" | "prueba"; aviso?: true };
 
 
 // El orden y los nombres con que se dicen: los ids de los puntos del motor son datos suyos y no cambian.
@@ -52,13 +53,16 @@ export function puntoDelRepo(local: Awaited<ReturnType<typeof leerRepoLocal>>, r
  * cuenta como ok. El contenido de `instalacion.json` nunca se copia al mensaje.
  *  · `lectura`: lo que dice el archivo (o `null` si no se miró: el clon no es el del repo del proyecto).
  *  · `faltan`: los archivos anotados que ya no están.
- *  · `delProyecto`: el contrato que declara el proyecto hoy (`interfaz_propia.contrato_version`), o null si no se supo.
+ *  · `delProyecto`: el contrato que declara el proyecto hoy (`interfaz_propia.contrato.version`), o null si no se supo.
  */
+const mayor = (v: string) => Number(v.split(".")[0]);
+
 export function puntoDeLaInterfaz(i: { lectura: LecturaDeLaInstalacion | null; faltan: string[]; delProyecto: string | null }): Punto {
-  const punto = (ok: boolean, mensaje: string): Punto => ({ punto: "interfaz", ok, mensaje, grupo: "instalacion" });
+  const punto = (ok: boolean, mensaje: string): Punto => ({ punto: "interfaz", ok, mensaje, grupo: "instalacion", aviso: true });
   if (i.lectura === null) return punto(true, "Not checked: this folder isn't a clone of the project's repo, so I don't read its installation record.");
   const l = i.lectura;
   if (l.estado === "ausente") return punto(true, `Not applicable: there's no ${RUTA_DE_LA_INSTALACION}, so no own interface is recorded.`);
+  if (l.estado === "mas_nueva") return punto(false, `${RUTA_DE_LA_INSTALACION} was written by a newer supcoflow than this one: update supcoflow (\`npm i -g supcoflow@latest\` or \`npx supcoflow@latest\`) to read it.`);
   if (l.estado === "ilegible") return punto(false, `I can't read ${RUTA_DE_LA_INSTALACION}: run \`supcoflow install record\` again.`);
   if (l.forma !== "interfaz_propia") {
     return punto(true, l.forma === "widget" ? "Not applicable: the chat is recorded as the packaged widget, which has no interface contract to check." : "Not applicable: no own interface is recorded.");
@@ -70,7 +74,11 @@ export function puntoDeLaInterfaz(i: { lectura: LecturaDeLaInstalacion | null; f
   }
   const archivos = `${l.archivos.length} ${l.archivos.length === 1 ? "file" : "files"}`;
   if (i.delProyecto !== null && compararSemver(i.delProyecto, l.contrato) > 0) {
-    return punto(false, `The interface (${archivos}) follows contract ${l.contrato}, and the project now declares ${i.delProyecto}: run the skill again to see what changed and check that the interface still conforms.`);
+    // Un obligatorio nuevo sólo llega con una versión MAYOR del contrato (plan §2.5.8): una menor o de parche suma lo opcional.
+    if (mayor(i.delProyecto) > mayor(l.contrato)) {
+      return punto(false, `The interface (${archivos}) follows contract ${l.contrato}, and the project now declares ${i.delProyecto}, a new major version: run the skill again to see what changed and check that the interface still conforms.`);
+    }
+    return punto(true, `The interface (${archivos}) follows contract ${l.contrato}; the project declares ${i.delProyecto}, which only adds optional points: run the skill again to see them.`);
   }
   return punto(true, `The interface (${archivos}) follows contract ${l.contrato}${i.delProyecto === l.contrato ? ", the one the project declares" : ""}.`);
 }

@@ -13,7 +13,7 @@ import { lstatSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
-import { anotadoEn, armarInstalacion, esSemver, PAQUETE_DEL_CHAT, RUTA_DE_LA_INSTALACION, serializar, validarLosArchivos, type Configuracion, type Forma, type Instalacion } from "../instalacion.ts";
+import { anotadoEn, armarInstalacion, leerInstalacionAnotada, esSemver, PAQUETE_DEL_CHAT, RUTA_DE_LA_INSTALACION, serializar, validarLosArchivos, type Configuracion, type Forma, type Instalacion } from "../instalacion.ts";
 import { NO_LEIDO } from "../lectura.ts";
 import { repoPedido } from "../repo-local.ts";
 import { fallo } from "./configurar.ts";
@@ -247,12 +247,18 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
   const antes = "bytes" in actual ? Buffer.from(actual.bytes).toString("utf8") : null;
   // Re-correr sin `--shape` ni `--file` no borra lo que ya se anotó (v2: su `archivo` es el widget; v1: nada, sin error).
   // `--file` reemplaza la lista entera y `--shape` la forma: lo que se pide manda, lo que no, se conserva.
+  // Un archivo de una terminal más nueva no se reescribe: se perdería lo que esa versión anotó.
+  if (leerInstalacionAnotada(antes).estado === "mas_nueva") {
+    return fallo(SALIDA.haceFaltaUnaPersona, "escrito_por_una_terminal_mas_nueva", `${RUTA_DE_LA_INSTALACION} was written by a newer supcoflow than this one; I didn't touch it. Update supcoflow (\`npx supcoflow@latest\`) and run again.`);
+  }
   const anotado = anotadoEn(antes);
+  // Cambiar la forma sin decir los archivos no hereda los de la forma anterior (el envoltorio del widget no es la interfaz propia).
+  const cambiaLaForma = formaPedida !== null && anotado.forma !== null && formaPedida !== anotado.forma;
   let x: Instalacion;
   try {
     x = armarInstalacion({
       skill: flags.skill, terminal: d.terminal, paqueteDeLaApp: deLaApp.ok ? deLaApp.valor : null, paqueteInstalado: instalado.valor, configuracion,
-      forma: formaPedida ?? anotado.forma, archivos: archivosPedidos ?? anotado.archivos, contrato: instalado.contrato,
+      forma: formaPedida ?? anotado.forma, archivos: archivosPedidos ?? (cambiaLaForma ? [] : anotado.archivos), contrato: instalado.contrato,
     });
   } catch (e) {
     return resultadoDeFallo(e);
