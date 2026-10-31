@@ -323,6 +323,7 @@ describe("leerWidget", () => {
       { ...PROPIA, documentos: { ...PROPIA.documentos, nucleo: "docs/core.md" } },
       { ...PROPIA, documentos: { ...PROPIA.documentos, nucleo: "node_modules/@supcoflow/chat/../../etc/passwd" } },
       { ...PROPIA, contrato: { ...PROPIA.contrato, archivo: "node_modules/@supcoflow/chat/a b.json" } },
+      { ...PROPIA, contrato: { ...PROPIA.contrato, archivo: "node_modules/@supcoflow/chat/..\\..\\x" } },
     ];
     for (const mala of malas) {
       const avisos: string[] = [];
@@ -331,6 +332,7 @@ describe("leerWidget", () => {
       expect(w).not.toHaveProperty("interfaz_propia");
       expect(avisos, JSON.stringify(mala)).toHaveLength(1);
       expect(avisos[0]).toMatch(/ignor/i);
+      expect(avisos[0]).not.toMatch(/widget/i); // también sale desde `diagnose`, donde no se muestra ningún widget
     }
   });
   it("404 sale como entrada inválida con el mensaje del motor tapado", async () => {

@@ -498,7 +498,7 @@ describe("install record --file (instalacion.json v3; el `archivo` de la v2 se l
 
 describe("anotadoEn, leerInstalacionAnotada y validarElArchivoDelChat (puras)", () => {
   const VACIO = { forma: null, archivos: [], contrato: null };
-  it("v1, sin `version`, ilegible, vacío o con un archivo inválido: lo anotado vacío, nunca un error", () => {
+  it("sin `version`, ilegible, vacío o de una versión futura: lo anotado vacío, nunca un error", () => {
     const v = (extra: object) => JSON.stringify({ skill: "0.1.0", ...extra });
     expect(anotadoEn(v({}))).toEqual(VACIO);
     expect(anotadoEn("{no es json")).toEqual(VACIO);

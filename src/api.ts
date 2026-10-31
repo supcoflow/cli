@@ -433,7 +433,7 @@ function aWidget(v: Record<string, unknown>, status: number, avisar?: (s: string
   // nada de él (nunca la mitad).
   let propia = aInterfazPropia(v.interfaz_propia);
   if (propia === null) {
-    avisar?.("The engine described the app's own interface halfway; I'm ignoring that part and showing the widget only.");
+    avisar?.("The engine described the app's own interface halfway; I'm ignoring that part.");
     propia = undefined;
   }
   return {
@@ -447,7 +447,8 @@ function aWidget(v: Record<string, unknown>, status: number, avisar?: (s: string
 
 // `undefined` es «el motor no la manda» (producción de hoy; también `null`); `null` es «la mandó a medias»; y una lista cerrada de
 // campos, anidados incluidos: lo que el motor sume mañana dentro de `interfaz_propia` no se copia (como el resto del widget).
-const SIN_ESPACIOS_RAROS = /^[\x21-\x7e]+$/;
+// Sin `\\` tampoco: un `..` escrito con barras invertidas no se vería al partir por `/`.
+const SIN_ESPACIOS_RAROS = /^[\x21-\x5b\x5d-\x7e]+$/;
 const EN_EL_PAQUETE = "node_modules/@supcoflow/chat/";
 const ENTRADA_DEL_PAQUETE = "@supcoflow/chat/";
 // Una ruta o una entrada: un texto sin espacios ni control, que empiece donde tiene que empezar y no suba con `..`.

@@ -12,9 +12,9 @@ Fecha: 2026-10-31. Rama `fm/ui-t8-cli`. Local y gratis: nada publicado, ningún 
 
 ## Qué se comprobó
 
-- `npm run typecheck`: limpio. `npx vitest run`: **35 archivos, 839 tests en verde**. Los tests nuevos se escribieron antes y se vieron en rojo (commit aparte, `test(cli): T8 en rojo`).
+- `npm run typecheck`: limpio. `npx vitest run`: **35 archivos, 848 tests en verde**. Los tests nuevos se escribieron antes y se vieron en rojo (commit aparte, `test(cli): T8 en rojo`).
 - **Contra el motor de hoy:** `test/sin-tty.test.ts` corre el binario real contra un motor falso local. `widget --json` sin el campo nuevo devuelve exactamente el objeto de siempre (no aparece `interfaz_propia`); con el campo, lo deja pasar.
-- **De punta a punta (mismo archivo):** en un repo de git descartable con un `node_modules/@supcoflow/chat/{package.json,contract.json}` y dos archivos de la interfaz, `install record --shape own-interface --file … --file …` escribe v3 con `contrato: "1.1.0"`; `diagnose` da 7 de 7; si el motor pasa a declarar `1.2.0` el punto 7 falla con un aviso y la salida sigue en 0; si se borra un archivo anotado, el punto lo nombra.
+- **De punta a punta (mismo archivo):** en un repo de git descartable con un `node_modules/@supcoflow/chat/{package.json,contract.json}` y dos archivos de la interfaz, `install record --shape own-interface --file … --file …` escribe v3 con `contrato: "1.1.0"`; `diagnose` da 7 de 7; si el motor pasa a declarar `1.2.0` (menor) el punto 7 sigue ok y lo dice; con `2.0.0` (mayor) falla con un aviso y la salida sigue en 0; si se borra un archivo anotado, el punto lo nombra.
 - Compatibilidad de formatos: v1 y v2 se leen sin error (el `archivo` de la v2 se lee como widget) y se reescriben v3.
 
 ## Lo que no se hizo
@@ -24,8 +24,10 @@ Fecha: 2026-10-31. Rama `fm/ui-t8-cli`. Local y gratis: nada publicado, ningún 
 
 ## Antes de publicar
 
-`diagnose` ahora dice «N of 7» y la skill de hoy pide literalmente «6 of 6» (`SKILL.md`, `referencias/prueba.md`): con el punto 7 en falla frenaría una prueba que la terminal dice que puede seguir. **La 0.9.0 sale junto con la skill de T9** (que mire `instalacion.ok`/`listo`/`aviso`, no un número fijo), no antes. La versión 2.4.0 del sdk tampoco está publicada (`estado: sin_publicar`).
+`diagnose` ahora dice «N of 7» y la skill de hoy pide literalmente «6 of 6» (`SKILL.md`, `referencias/prueba.md`): con el punto 7 en falla frenaría una prueba que la terminal dice que puede seguir. La skill de hoy fija la terminal 0.8.1 (`SKILL.md:19-22`, «never `@latest`»), así que no vería la 0.9.0 aunque estuviera en npm; el choque aparece cuando una skill fije la 0.9.0. **La 0.9.0 tiene que estar en npm antes o junto con la skill de T9** (que mire `instalacion.ok`/`listo`/`aviso`, no un número fijo), no antes. La versión 2.4.0 del sdk tampoco está publicada (`estado: sin_publicar`).
 
 ## Revisión 1
 
 Informe en `docs/revisiones/2026-10-31-terminal-0.9.0-revision-1.md`; cómo se resolvió cada hallazgo, en `docs/revisiones/2026-10-31-terminal-0.9.0-respuesta-1.md`.
+
+Revisión 2 (aprobado con cambios menores): `docs/revisiones/2026-10-31-terminal-0.9.0-revision-2.md`. Sus cuatro P3 (datos viejos de este informe, texto del aviso en `diagnose`, `\` en las rutas, título de un test) están resueltos.

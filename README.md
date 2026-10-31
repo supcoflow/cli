@@ -243,8 +243,9 @@ own interface recorded (no file, the widget, or nothing said) the point is ok (�
 fails it lowers the «N of 7», it is marked `aviso: true` in the JSON, and it doesn't stop a test.
 
 **Before publishing 0.9.0.** `diagnose` now says «N of 7», and the skill of today (`SKILL.md`, `referencias/prueba.md`)
-asks literally for «6 of 6»: with a failing point 7 it would stop a test that the terminal says can go on. Publish this
-terminal together with the skill that reads `instalacion.ok` / `listo` (or `aviso`) instead of a fixed number, not before.
+asks literally for «6 of 6», but it pins the terminal to 0.8.1 (never `@latest`), so it won't see 0.9.0 until a skill pins it.
+The skill that pins 0.9.0 has to read `instalacion.ok` / `listo` (or `aviso`) instead of a fixed number, and 0.9.0 has to be on
+npm before or together with it.
 
 ## Test the installation
 
