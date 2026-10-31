@@ -1,5 +1,6 @@
 // Los pedidos de la terminal al motor. Sin dependencias: `fetch` viene de Node y se inyecta.
 import { FalloDeLaTerminal, SALIDA, taparSecretos } from "./contrato.ts";
+import { esSemver } from "./instalacion.ts";
 
 // La URL viene FIJA (§5.2): si un archivo del repo pudiera cambiarla, clonar un repo ajeno y correr
 // `supcoflow` mandaría el token a un servidor ajeno. Sólo el entorno del proceso la mueve, y `http`
@@ -26,7 +27,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.8.1";
+const VERSION = "0.9.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -387,6 +388,22 @@ export function elegirOrigen(api: URL, clave: string, proyectoId: string, origen
 
 // ---- El widget (bloque 6) ----
 
+// T8 (chat agnóstico al estilo): la forma «interfaz propia». El agente de código de la app construye el chat con los
+// componentes de la app; Supcoflow sólo dice qué instalar y qué contrato cumplir. Por eso acá no hay `contenido` ni código para
+// pegar: son nombres de paquete, versiones, ids, rutas y una línea de CSP. La forma es la que manda el motor (rama `fm/ui-t8-motor`,
+// `interfazPropiaJson`); esta CLI se adapta a ella. El campo es ADITIVO: el motor de antes no lo manda y la forma de siempre sigue valiendo.
+// `estado: "sin_publicar"` quiere decir que la versión todavía no está en npm: quien lo lea NO ofrece el camino.
+export type InterfazPropia = {
+  estado: "sin_publicar" | "disponible";
+  paquete: "@supcoflow/chat"; version: string; instalar: string;
+  tenant_id: string; project_id: string; backend_url: string; csp: string;
+  opciones_del_nucleo: { tenantId: string; projectId: string };
+  // `archivo` y `documento` son rutas relativas a la carpeta donde se corrió `npm i` (la de la app); el motor lo dice así.
+  contrato: { version: string; archivo: string; documento: string };
+  entradas: { nucleo: string; react: string; pruebas: string; servidor_de_pruebas: string };
+  documentos: { nucleo: string; react: string; pruebas: string; conformidad: string; protocolo: string };
+};
+
 export type Widget = {
   tenant_id: string; project_id: string; backend_url: string;
   paquete: "@supcoflow/chat"; version: string; instalar: string;
@@ -394,11 +411,12 @@ export type Widget = {
   nextjs: { estado: "probando" | "soportado"; archivo_sugerido: string; archivos_anteriores: string[]; contenido: string; uso: string };
   script: { estado: "disponible_sin_soporte"; linea: string };
   csp: string;
+  interfaz_propia?: InterfazPropia;
 };
 
 // Se valida campo a campo: lo que se le pasa a la persona (y de ahí a un archivo de su app) no puede
 // ser algo a medias. `contenido` se guarda tal cual, sin tocarlo: los ids ya vienen puestos por el motor.
-function aWidget(v: Record<string, unknown>, status: number): Widget {
+function aWidget(v: Record<string, unknown>, status: number, avisar?: (s: string) => void): Widget {
   const n = (typeof v.nextjs === "object" && v.nextjs !== null ? v.nextjs : {}) as Record<string, unknown>;
   const s = (typeof v.script === "object" && v.script !== null ? v.script : {}) as Record<string, unknown>;
   const [tenantId, projectId, backendUrl, version, instalar, csp] =
@@ -411,11 +429,58 @@ function aWidget(v: Record<string, unknown>, status: number): Widget {
   if (!tenantId || !projectId || !backendUrl || !version || !instalar || !csp || v.paquete !== "@supcoflow/chat"
     || (n.estado !== "probando" && n.estado !== "soportado") || !archivo || !contenido || !uso
     || s.estado !== "disponible_sin_soporte" || !linea) throw inesperada(status);
+  // Un bloque ADITIVO a medias no tumba el widget de siempre (revisión 1, P2-1): se descarta entero, con un aviso, y no se muestra
+  // nada de él (nunca la mitad).
+  let propia = aInterfazPropia(v.interfaz_propia);
+  if (propia === null) {
+    avisar?.("The engine described the app's own interface halfway; I'm ignoring that part.");
+    propia = undefined;
+  }
   return {
     tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, paquete: "@supcoflow/chat", version, instalar,
     nextjs: { estado: n.estado, archivo_sugerido: archivo, archivos_anteriores: anteriores, contenido, uso },
     script: { estado: "disponible_sin_soporte", linea },
     csp,
+    ...(propia === undefined ? {} : { interfaz_propia: propia }),
+  };
+}
+
+// `undefined` es «el motor no la manda» (producción de hoy; también `null`); `null` es «la mandó a medias»; y una lista cerrada de
+// campos, anidados incluidos: lo que el motor sume mañana dentro de `interfaz_propia` no se copia (como el resto del widget).
+// Sin `\\` tampoco: un `..` escrito con barras invertidas no se vería al partir por `/`.
+const SIN_ESPACIOS_RAROS = /^[\x21-\x5b\x5d-\x7e]+$/;
+const EN_EL_PAQUETE = "node_modules/@supcoflow/chat/";
+const ENTRADA_DEL_PAQUETE = "@supcoflow/chat/";
+// Una ruta o una entrada: un texto sin espacios ni control, que empiece donde tiene que empezar y no suba con `..`.
+const conPrefijo = (v: unknown, prefijo: string): string | null => {
+  const t = texto(v);
+  return t !== null && SIN_ESPACIOS_RAROS.test(t) && t.startsWith(prefijo) && t.length > prefijo.length && !t.split("/").includes("..") ? t : null;
+};
+const objetoONull = (v: unknown): Record<string, unknown> | null => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+
+function aInterfazPropia(v: unknown): InterfazPropia | undefined | null {
+  if (v === undefined || v === null) return undefined;
+  const o = objetoONull(v);
+  const c = objetoONull(o?.contrato), e = objetoONull(o?.entradas), d = objetoONull(o?.documentos), n = objetoONull(o?.opciones_del_nucleo);
+  if (o === null || c === null || e === null || d === null || n === null) return null;
+  const [version, instalar, tenantId, projectId, backendUrl, csp, nucleoTenant, nucleoProyecto] =
+    [o.version, o.instalar, o.tenant_id, o.project_id, o.backend_url, o.csp, n.tenantId, n.projectId].map(texto);
+  const cVersion = texto(c.version);
+  const [cArchivo, cDocumento] = [c.archivo, c.documento].map((x) => conPrefijo(x, EN_EL_PAQUETE));
+  const entradas = [e.nucleo, e.react, e.pruebas, e.servidor_de_pruebas].map((x) => conPrefijo(x, ENTRADA_DEL_PAQUETE));
+  const docs = [d.nucleo, d.react, d.pruebas, d.conformidad, d.protocolo].map((x) => conPrefijo(x, EN_EL_PAQUETE));
+  if ((o.estado !== "sin_publicar" && o.estado !== "disponible") || o.paquete !== "@supcoflow/chat"
+    || !version || !instalar || !tenantId || !projectId || !backendUrl || !csp || !nucleoTenant || !nucleoProyecto
+    || !cVersion || !esSemver(cVersion) || cArchivo === null || cDocumento === null
+    || entradas.includes(null) || docs.includes(null)) return null;
+  const [eNucleo, eReact, ePruebas, eServidor] = entradas as string[];
+  const [dNucleo, dReact, dPruebas, dConformidad, dProtocolo] = docs as string[];
+  return {
+    estado: o.estado, paquete: "@supcoflow/chat", version, instalar, tenant_id: tenantId, project_id: projectId, backend_url: backendUrl, csp,
+    opciones_del_nucleo: { tenantId: nucleoTenant, projectId: nucleoProyecto },
+    contrato: { version: cVersion, archivo: cArchivo, documento: cDocumento },
+    entradas: { nucleo: eNucleo!, react: eReact!, pruebas: ePruebas!, servidor_de_pruebas: eServidor! },
+    documentos: { nucleo: dNucleo!, react: dReact!, pruebas: dPruebas!, conformidad: dConformidad!, protocolo: dProtocolo! },
   };
 }
 
@@ -427,10 +492,11 @@ function listaDeTextos(v: unknown): string[] | null {
   return textos.every((t): t is string => t !== null && t !== "") ? textos : null;
 }
 
-export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Widget> {
+// `avisar` recibe lo que la terminal descarta sin tumbar el comando (hoy: una `interfaz_propia` a medias).
+export async function leerWidget(api: URL, clave: string, proyectoId: string, f: Fetch, avisar?: (s: string) => void): Promise<Widget> {
   const r = await conClave(api, clave, `/api/proyectos/${encodeURIComponent(proyectoId)}/widget`, { method: "GET" }, f);
   if (r.status !== 200) throw rechazada(r);
-  return aWidget(r.cuerpo, r.status);
+  return aWidget(r.cuerpo, r.status, avisar);
 }
 
 // ---- La prueba (bloque 7) ----

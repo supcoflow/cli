@@ -69,7 +69,7 @@ describe("V-1 (c): un clon de gitlab.com con --repo equipo/reservas no es ese re
       leerConfiguracion: async () => { llamadas.push("configuracion"); throw new Error("no"); },
       leerArchivoChico: () => { llamadas.push("leer"); return { error: "x" }; },
       rutaReal: () => { llamadas.push("rutaReal"); return null; }, esCarpeta: () => false, esEnlace: () => false,
-      escribir: () => void llamadas.push("escribir"), avisar: () => {}, terminal: "0.8.1",
+      escribir: () => void llamadas.push("escribir"), avisar: () => {}, terminal: "0.9.0",
     } as DepsDeInstalacion;
     const r = await instalacionAnotar(d, { repo: "equipo/reservas", dryRun: false, skill: "0.3.1", app: null });
     expect(r).toMatchObject({ codigo: 3, json: { ok: false, error: "sin_clon" } });
@@ -123,7 +123,7 @@ describe("V-1 (b) y (e): con el remoto `supcoflow` de GitHub, el alias queda ata
       buscarProyecto: async (_a: URL, _k: string, repo: string) => { buscados.push(repo); return PROY; },
       leerConfiguracion: async () => { throw new Error("corte"); },
       leerArchivoChico: () => ({ error: "x" }), rutaReal: (p: string) => p, esCarpeta: () => true, esEnlace: () => false,
-      escribir: () => {}, avisar: () => {}, terminal: "0.8.1",
+      escribir: () => {}, avisar: () => {}, terminal: "0.9.0",
     } as unknown as DepsDeInstalacion;
     const r = await instalacionAnotar(d, { repo: null, dryRun: false, skill: "0.3.1", app: null });
     expect(r.json.error).not.toBe("sin_clon");

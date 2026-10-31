@@ -11,6 +11,8 @@ export type Flags = {
   source: string | null;
   fromGithub: boolean;
   skill: string | null; app: string | null;
+  // T8: `--file` se puede repetir sólo en `install record` (una interfaz propia vive en varios archivos); `file` es el primero.
+  files: string[]; shape: string | null;
   authorizeSpend: boolean; message: string | null; testId: string | null;
   ceiling: string | null; expectPolicy: string | null;
 };
@@ -27,8 +29,10 @@ export const COMANDOS_COMPUESTOS = [
 const PRIMERAS_PALABRAS = new Set([...COMANDOS_COMPUESTOS, ...Object.keys(COMANDOS_VIEJOS)].filter((c) => c.includes(" ")).map((c) => c.split(" ")[0]));
 const FLAGS_CON_VALOR = [
   "repo", "install", "test", "site", "title", "greeting", "file", "allow", "mode", "name", "save-to", "id", "source", "skill", "app",
-  "message", "test-id", "ceiling", "expect-policy",
+  "message", "test-id", "ceiling", "expect-policy", "shape",
 ] as const;
+// Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
+const FLAGS_REPETIBLES = new Set<string>(["file"]);
 const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend"] as const;
 
 // El flag que el token nombró, ya llevado a su nombre canónico (el viejo y el nuevo cuentan como el mismo).
@@ -69,7 +73,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
   // nombre viejo y el nuevo de un mismo flag) creería que se usó el primero. Se mira en los tokens y se rechaza.
   for (const nombre of FLAGS_CON_VALOR) {
     const toks = tokens.filter((t) => canonico(t.name) === nombre);
-    if (toks.length > 1 || toks.some((t) => t.value === "")) {
+    if ((toks.length > 1 && !FLAGS_REPETIBLES.has(nombre)) || toks.some((t) => t.value === "")) {
       throw invalida("argumentos_invalidos", `--${nombre} goes once, with a value. Try \`supcoflow --help\`.`);
     }
   }
@@ -95,6 +99,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
     return t === undefined ? null : (t.value ?? null);
   };
   const hay = (nombre: string) => tokens.some((x) => canonico(x.name) === nombre);
+  const archivos = tokens.filter((t) => canonico(t.name) === "file").map((t) => t.value ?? "");
   return {
     comando,
     viejos,
@@ -120,6 +125,8 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       fromGithub: hay("from-github"),
       skill: un("skill"),
       app: un("app"),
+      files: archivos,
+      shape: un("shape"),
       authorizeSpend: hay("authorize-spend"),
       message: un("message"),
       testId: un("test-id"),

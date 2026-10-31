@@ -1,8 +1,9 @@
 // src/comandos/instalacion.ts
-// `install record --skill <versión> [--app <carpeta>] [--file <ruta>] [--dry-run]` (bloque 6 y 0.8.0): deja en
-// `.supcoflow/instalacion.json` con qué versiones se instaló el chat y, desde la 0.8.0 (v2), en qué archivo quedó
-// (`--file`). Lee la configuración del motor y los `package.json` de la app y del paquete instalado; nunca ejecuta
-// nada del repo (ni `npm ls` ni `node`).
+// `install record --skill <versión> [--app <carpeta>] [--file <ruta>]... [--shape widget|own-interface] [--dry-run]`
+// (bloque 6, 0.8.0 y 0.9.0): deja en `.supcoflow/instalacion.json` con qué versiones se instaló el chat y, desde la 0.9.0
+// (v3, T8), qué se instaló (`--shape`: el widget o una interfaz propia de la app), en qué archivos quedó (`--file`, repetible)
+// y qué versión del contrato de presentación trae el paquete instalado (su `contract.json`). Lee la configuración del motor y
+// los `package.json` y `contract.json` de la app y del paquete instalado; nunca ejecuta nada del repo (ni `npm ls` ni `node`).
 //
 // La regla de §13 («no pisa archivos ni cambios sin commit») adaptada a un archivo que tiene que poder cambiar
 // (decisión 11): se reescribe sólo si git ya guarda el anterior. El control se hace ANTES de escribir; si la
@@ -12,7 +13,7 @@ import { lstatSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
-import { archivoAnotado, armarInstalacion, esSemver, PAQUETE_DEL_CHAT, RUTA_DE_LA_INSTALACION, serializar, validarElArchivoDelChat, type Configuracion, type Instalacion } from "../instalacion.ts";
+import { anotadoEn, armarInstalacion, leerInstalacionAnotada, esSemver, PAQUETE_DEL_CHAT, RUTA_DE_LA_INSTALACION, serializar, validarLosArchivos, type Configuracion, type Forma, type Instalacion } from "../instalacion.ts";
 import { NO_LEIDO } from "../lectura.ts";
 import { repoPedido } from "../repo-local.ts";
 import { fallo } from "./configurar.ts";
@@ -32,7 +33,13 @@ export type DepsDeInstalacion = DepsDelProyectoDelRepo & {
   terminal: string; // la versión de esta terminal
 };
 
-export type FlagsDeInstalacion = Pick<Flags, "repo" | "dryRun"> & { skill: string | null; app: string | null; file?: string | null };
+// `files` (todos los `--file`, en orden) manda sobre `file` (el primero, de antes de la 0.9.0); `shape` es lo que dijo la persona.
+export type FlagsDeInstalacion = Pick<Flags, "repo" | "dryRun"> & {
+  skill: string | null; app: string | null; file?: string | null; files?: string[]; shape?: string | null;
+};
+
+// `--shape` en inglés; al archivo va el nombre de la API (como `--mode save` y `guardar`).
+const FORMA_DE_LA_FLAG: Record<string, Forma> = { widget: "widget", "own-interface": "interfaz_propia" };
 
 export function esEnlaceReal(p: string): boolean {
   try {
@@ -82,7 +89,26 @@ function leerJson(d: DepsDeInstalacion, p: string, nombre: string): { ok: true; 
 // subiendo desde <app> hasta la raíz del repo. En un monorepo npm lo deja en la raíz; pnpm enlaza a
 // `node_modules/.pnpm/…`, adentro del repo. Si la ruta real sale del repo, no se lee: lo que hay afuera no es
 // de esta instalación y la terminal no lee fuera del repo por un enlace que el repo eligió.
-function paqueteInstalado(d: DepsDeInstalacion, raiz: string, app: string, avisos: string[]): { ok: true; valor: unknown } | { ok: false; resultado: Resultado } {
+// El `contract.json` (T8) se lee del MISMO paquete, al lado de su `package.json`: sin él (un paquete anterior al contrato)
+// es null; si es un enlace que sale del repo tampoco se lee.
+type Instalado = { ok: true; valor: unknown; contrato: unknown } | { ok: false; resultado: Resultado };
+
+function contratoDelPaquete(d: DepsDeInstalacion, raiz: string, carpetaReal: string, avisos: string[]): { ok: true; valor: unknown } | { ok: false; resultado: Resultado } {
+  const candidato = path.join(carpetaReal, "contract.json");
+  const real = d.rutaReal(candidato);
+  if (real === null) return { ok: true, valor: null };
+  if (!adentro(raiz, real)) {
+    const aviso = `${path.relative(raiz, candidato)} points outside the repo; I don't read it and I record the contract as null.`;
+    avisos.push(aviso);
+    d.avisar(aviso);
+    return { ok: true, valor: null };
+  }
+  const j = leerJson(d, real, `the contract.json of ${PAQUETE_DEL_CHAT}`);
+  if (j.ok) return j;
+  return { ok: false, resultado: j.noExiste ? fallo(SALIDA.inesperado, "paquete_ilegible", `I can't read the contract.json of ${PAQUETE_DEL_CHAT}.`) : j.resultado };
+}
+
+function paqueteInstalado(d: DepsDeInstalacion, raiz: string, app: string, avisos: string[]): Instalado {
   for (let dir = app; ; dir = path.dirname(dir)) {
     const candidato = path.join(dir, "node_modules", ...PAQUETE_DEL_CHAT.split("/"), "package.json");
     const real = d.rutaReal(candidato);
@@ -91,14 +117,17 @@ function paqueteInstalado(d: DepsDeInstalacion, raiz: string, app: string, aviso
         const aviso = `${path.relative(raiz, candidato)} points outside the repo; I don't read it and I record the installed chat as null.`;
         avisos.push(aviso);
         d.avisar(aviso);
-        return { ok: true, valor: null };
+        return { ok: true, valor: null, contrato: null };
       }
       const j = leerJson(d, real, `the installed package.json of ${PAQUETE_DEL_CHAT}`);
-      if (j.ok) return j;
-      // Existía hace un instante: si ahora no está, tampoco se anota «no está».
-      return { ok: false, resultado: j.noExiste ? fallo(SALIDA.inesperado, "paquete_ilegible", `I can't read the installed package.json of ${PAQUETE_DEL_CHAT}.`) : j.resultado };
+      if (!j.ok) {
+        // Existía hace un instante: si ahora no está, tampoco se anota «no está».
+        return { ok: false, resultado: j.noExiste ? fallo(SALIDA.inesperado, "paquete_ilegible", `I can't read the installed package.json of ${PAQUETE_DEL_CHAT}.`) : j.resultado };
+      }
+      const c = contratoDelPaquete(d, raiz, path.dirname(real), avisos);
+      return c.ok ? { ok: true, valor: j.valor, contrato: c.valor } : c;
     }
-    if (dir === raiz || path.dirname(dir) === dir) return { ok: true, valor: null };
+    if (dir === raiz || path.dirname(dir) === dir) return { ok: true, valor: null, contrato: null };
   }
 }
 
@@ -142,18 +171,27 @@ function diff(antes: string | null, despues: string): string {
 }
 
 const resumen = (x: Instalacion) =>
-  `skill ${x.skill}, terminal ${x.terminal}, chat declared ${x.chat.declarado ?? "—"} / installed ${x.chat.instalado ?? "—"}${x.archivo !== null ? `, file ${x.archivo}` : ""}`;
+  `skill ${x.skill}, terminal ${x.terminal}, chat declared ${x.chat.declarado ?? "—"} / installed ${x.chat.instalado ?? "—"}`
+  + `${x.forma === null ? "" : `, ${x.forma === "widget" ? "widget" : "own interface"}`}`
+  + `${x.archivos.length === 0 ? "" : `, ${x.archivos.length === 1 ? "file" : "files"} ${x.archivos.join(", ")}`}`
+  + `${x.contrato === null ? "" : `, contract ${x.contrato}`}`;
 
 export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInstalacion): Promise<Resultado> {
   if (flags.skill === null) return fallo(SALIDA.entradaInvalida, "falta_skill", "The skill version is missing: `supcoflow install record --skill 0.1.0`.");
   if (!esSemver(flags.skill)) return fallo(SALIDA.entradaInvalida, "skill_invalida", "--skill goes with a semver version (for example 0.1.0).");
 
-  // El archivo del chat se mira antes de cualquier pedido: una ruta imposible no gasta una vuelta al motor.
-  let archivoPedido: string | null = null;
-  if (flags.file !== undefined && flags.file !== null) {
-    const v = validarElArchivoDelChat(flags.file);
+  // La forma y los archivos del chat se miran antes de cualquier pedido: algo imposible no gasta una vuelta al motor.
+  let formaPedida: Forma | null = null;
+  if (flags.shape !== undefined && flags.shape !== null) {
+    formaPedida = Object.hasOwn(FORMA_DE_LA_FLAG, flags.shape) ? FORMA_DE_LA_FLAG[flags.shape]! : null;
+    if (formaPedida === null) return fallo(SALIDA.entradaInvalida, "forma_invalida", "--shape goes with `widget` (the packaged widget) or `own-interface` (a chat the app builds with its own components).");
+  }
+  const crudos = flags.files !== undefined && flags.files.length > 0 ? flags.files : flags.file !== undefined && flags.file !== null ? [flags.file] : [];
+  let archivosPedidos: string[] | null = null;
+  if (crudos.length > 0) {
+    const v = validarLosArchivos(crudos);
     if (!v.ok) return fallo(SALIDA.entradaInvalida, "archivo_invalido", v.motivo);
-    archivoPedido = v.ruta;
+    archivosPedidos = v.rutas;
   }
 
   // ─── La raíz y la app, antes de cualquier pedido ───
@@ -176,7 +214,7 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
 
   // `--file`: ni un enlace simbólico ni un camino que pase por uno (saldría del repo sin que se vea). El archivo todavía
   // puede no existir (con `--dry-run` se anota antes de escribirlo), pero ninguna carpeta del camino puede ser un enlace.
-  if (archivoPedido !== null) {
+  for (const archivoPedido of archivosPedidos ?? []) {
     const partes = archivoPedido.split("/");
     for (let i = 1; i <= partes.length; i++) {
       if (d.esEnlace(path.join(raiz, ...partes.slice(0, i)))) {
@@ -207,18 +245,32 @@ export async function instalacionAnotar(d: DepsDeInstalacion, flags: FlagsDeInst
   const actual = d.leerArchivoChico(archivo, TOPE_DEL_ARCHIVO);
   const existe = !("error" in actual) || actual.error !== NO_LEIDO.noExiste;
   const antes = "bytes" in actual ? Buffer.from(actual.bytes).toString("utf8") : null;
-  // Re-correr sin `--file` no borra el archivo que ya se anotó; un v1 (sin `archivo`) da null, sin error.
-  const archivoDelChat = archivoPedido ?? archivoAnotado(antes);
+  // Re-correr sin `--shape` ni `--file` no borra lo que ya se anotó (v2: su `archivo` es el widget; v1: nada, sin error).
+  // `--file` reemplaza la lista entera y `--shape` la forma: lo que se pide manda, lo que no, se conserva.
+  // Un archivo de una terminal más nueva no se reescribe: se perdería lo que esa versión anotó.
+  if (leerInstalacionAnotada(antes).estado === "mas_nueva") {
+    return fallo(SALIDA.haceFaltaUnaPersona, "escrito_por_una_terminal_mas_nueva", `${RUTA_DE_LA_INSTALACION} was written by a newer supcoflow than this one; I didn't touch it. Update supcoflow (\`npx supcoflow@latest\`) and run again.`);
+  }
+  const anotado = anotadoEn(antes);
+  // Cambiar la forma sin decir los archivos no hereda los de la forma anterior (el envoltorio del widget no es la interfaz propia).
+  const cambiaLaForma = formaPedida !== null && anotado.forma !== null && formaPedida !== anotado.forma;
   let x: Instalacion;
   try {
-    x = armarInstalacion({ skill: flags.skill, terminal: d.terminal, paqueteDeLaApp: deLaApp.ok ? deLaApp.valor : null, paqueteInstalado: instalado.valor, configuracion, archivo: archivoDelChat });
+    x = armarInstalacion({
+      skill: flags.skill, terminal: d.terminal, paqueteDeLaApp: deLaApp.ok ? deLaApp.valor : null, paqueteInstalado: instalado.valor, configuracion,
+      forma: formaPedida ?? anotado.forma, archivos: archivosPedidos ?? (cambiaLaForma ? [] : anotado.archivos), contrato: instalado.contrato,
+    });
   } catch (e) {
     return resultadoDeFallo(e);
   }
   const nuevo = serializar(x);
 
   // ─── ¿Se puede escribir? ───
-  const json = { ok: true, ruta: RUTA_DE_LA_INSTALACION, instalacion: x, archivo: x.archivo, ...(avisos.length > 0 ? { avisos } : {}) };
+  // `archivo` (el primero) sigue en el JSON por las skills de antes de la 0.9.0; lo nuevo es `archivos`, `forma` y `contrato`.
+  const json = {
+    ok: true, ruta: RUTA_DE_LA_INSTALACION, instalacion: x, archivo: x.archivos[0] ?? null, archivos: x.archivos, forma: x.forma, contrato: x.contrato,
+    ...(avisos.length > 0 ? { avisos } : {}),
+  };
   if ("bytes" in actual && Buffer.from(actual.bytes).equals(Buffer.from(nuevo, "utf8"))) {
     return { codigo: SALIDA.ok, json: { ...json, ...(flags.dryRun ? { dry_run: true } : {}), sin_cambios: true }, texto: `${RUTA_DE_LA_INSTALACION} already says that (${resumen(x)}); I didn't touch it.` };
   }

@@ -521,7 +521,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     widget: {
       api, guardado, git: gitReal, cwd, archivos: archivosDelRepo(avisar),
       buscarProyecto: configurarEnElMotor.buscarProyecto,
-      leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch),
+      leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch, avisar),
     },
     // La versión que se anota es la de `describir` (pinzada contra package.json por test): una sola fuente
     // para lo que la terminal dice de sí misma.
@@ -535,6 +535,8 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       api, guardado, git: gitReal, cwd, avisar, archivos: archivosDelRepo(avisar), pruebas, generar: randomUUID, ahora: Date.now, dormir, tramoMs,
       buscarProyecto: configurarEnElMotor.buscarProyecto,
       leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
+      leerWidget: (a, clave, id) => leerWidget(a, clave, id, fetch, avisar),
+      existe: (p) => { try { lstatSync(p); return true; } catch { return false; } },
       pedirPrueba: (a, clave, id, intento) => pedirPrueba(a, clave, id, intento, fetch),
       leerPrueba: (a, clave, id, pruebaId, plazoMs) => leerPrueba(a, clave, id, pruebaId, fetch, plazoMs),
     },

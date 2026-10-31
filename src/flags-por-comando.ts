@@ -29,8 +29,13 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
     flags: ["authorizeSpend", "ceiling", "expectPolicy", "message", "testId"], comandos: ["test"],
     texto: "--authorize-spend, --ceiling, --expect-policy, --message and --test-id belong to `supcoflow test`.",
   },
-  { flags: ["skill", "app"], comandos: ["install record"], texto: "--skill and --app belong to `supcoflow install record`." },
+  { flags: ["skill", "app", "shape"], comandos: ["install record"], texto: "--skill, --app and --shape belong to `supcoflow install record`." },
 ];
+
+/** `--file` se repite sólo en `install record` (la interfaz propia vive en varios archivos); en los demás va una vez. */
+export function archivosDeMas(comando: string, cuantos: number): string | null {
+  return cuantos > 1 && comando !== "install record" ? "--file goes once, with a value. Try `supcoflow --help`." : null;
+}
 
 /** El mensaje del primer flag presente que el comando no acepta, o null si todo aplica. */
 export function flagQueNoAplica(comando: string, presentes: string[]): string | null {

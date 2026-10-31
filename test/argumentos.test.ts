@@ -5,7 +5,7 @@ import { COMANDOS_VIEJOS, FLAGS_VIEJOS } from "../src/alias.ts";
 const VACIOS = {
   json: false, dryRun: false, fromGithub: false, help: false, start: false, wait: false, repo: null, install: null, test: null,
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
-  skill: null, app: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
+  skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
 };
 
 it("lee comando y flags", () => {
@@ -138,6 +138,15 @@ describe("flags de configurar", () => {
     expect(() => leerArgumentos(["install", "record", "--app", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
     expect(() => leerArgumentos(["install", "record", "--file", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
     expect(() => leerArgumentos(["widget", "show"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+  });
+  it("T8: --file se puede repetir (en orden, `file` es el primero) y --shape lleva valor, una sola vez", () => {
+    const a = leerArgumentos(["install", "record", "--skill", "0.1.0", "--shape", "own-interface", "--file", "src/a.tsx", "--file", "src/b.ts"]);
+    expect(a.flags).toMatchObject({ shape: "own-interface", file: "src/a.tsx", files: ["src/a.tsx", "src/b.ts"] });
+    expect(leerArgumentos(["install", "record", "--file", "src/a.tsx"]).flags).toMatchObject({ file: "src/a.tsx", files: ["src/a.tsx"] });
+    expect(leerArgumentos(["install", "record"]).flags).toMatchObject({ file: null, files: [], shape: null });
+    expect(() => leerArgumentos(["install", "record", "--shape", "widget", "--shape", "own-interface"])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["install", "record", "--shape", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    expect(() => leerArgumentos(["install", "record", "--file", "src/a.tsx", "--file", ""])).toThrowError(expect.objectContaining({ codigo: 3 }));
   });
   it("--save-to llega como saveTo", () => {
     expect(leerArgumentos(["keys", "create", "--save-to", "/tmp/k"]).flags.saveTo).toBe("/tmp/k");

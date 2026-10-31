@@ -19,7 +19,7 @@ import { repoConectarInteractivo, repoConectarStart, repoConectarWait } from "./
 import { widget } from "./comandos/widget.ts";
 import { emitir, FalloDeLaTerminal, resultadoDeFallo, SALIDA, type Resultado } from "./contrato.ts";
 import { entornoReal } from "./entorno.ts";
-import { flagQueNoAplica } from "./flags-por-comando.ts";
+import { archivosDeMas, flagQueNoAplica } from "./flags-por-comando.ts";
 
 const COMANDOS = new Set(DESCRIPCION.comandos.map((c) => c.nombre));
 
@@ -46,12 +46,14 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       site: flags.site !== null, title: flags.title !== null, greeting: flags.greeting !== null, theme: flags.theme.length > 0,
       file: flags.file !== null, allow: flags.allow !== null, mode: flags.mode !== null,
       name: flags.name !== null, saveTo: flags.saveTo !== null, id: flags.id !== null, source: flags.source !== null, fromGithub: flags.fromGithub,
-      skill: flags.skill !== null, app: flags.app !== null,
+      skill: flags.skill !== null, app: flags.app !== null, shape: flags.shape !== null,
       authorizeSpend: flags.authorizeSpend, message: flags.message !== null, testId: flags.testId !== null,
       ceiling: flags.ceiling !== null, expectPolicy: flags.expectPolicy !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
+    const deMas = archivosDeMas(comando, flags.files.length);
+    if (deMas !== null) throw invalida("argumentos_invalidos", deMas);
     if (flags.start && flags.wait) {
       throw invalida("flags_incompatibles", "--start and --wait go separately: first one and then the other.");
     }

@@ -36,8 +36,8 @@ the English ones.
 | `supcoflow guide use --source repo\|agent` | Chooses which guide is active. |
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
-| `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with and which file it lives in. |
-| `supcoflow diagnose` | Free: how far the installation is (N of 6) and whether a test would go in (including whether this machine can save the test request). |
+| `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
+| `supcoflow diagnose` | Free: how far the installation is (N of 7) and whether a test would go in (including whether this machine can save the test request). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
 | `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. |
 
@@ -191,13 +191,61 @@ wrongly copied id leaves the chat invisible without any error). It writes no fil
 The `<script>` line it also shows is available but not tested in a real app, and is not for Next.js.
 `supcoflow widget --json` returns the engine's object as is.
 
-Then, `supcoflow install record --skill <version> [--app <folder>] [--file <path>]` leaves in
+### Your own interface (the app builds the chat)
+
+Supcoflow doesn't have to be the one that draws the chat. When the engine also describes the app's **own interface**
+(`interfaz_propia` in `widget --json`; `Own interface` in the text), the code assistant builds the chat with the
+app's own components, icons and styles, and Supcoflow only says what to install and which contract the interface
+must fulfil. **There is no code to paste** in this form:
+
+| Field (`interfaz_propia`) | What it is |
+|---|---|
+| `estado` | `disponible`, or `sin_publicar` when the package version isn't on npm yet. With `sin_publicar` the text doesn't offer the path (it would be an `npm i` that fails): it says «not published yet; use the widget». The JSON still carries everything. |
+| `paquete`, `version`, `instalar` | The package and its exact version, and the install command. |
+| `tenant_id`, `project_id`, `backend_url`, `opciones_del_nucleo` | The ids and the backend, as the engine has them: don't copy them by hand. |
+| `csp` | The Content Security Policy line to add to `connect-src`. |
+| `contrato` (`version`, `archivo`, `documento`) | The presentation contract the interface has to follow: its version, and where the installed package carries it (`contract.json` and `docs/presentation-contract.md`, paths relative to the folder where `npm i` was run), so it can be read offline. |
+| `entradas`, `documentos` | The package entry points (`@supcoflow/chat/core`, `/react`, `/testing`, `/testing/server`) and the docs inside the package. Names and paths, not code. |
+
+The field is additive: an engine that doesn't send it (production, until the engine's T8 ships) gives exactly the
+object it always gave, and the terminal adds nothing. If the engine sends `interfaz_propia` halfway (a field missing,
+an `estado` it doesn't know, a `contrato.version` that isn't a semver, a path outside the package), the terminal ignores
+that whole part, says so on stderr and shows the widget as always: it never shows half of it, and an optional block never
+takes the widget down. Anything else inside `interfaz_propia` that the terminal doesn't know is not passed on.
+
+Then, `supcoflow install record --skill <version> [--app <folder>] [--shape widget|own-interface] [--file <path>]…` leaves in
 `.supcoflow/instalacion.json` (to commit) which versions it ended up with: the skill, the terminal, the chat declared
-and installed, the project configuration and, with `--file`, the file the chat lives in (a path relative to the repo
-root, with no `..`, and not a symlink). The file is version 2; a version 1 file (from 0.7.0) is read without error as
-«no file recorded». Running it again without `--file` keeps the file already recorded. It never contains a secret or
-a date; repeating it without changes doesn't touch it, and if the file has uncommitted changes it exits 4 and doesn't
-overwrite it.
+and installed, the project configuration and, from version 3 (0.9.0), what the installation is:
+
+- `forma`: `"widget"` or `"interfaz_propia"` (`--shape widget` / `--shape own-interface`), or `null` if not said.
+- `archivos`: the files the chat lives in, relative to the repo root (no `..`, not absolute, not a symlink, up to 20).
+  `--file` can be repeated, in order, and replaces the whole list; the wrapper of the widget is one file, an own
+  interface usually several.
+- `contrato`: the version of the presentation contract the **installed** package carries (its `contract.json`, found the
+  same way as its `package.json`: the closest `node_modules` going up to the repo root, never outside the repo), or `null`
+  if the package has none. A `contract.json` that is there but has no version is an error (`paquete_ilegible`).
+
+Running it again without `--shape` or `--file` keeps the form and the files already recorded; changing `--shape` without
+`--file` leaves `archivos` empty (the wrapper of the widget isn't the own interface, and the other way round). Versions 1 and
+2 are read without error and as a widget, the only form there was: a version 2 `archivo` is read as `archivos: [archivo]`
+(and rewritten as version 3). A file of version 4 or more (written by a newer supcoflow) is never rewritten: `install record`
+exits 4 `escrito_por_una_terminal_mas_nueva` and `diagnose` says to update supcoflow. The JSON of the command keeps `archivo` (the first file) for the skills before 0.9.0 and adds
+`archivos`, `forma` and `contrato`. It never contains a secret or a date; repeating it without changes doesn't touch it,
+and if the file has uncommitted changes it exits 4 and doesn't overwrite it.
+
+**Point 7 of `diagnose` (`interfaz`).** It is local and only reads. If `.supcoflow/instalacion.json` records an own
+interface, it checks that every recorded file is still there, that a contract is recorded and that it isn't older than the
+one the project declares today (`interfaz_propia.contrato.version`, asked from the engine; if that can't be asked, or the
+engine doesn't send it, nothing is compared). Only a new **major** version fails the point (a new requirement comes only with
+a major one): then it says to run the skill again and check that the interface still conforms. A newer minor or patch only
+adds optional points: the point stays ok and says so. To see that a recorded file is still there it doesn't read it. With no
+own interface recorded (no file, the widget, or nothing said) the point is ok («Not applicable»). It is advice: when it
+fails it lowers the «N of 7», it is marked `aviso: true` in the JSON, and it doesn't stop a test.
+
+**Before publishing 0.9.0.** `diagnose` now says «N of 7», and the skill of today (`SKILL.md`, `referencias/prueba.md`)
+asks literally for «6 of 6», but it pins the terminal to 0.8.1 (never `@latest`), so it won't see 0.9.0 until a skill pins it.
+The skill that pins 0.9.0 has to read `instalacion.ok` / `listo` (or `aviso`) instead of a fixed number, and 0.9.0 has to be on
+npm before or together with it.
 
 ## Test the installation
 
@@ -206,7 +254,7 @@ the repo from the `origin`, or `--repo owner/repo`.
 
 | Command | What it does |
 |---|---|
-| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat and guide: N of 6, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the month's balance and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 6, puntos }` and `prueba: { listo, puntos }`. |
+| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the month's balance and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 7, puntos }` and `prueba: { listo, puntos }`. The seventh point, `interfaz`, is explained in «Put the chat in the app». |
 | `supcoflow test` | Without `--authorize-spend` it sends nothing: it exits 4 with the test's ceiling, the balance, the cap and what is committed this month, and the exact command to launch it. It also says, before you authorize anything, whether this machine can save the test request (`maquina: { ok, impedimentos }`) and any request still waiting for confirmation (`intento_pendiente: { techo_usd, politica }`). |
 | `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate` | Requests the test: the problem comes in through the same door as the chat and runs an investigation that **spends** up to the ceiling you authorize (with the `save` policy it goes as far as the saved case and doesn't spend). Exits 5 with the id. `--message "…"` uses your own text. |
 | `supcoflow test --wait` | Follows the last test up to 90 s: 5 while it runs (call it again), 0 with the issue, 4 if it needs a look in the console (it brings the link). The charge is shown as it is: `pendiente` right at the close, never 0. `--test-id prb_…` follows another one. |

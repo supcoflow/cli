@@ -79,7 +79,7 @@ describe("V-3: una máquina sana", () => {
     expect(t.json).toMatchObject({ error: "falta_autorizacion", intento_pendiente: null });
     expect(t.texto).not.toContain("can't save");
     expect(g.codigo).toBe(0);
-    expect(g.json).toMatchObject({ listo: true, maquina: { ok: true }, prueba: { listo: true }, instalacion: { ok: 6, total: 6 }, intento_pendiente: null });
+    expect(g.json).toMatchObject({ listo: true, maquina: { ok: true }, prueba: { listo: true }, instalacion: { ok: 7, total: 7 }, intento_pendiente: null });
   });
 });
 
@@ -94,10 +94,10 @@ describe("V-3: lo que se ve antes del sí", () => {
     // el mensaje lo dice PRIMERO, y el comando para lanzar sigue ahí
     expect(t.texto).toMatch(/^This machine can't save the test request yet: /);
     expect(t.codigo).toBe(4);
-    // diagnose: sale 4 no_listo, `listo` y `prueba.listo` en false y el «N of 6» de la instalación no cambia
+    // diagnose: sale 4 no_listo, `listo` y `prueba.listo` en false y el «N of 7» de la instalación no cambia
     expect(g.codigo).toBe(4);
-    expect(g.json).toMatchObject({ ok: false, error: "no_listo", listo: false, prueba: { listo: false }, instalacion: { ok: 6, total: 6 } });
-    expect(g.texto).toContain("6 of 6, at no cost.");
+    expect(g.json).toMatchObject({ ok: false, error: "no_listo", listo: false, prueba: { listo: false }, instalacion: { ok: 7, total: 7 } });
+    expect(g.texto).toContain("7 of 7, at no cost.");
     expect(g.texto).toMatch(/\[missing\] maquina: This machine can't save the test request yet: /);
     return maquina;
   }

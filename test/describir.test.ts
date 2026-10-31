@@ -89,24 +89,32 @@ describe("describe --json", () => {
     expect(i.ejemplos[0]).toMatch(/^supcoflow install record --skill \S+/);
     expect(i.codigos).toEqual([0, 1, 2, 3, 4]);
     const flags = i.flags.join(" ");
-    for (const f of ["--skill", "--app", "--file", "--repo", "--dry-run", "--json"]) expect(flags, f).toContain(f);
+    for (const f of ["--skill", "--app", "--file", "--shape", "--repo", "--dry-run", "--json"]) expect(flags, f).toContain(f);
     // Todos los errores con nombre, para que el asistente sepa qué hacer con cada uno sin probarlo.
     const texto = `${i.resumen} ${flags}`;
     for (const e of [
       "falta_skill", "skill_invalida", "app_fuera_del_repo", "app_inexistente", "sin_clon",
       "cambios_sin_commit", "archivo_no_versionado", "archivo_invalido", "sin_proyecto", "acuerdo_ilegible",
-      "paquete_ilegible", "configuracion_inesperada", "archivo_no_escrito", "sin_cambios",
+      "paquete_ilegible", "configuracion_inesperada", "archivo_no_escrito", "sin_cambios", "forma_invalida", "escrito_por_una_terminal_mas_nueva",
     ]) expect(texto, e).toContain(e);
-    // Sólo `install record` nombra --skill y --app.
+    // T8: la versión 3 del archivo, y la forma «interfaz propia» con sus archivos y su contrato.
+    expect(texto).toMatch(/version 3/);
+    for (const palabra of ["interfaz_propia", "archivos", "contrato"]) expect(texto, palabra).toContain(palabra);
+    // Sólo `install record` nombra --skill, --app y --shape.
     for (const c of DESCRIPCION.comandos.filter((x) => x.nombre !== "install record")) {
-      expect(c.flags.join(" "), c.nombre).not.toMatch(/--skill|--app/);
+      expect(c.flags.join(" "), c.nombre).not.toMatch(/--skill|--app|--shape/);
     }
+    // `widget` cuenta el campo nuevo, y dice que no da código para pegar.
+    expect(w.resumen).toContain("interfaz_propia");
+    expect(w.resumen).toContain("sin_publicar");
+    expect(w.resumen).toContain("contrato.version");
+    expect(w.resumen).toMatch(/no code to paste/);
   });
 
-  it("la versión es la del package.json, y es la 0.8.1", () => {
+  it("la versión es la del package.json, y es la 0.9.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.8.1");
+    expect(pkg.version).toBe("0.9.0");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -117,7 +125,11 @@ describe("describe --json", () => {
     expect(dg).toBeDefined();
     expect(dg.codigos).toEqual([0, 1, 2, 3, 4]);
     expect(dg.ejemplos).toContain("supcoflow diagnose --json");
-    expect(dg.resumen).toMatch(/N of 6/);
+    expect(dg.resumen).toMatch(/N of 7/);
+    expect(dg.resumen).toMatch(/interface/);
+    expect(dg.resumen).toMatch(/doesn't stop a test/);
+    expect(`${dg.resumen} ${dg.flags.join(" ")}`).toContain("aviso");
+    expect(dg.resumen).toMatch(/major/);
     const pr = g("test");
     expect(pr).toBeDefined();
     const flags = pr.flags.join(" ");
@@ -174,8 +186,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.8.1", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.8.1" });
+  it("describe --json se escribe en una sola línea con la versión 0.9.0", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.9.0" });
   });
 });
 
