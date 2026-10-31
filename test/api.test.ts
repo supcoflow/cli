@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { interfazPropiaDelMotor } from "./interfaz-propia-del-motor.ts";
 import { describe, expect, it, vi } from "vitest";
 import { API_DE_PRODUCCION, buscarProyecto, canjear, elegirOrigen, leerGuia, leerWidget, publicarGuia, revisarGuia, configurar, crearConexion, crearProyecto, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerProyecto, listarClaves, subirLogo, pedirCodigo, quienSoy, revocarPropia, ultimaConexion, urlDeLaApi, type Fetch } from "../src/api.ts";
 
@@ -287,33 +288,49 @@ describe("leerWidget", () => {
     await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, paquete: "otro" }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
   });
   // T8: la forma «interfaz propia» (aditiva). Un motor que no la manda (el de producción de hoy) sigue valiendo igual.
-  const PROPIA = {
-    paquete: "@supcoflow/chat", version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
-    tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
-    csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: "1.1.0",
-  };
+  // El fixture es la copia literal de lo que manda el motor T8 (`test/interfaz-propia-del-motor.ts`), no una forma inventada.
+  const PROPIA = interfazPropiaDelMotor();
   it("T8: sin `interfaz_propia` (el motor de hoy) la forma es la de siempre y la clave no aparece", async () => {
     const w = await leerWidget(API, CLAVE, "p", falso(200, WIDGET));
     expect(w).toEqual(WIDGET);
     expect(w).not.toHaveProperty("interfaz_propia");
     expect(await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: null }))).not.toHaveProperty("interfaz_propia");
   });
-  it("T8: con `interfaz_propia` la deja pasar, campo a campo, y descarta lo que no es de la lista", async () => {
-    const w = await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: { ...PROPIA, contenido: "codigo para pegar", nextjs: {}, secreto: CLAVE } }));
+  it("T8 (P1-1): la forma REAL del motor (`contrato` objeto, `estado`, `entradas`, `documentos`) se lee entera, sin tirar el widget", async () => {
+    for (const estado of ["disponible", "sin_publicar"] as const) {
+      const w = await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: interfazPropiaDelMotor(estado) }));
+      expect(w.interfaz_propia, estado).toEqual(interfazPropiaDelMotor(estado));
+      expect(w.nextjs.archivo_sugerido).toBe("app/_supcoflow/support-chat.tsx");
+    }
+  });
+  it("T8: descarta lo que no es de la lista (código para pegar, claves) y no copia campos que el motor sume mañana", async () => {
+    const w = await leerWidget(API, CLAVE, "p", falso(200, {
+      ...WIDGET, interfaz_propia: { ...PROPIA, contenido: "codigo para pegar", nextjs: {}, secreto: CLAVE, contrato: { ...PROPIA.contrato, otro: "x" }, entradas: { ...PROPIA.entradas, extra: "y" } },
+    }));
     expect(w.interfaz_propia).toEqual(PROPIA);
     expect(JSON.stringify(w)).not.toContain("codigo para pegar");
     expect(JSON.stringify(w)).not.toContain(CLAVE);
-    // Lo de siempre sigue donde estaba.
-    expect(w.nextjs.archivo_sugerido).toBe("app/_supcoflow/support-chat.tsx");
   });
-  it("T8: una `interfaz_propia` a medias (campo faltante, paquete ajeno, contrato que no es semver, no objeto) es respuesta_inesperada: no se muestra algo a medias", async () => {
-    const casos: unknown[] = [
-      "x", [PROPIA], { ...PROPIA, contrato_version: undefined }, { ...PROPIA, contrato_version: "uno" }, { ...PROPIA, contrato_version: "1.1" },
+  it("T8 (P2-1): una `interfaz_propia` a medias se DESCARTA con un aviso y el widget de siempre sigue andando", async () => {
+    const malas: unknown[] = [
+      "x", [PROPIA], { ...PROPIA, estado: "raro" }, { ...PROPIA, estado: undefined },
+      { ...PROPIA, contrato: undefined }, { ...PROPIA, contrato: "1.1.0" }, { ...PROPIA, contrato: { ...PROPIA.contrato, version: "uno" } },
+      { ...PROPIA, contrato: { ...PROPIA.contrato, archivo: "" } }, { ...PROPIA, contrato: { ...PROPIA.contrato, documento: undefined } },
+      { ...PROPIA, contrato_version: "1.1.0", contrato: undefined }, // la forma que esta CLI adivinó antes: no es la del motor
       { ...PROPIA, paquete: "otro" }, { ...PROPIA, version: "" }, { ...PROPIA, instalar: undefined }, { ...PROPIA, tenant_id: 3 },
       { ...PROPIA, project_id: "" }, { ...PROPIA, backend_url: undefined }, { ...PROPIA, csp: "" },
+      { ...PROPIA, opciones_del_nucleo: { tenantId: "t_1" } }, { ...PROPIA, entradas: { ...PROPIA.entradas, react: "react" } },
+      { ...PROPIA, documentos: { ...PROPIA.documentos, nucleo: "docs/core.md" } },
+      { ...PROPIA, documentos: { ...PROPIA.documentos, nucleo: "node_modules/@supcoflow/chat/../../etc/passwd" } },
+      { ...PROPIA, contrato: { ...PROPIA.contrato, archivo: "node_modules/@supcoflow/chat/a b.json" } },
     ];
-    for (const malo of casos) {
-      await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: malo })), JSON.stringify(malo)).rejects.toMatchObject({ codigo: 1, error: "respuesta_inesperada" });
+    for (const mala of malas) {
+      const avisos: string[] = [];
+      const w = await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: mala }), (a) => void avisos.push(a));
+      expect(w, JSON.stringify(mala)).toEqual(WIDGET);
+      expect(w).not.toHaveProperty("interfaz_propia");
+      expect(avisos, JSON.stringify(mala)).toHaveLength(1);
+      expect(avisos[0]).toMatch(/ignor/i);
     }
   });
   it("404 sale como entrada inválida con el mensaje del motor tapado", async () => {

@@ -95,7 +95,7 @@ describe("describe --json", () => {
     for (const e of [
       "falta_skill", "skill_invalida", "app_fuera_del_repo", "app_inexistente", "sin_clon",
       "cambios_sin_commit", "archivo_no_versionado", "archivo_invalido", "sin_proyecto", "acuerdo_ilegible",
-      "paquete_ilegible", "configuracion_inesperada", "archivo_no_escrito", "sin_cambios", "forma_invalida",
+      "paquete_ilegible", "configuracion_inesperada", "archivo_no_escrito", "sin_cambios", "forma_invalida", "escrito_por_una_terminal_mas_nueva",
     ]) expect(texto, e).toContain(e);
     // T8: la versión 3 del archivo, y la forma «interfaz propia» con sus archivos y su contrato.
     expect(texto).toMatch(/version 3/);
@@ -106,6 +106,8 @@ describe("describe --json", () => {
     }
     // `widget` cuenta el campo nuevo, y dice que no da código para pegar.
     expect(w.resumen).toContain("interfaz_propia");
+    expect(w.resumen).toContain("sin_publicar");
+    expect(w.resumen).toContain("contrato.version");
     expect(w.resumen).toMatch(/no code to paste/);
   });
 
@@ -126,6 +128,8 @@ describe("describe --json", () => {
     expect(dg.resumen).toMatch(/N of 7/);
     expect(dg.resumen).toMatch(/interface/);
     expect(dg.resumen).toMatch(/doesn't stop a test/);
+    expect(`${dg.resumen} ${dg.flags.join(" ")}`).toContain("aviso");
+    expect(dg.resumen).toMatch(/major/);
     const pr = g("test");
     expect(pr).toBeDefined();
     const flags = pr.flags.join(" ");

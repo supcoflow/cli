@@ -15,11 +15,9 @@ const W: Widget = {
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
 
-const PROPIA = {
-  paquete: "@supcoflow/chat" as const, version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
-  tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
-  csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: "1.1.0",
-};
+import { interfazPropiaDelMotor } from "./interfaz-propia-del-motor.ts";
+
+const PROPIA = interfazPropiaDelMotor();
 
 function deps(o: Partial<DepsDeWidget> = {}): DepsDeWidget {
   return {
@@ -88,7 +86,7 @@ describe("supcoflow widget", () => {
     expect(r.json).not.toHaveProperty("interfaz_propia");
   });
 
-  it("T8: con `interfaz_propia`: el JSON la lleva tal cual y el texto la describe sin dar código para pegar", async () => {
+  it("T8: con `interfaz_propia` disponible: el JSON la lleva tal cual y el texto la describe con lo que manda el motor, sin dar código para pegar", async () => {
     const r = await widget(deps({ leerWidget: async () => ({ ...W, interfaz_propia: PROPIA }) }), F);
     expect(r.codigo).toBe(SALIDA.ok);
     expect(r.json).toEqual({ ok: true, ...W, interfaz_propia: PROPIA });
@@ -99,9 +97,22 @@ describe("supcoflow widget", () => {
     expect(i).toBeGreaterThan(t.indexOf(W.csp));
     const propia = t.slice(i);
     expect(propia).toContain(PROPIA.instalar);
-    for (const dato of [PROPIA.tenant_id, PROPIA.project_id, PROPIA.backend_url, PROPIA.csp, PROPIA.contrato_version]) expect(propia).toContain(dato);
-    expect(propia).toContain("node_modules/@supcoflow/chat/contract.json");
+    for (const dato of [PROPIA.tenant_id, PROPIA.project_id, PROPIA.backend_url, PROPIA.csp, PROPIA.contrato.version]) expect(propia).toContain(dato);
+    // Las rutas y las entradas son las del motor, no una segunda copia escrita a mano acá (P2-2).
+    for (const dato of [PROPIA.contrato.archivo, PROPIA.contrato.documento, ...Object.values(PROPIA.entradas), ...Object.values(PROPIA.documentos)]) expect(propia).toContain(dato);
     expect(propia).toMatch(/no code to paste/i);
     expect(propia).not.toContain("ChatDeIntake");
+  });
+
+  it("T8 (P1-2): con `estado: sin_publicar` NO ofrece el camino (ni `npm i` de una versión que no existe en npm) pero el JSON lo dice", async () => {
+    const sinPublicar = interfazPropiaDelMotor("sin_publicar");
+    const r = await widget(deps({ leerWidget: async () => ({ ...W, interfaz_propia: sinPublicar }) }), F);
+    expect(r.json).toEqual({ ok: true, ...W, interfaz_propia: sinPublicar });
+    expect((r.json as { interfaz_propia: { estado: string } }).interfaz_propia.estado).toBe("sin_publicar");
+    const t = r.texto!;
+    expect(t).toContain(CONTENIDO); // el widget sigue entero
+    expect(t).toMatch(/Own interface: not published yet/);
+    expect(t).not.toContain(sinPublicar.instalar);
+    expect(t).not.toContain("Presentation contract");
   });
 });

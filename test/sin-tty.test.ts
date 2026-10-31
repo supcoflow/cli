@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { interfazPropiaDelMotor } from "./interfaz-propia-del-motor.ts";
 
 const RAIZ = fileURLToPath(new URL("..", import.meta.url));
 const CLI = join(RAIZ, "dist", "cli.js");
@@ -50,11 +51,7 @@ const WIDGET = {
   script: { estado: "disponible_sin_soporte", linea: "<script src=\"https://chat.supcoflow.dev/w.js\"></script>" },
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
-const INTERFAZ_PROPIA = (contrato: string) => ({
-  paquete: "@supcoflow/chat", version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
-  tenant_id: "tnt_1", project_id: PROYECTO.id, backend_url: "https://chat.supcoflow.dev",
-  csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: contrato,
-});
+const INTERFAZ_PROPIA = (contrato: string) => interfazPropiaDelMotor("disponible", contrato);
 const pedidosAlMotor: string[] = [];
 let servidor: Server;
 let api: string;

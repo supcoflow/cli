@@ -488,8 +488,8 @@ describe("install record --file (instalacion.json v3; el `archivo` de la v2 se l
     const m = mundo({ versionado: true });
     m.archivos.set(ARCHIVO, v1);
     const r = await instalacionAnotar(deps(m), F);
-    expect(r).toMatchObject({ codigo: 0, json: { ok: true, archivo: null, archivos: [], sin_cambios: false } });
-    expect(JSON.parse(m.archivos.get(ARCHIVO)!)).toMatchObject({ version: 3, forma: null, archivos: [], contrato: null });
+    expect(r).toMatchObject({ codigo: 0, json: { ok: true, archivo: null, archivos: [], forma: "widget", sin_cambios: false } });
+    expect(JSON.parse(m.archivos.get(ARCHIVO)!)).toMatchObject({ version: 3, forma: "widget", archivos: [], contrato: null });
   });
   it("--file con otro proyecto/clon: --repo sin clon sale 3 sin_clon como antes", async () => {
     expect(await instalacionAnotar(deps(mundo()), { ...F, repo: "otro/repo", file: CHAT })).toMatchObject({ codigo: 3, json: { error: "sin_clon" } });
@@ -500,18 +500,21 @@ describe("anotadoEn, leerInstalacionAnotada y validarElArchivoDelChat (puras)", 
   const VACIO = { forma: null, archivos: [], contrato: null };
   it("v1, sin `version`, ilegible, vacío o con un archivo inválido: lo anotado vacío, nunca un error", () => {
     const v = (extra: object) => JSON.stringify({ skill: "0.1.0", ...extra });
-    expect(anotadoEn(v({ version: 1 }))).toEqual(VACIO);
     expect(anotadoEn(v({}))).toEqual(VACIO);
     expect(anotadoEn("{no es json")).toEqual(VACIO);
     expect(anotadoEn(null)).toEqual(VACIO);
-    expect(anotadoEn(v({ version: 2, archivo: "../x" }))).toEqual(VACIO);
-    expect(anotadoEn(v({ version: 2, archivo: 3 }))).toEqual(VACIO);
-    expect(anotadoEn(v({ version: 1, archivo: "app/x.tsx" }))).toEqual(VACIO);
     expect(anotadoEn(v({ version: 4, forma: "widget", archivos: ["a.tsx"] }))).toEqual(VACIO); // de una terminal más nueva: no se adivina
+  });
+  it("P3-1: antes de la 0.9.0 la única forma era el widget: una v1, o una v2 sin archivo, se leen como widget (sin archivos si no hay)", () => {
+    const v = (extra: object) => JSON.stringify({ skill: "0.1.0", ...extra });
+    expect(anotadoEn(v({ version: 1 }))).toEqual({ forma: "widget", archivos: [], contrato: null });
+    expect(anotadoEn(v({ version: 1, archivo: "app/x.tsx" }))).toEqual({ forma: "widget", archivos: [], contrato: null }); // la v1 no tiene archivo
+    expect(anotadoEn(v({ version: 2, archivo: null }))).toEqual({ forma: "widget", archivos: [], contrato: null });
+    expect(anotadoEn(v({ version: 2, archivo: "../x" }))).toEqual({ forma: "widget", archivos: [], contrato: null });
   });
   it("v2: el `archivo` es de un widget (la v2 sólo existió para el widget)", () => {
     expect(anotadoEn(JSON.stringify({ version: 2, archivo: "app/_supcoflow/support-chat.tsx" }))).toEqual({ forma: "widget", archivos: ["app/_supcoflow/support-chat.tsx"], contrato: null });
-    expect(anotadoEn(JSON.stringify({ version: 2, archivo: null }))).toEqual(VACIO);
+    expect(anotadoEn(JSON.stringify({ version: 2, archivo: null }))).toEqual({ forma: "widget", archivos: [], contrato: null });
   });
   it("v3: de ida y vuelta (serializar → leer) devuelve lo mismo", () => {
     const x: Instalacion = { ...ESPERADA, forma: "interfaz_propia", archivos: ["src/chat/panel.tsx", "src/chat/use-chat.ts"], contrato: "1.1.0" };
@@ -529,6 +532,9 @@ describe("anotadoEn, leerInstalacionAnotada y validarElArchivoDelChat (puras)", 
     expect(leerInstalacionAnotada("\u0000(unreadable)")).toEqual({ estado: "ilegible" });
     expect(leerInstalacionAnotada("[1]")).toEqual({ estado: "ilegible" });
     expect(leerInstalacionAnotada(serializar(ESPERADA))).toEqual({ estado: "leida", ...VACIO });
+    // P3-2: una versión que esta terminal no conoce no es «nada»: es de una terminal más nueva.
+    expect(leerInstalacionAnotada(JSON.stringify({ version: 4 }))).toEqual({ estado: "mas_nueva" });
+    expect(leerInstalacionAnotada(JSON.stringify({ version: 12 }))).toEqual({ estado: "mas_nueva" });
   });
   it("compararSemver compara número a número (1.10.0 > 1.9.0) e ignora lo que sigue al guion", () => {
     expect(compararSemver("1.10.0", "1.9.0")).toBeGreaterThan(0);
@@ -678,6 +684,38 @@ describe("install record: forma, archivos y contrato (v3)", () => {
     const r = await instalacionAnotar(deps(m), F);
     expect(r.json).toMatchObject({ contrato: null });
     expect(m.avisos.join(" ")).toContain("points outside the repo");
+  });
+  it("P2-4: cambiar la forma SIN --file no hereda los archivos de la forma anterior (ni de v2 a interfaz propia, ni al revés)", async () => {
+    const v2 = JSON.stringify({ ...ESPERADA, version: 2, forma: undefined, archivos: undefined, contrato: undefined, archivo: "app/_supcoflow/support-chat.tsx" }, null, 2) + "\n";
+    const m = conContrato();
+    m.versionado = true;
+    m.archivos.set(ARCHIVO, v2);
+    const aPropia = await instalacionAnotar(deps(m), { ...F, shape: "own-interface" });
+    expect(aPropia.json).toMatchObject({ forma: "interfaz_propia", archivos: [], archivo: null });
+    const m2 = conContrato();
+    m2.versionado = true;
+    m2.archivos.set(ARCHIVO, serializar(propia));
+    const aWidget = await instalacionAnotar(deps(m2), { ...F, shape: "widget" });
+    expect(aWidget.json).toMatchObject({ forma: "widget", archivos: [] });
+    // La misma forma, o una forma que no estaba dicha, sí conserva los archivos.
+    const m3 = conContrato();
+    m3.versionado = true;
+    m3.archivos.set(ARCHIVO, serializar(propia));
+    expect((await instalacionAnotar(deps(m3), { ...F, shape: "own-interface" })).json).toMatchObject({ archivos: [A, B] });
+    const m4 = conContrato();
+    m4.versionado = true;
+    m4.archivos.set(ARCHIVO, serializar({ ...ESPERADA, archivos: [A] }));
+    expect((await instalacionAnotar(deps(m4), { ...F, shape: "own-interface" })).json).toMatchObject({ forma: "interfaz_propia", archivos: [A] });
+  });
+  it("P3-2: un instalacion.json de una terminal más nueva (version 4 o más) no se reescribe: 4 escrito_por_una_terminal_mas_nueva", async () => {
+    const m = mundo({ versionado: true });
+    const futuro = JSON.stringify({ version: 4, forma: "interfaz_propia", archivos: [A] });
+    m.archivos.set(ARCHIVO, futuro);
+    const r = await instalacionAnotar(deps(m), { ...F, shape: "widget" });
+    expect(r).toMatchObject({ codigo: 4, json: { error: "escrito_por_una_terminal_mas_nueva" } });
+    expect(r.texto).toMatch(/update supcoflow/);
+    expect(m.escritos).toEqual([]);
+    expect(m.archivos.get(ARCHIVO)).toBe(futuro);
   });
   it("armarInstalacion: la forma, los archivos y el contrato entran por una lista cerrada", () => {
     const base = { skill: "0.1.0", terminal: "0.6.0", paqueteDeLaApp: JSON.parse(pkgApp()), paqueteInstalado: JSON.parse(pkgChat()), configuracion: CONFIG };

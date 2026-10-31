@@ -7,6 +7,7 @@ import { diagnosticar, probar, type DepsDePrueba } from "../src/comandos/probar.
 import { FalloDeLaTerminal, SALIDA } from "../src/contrato.ts";
 import type { Almacen, Registro } from "../src/guardado/index.ts";
 import { crearRegistroDePruebas } from "../src/pruebas-guardadas.ts";
+import { interfazPropiaDelMotor } from "./interfaz-propia-del-motor.ts";
 
 const CLAVE = `scf_${"a".repeat(16)}_${"b".repeat(64)}`;
 const PROY = { id: "proj_r-1", slug: "r", repo: "d/r", rama: "main", installCommand: "npm ci", testCommand: "npm test" };
@@ -249,17 +250,18 @@ describe("diagnose: el punto 7, la interfaz", () => {
     configuracion: { acuerdo_version: 1, politica: "relevar", guia: null },
     forma: "interfaz_propia", archivos: ["src/chat/panel.tsx", "src/chat/use-chat.ts"], contrato: "1.1.0", ...o,
   });
-  const DEL_MOTOR = { paquete: "@supcoflow/chat" as const, version: "2.4.0", instalar: "x", tenant_id: "t", project_id: "p", backend_url: "https://chat.supcoflow.dev", csp: "c" };
   const widgetConContrato = (v: string | null) => async () => ({
-    ...DEL_MOTOR, nextjs: { estado: "probando" as const, archivo_sugerido: "a", archivos_anteriores: [], contenido: "c", uso: "u" },
+    tenant_id: "t", project_id: "p", backend_url: "https://chat.supcoflow.dev", paquete: "@supcoflow/chat" as const, version: "2.3.1", instalar: "x",
+    nextjs: { estado: "probando" as const, archivo_sugerido: "a", archivos_anteriores: [], contenido: "c", uso: "u" },
     script: { estado: "disponible_sin_soporte" as const, linea: "l" }, csp: "c",
-    ...(v === null ? {} : { interfaz_propia: { ...DEL_MOTOR, contrato_version: v } }),
+    ...(v === null ? {} : { interfaz_propia: interfazPropiaDelMotor("disponible", v) }),
   });
   const archivos = (m: Record<string, string>) => ({ leer: (p: string) => m[p] ?? null });
+  const existe = (m: Record<string, string>) => (p: string) => p in m;
   const fuera = { git: async () => ({ codigo: 128, stdout: "" }) };
   const TODOS = { [`${RAIZ}/src/chat/panel.tsx`]: "x", [`${RAIZ}/src/chat/use-chat.ts`]: "x" };
   async function punto(m: Record<string, string>, o: Partial<DepsDePrueba> = {}) {
-    const { d } = deps(motor(), undefined, { archivos: archivos(m), ...o });
+    const { d } = deps(motor(), undefined, { archivos: archivos(m), existe: existe(m), ...o });
     const r = await diagnosticar(d, { repo: null });
     const inst = r.json.instalacion as { ok: number; total: number; puntos: { punto: string; ok: boolean; mensaje: string }[] };
     return { r, inst, p: inst.puntos.find((x) => x.punto === "interfaz")! };
@@ -299,12 +301,21 @@ describe("diagnose: el punto 7, la interfaz", () => {
     expect(sinContrato.ok).toBe(false);
     expect(sinContrato.mensaje).toMatch(/contract/);
   });
-  it("el proyecto declara un contrato más nuevo que el anotado: no ok, con los dos números y qué hacer", async () => {
-    const { p } = await punto({ [INST]: instalacion(), ...TODOS }, { leerWidget: widgetConContrato("1.2.0") });
+  it("P2-3: el proyecto declara una versión MAYOR del contrato: no ok, con los dos números y qué hacer", async () => {
+    const { p } = await punto({ [INST]: instalacion(), ...TODOS }, { leerWidget: widgetConContrato("2.0.0") });
     expect(p.ok).toBe(false);
     expect(p.mensaje).toContain("1.1.0");
-    expect(p.mensaje).toContain("1.2.0");
+    expect(p.mensaje).toContain("2.0.0");
     expect(p.mensaje).toMatch(/skill/);
+  });
+  it("P2-3: una versión menor o de parche más nueva sólo suma lo opcional: ok, y lo dice (no baja el N of 7)", async () => {
+    for (const nueva of ["1.2.0", "1.1.1"]) {
+      const { p, inst } = await punto({ [INST]: instalacion(), ...TODOS }, { leerWidget: widgetConContrato(nueva) });
+      expect(p.ok, nueva).toBe(true);
+      expect(p.mensaje).toContain(nueva);
+      expect(p.mensaje).toMatch(/optional/);
+      expect(inst).toMatchObject({ ok: 7, total: 7 });
+    }
   });
   it("el proyecto declara el mismo contrato o uno más viejo, no lo declara, o no se pudo preguntar: ok (no se inventa una diferencia)", async () => {
     for (const leerWidget of [
@@ -316,6 +327,26 @@ describe("diagnose: el punto 7, la interfaz", () => {
     }
     // Sin la dependencia (los tests viejos) tampoco se compara.
     expect((await punto({ [INST]: instalacion(), ...TODOS })).p.ok).toBe(true);
+  });
+  it("P3-2: un instalacion.json de una versión más nueva de la terminal: no ok y dice que se actualice, no que no hay interfaz", async () => {
+    const { p } = await punto({ [INST]: JSON.stringify({ version: 4, forma: "interfaz_propia", archivos: ["a.tsx"] }) });
+    expect(p.ok).toBe(false);
+    expect(p.mensaje).toMatch(/newer/);
+    expect(p.mensaje).toMatch(/update supcoflow/);
+  });
+  it("P3-3: ver si un archivo sigue ahí no lo lee entero (no se llama a `leer` por cada archivo) ni ensucia stderr", async () => {
+    const leidos: string[] = [];
+    const { p } = await punto({ [INST]: instalacion(), ...TODOS }, {
+      archivos: { leer: (x: string) => { leidos.push(x); return x === INST ? instalacion() : null; } },
+      leerWidget: widgetConContrato("1.1.0"),
+    });
+    expect(p.ok).toBe(true);
+    expect(leidos).toEqual([INST]);
+  });
+  it("P2-5: el punto 7 se marca como aviso en el JSON (`aviso: true`) para que una skill lo distinga de los seis que frenan", async () => {
+    const { p, inst } = await punto({ [INST]: instalacion() }); // archivos que faltan: no ok
+    expect(p).toMatchObject({ ok: false, aviso: true });
+    expect(inst.puntos.filter((x) => (x as { aviso?: boolean }).aviso === true).map((x) => x.punto)).toEqual(["interfaz"]);
   });
   it("sólo pregunta el contrato al proyecto cuando hay una interfaz propia anotada", async () => {
     let pidio = 0;
