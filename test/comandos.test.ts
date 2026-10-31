@@ -1,4 +1,4 @@
-import { flagQueNoAplica } from "../src/flags-por-comando.ts";
+import { archivosDeMas, flagQueNoAplica } from "../src/flags-por-comando.ts";
 import { describe, expect, it } from "vitest";
 import { loginInteractivo, type DepsDeLogin } from "../src/comandos/login.ts";
 import { comandoQuienSoy } from "../src/comandos/quien-soy.ts";
@@ -405,6 +405,14 @@ describe("flags que no aplican (despacho)", () => {
       expect(sin(c, "file"), c).toMatch(/install record/);
     }
     expect(sin("install record", "site")).not.toBeNull();
+  });
+  it("T8: --shape sólo en `install record`; --file repetido sólo en `install record`", () => {
+    expect(sin("install record", "shape", "file", "skill")).toBeNull();
+    for (const c of ["widget", "diagnose", "chat logo", "config"]) expect(sin(c, "shape"), c).toMatch(/install record/);
+    expect(archivosDeMas("install record", 3)).toBeNull();
+    expect(archivosDeMas("chat logo", 1)).toBeNull();
+    expect(archivosDeMas("chat logo", 0)).toBeNull();
+    expect(archivosDeMas("chat logo", 2)).toMatch(/--file goes once/);
   });
   it("bloque 7: --authorize-spend, --ceiling, --expect-policy, --message y --test-id sólo en `test`; --wait también en `test`; --repo en los dos", () => {
     expect(sin("test", "authorizeSpend", "ceiling", "expectPolicy", "message", "repo")).toBeNull();

@@ -286,6 +286,36 @@ describe("leerWidget", () => {
     await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, script: {} }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
     await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, paquete: "otro" }))).rejects.toMatchObject({ error: "respuesta_inesperada" });
   });
+  // T8: la forma «interfaz propia» (aditiva). Un motor que no la manda (el de producción de hoy) sigue valiendo igual.
+  const PROPIA = {
+    paquete: "@supcoflow/chat", version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
+    tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
+    csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: "1.1.0",
+  };
+  it("T8: sin `interfaz_propia` (el motor de hoy) la forma es la de siempre y la clave no aparece", async () => {
+    const w = await leerWidget(API, CLAVE, "p", falso(200, WIDGET));
+    expect(w).toEqual(WIDGET);
+    expect(w).not.toHaveProperty("interfaz_propia");
+    expect(await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: null }))).not.toHaveProperty("interfaz_propia");
+  });
+  it("T8: con `interfaz_propia` la deja pasar, campo a campo, y descarta lo que no es de la lista", async () => {
+    const w = await leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: { ...PROPIA, contenido: "codigo para pegar", nextjs: {}, secreto: CLAVE } }));
+    expect(w.interfaz_propia).toEqual(PROPIA);
+    expect(JSON.stringify(w)).not.toContain("codigo para pegar");
+    expect(JSON.stringify(w)).not.toContain(CLAVE);
+    // Lo de siempre sigue donde estaba.
+    expect(w.nextjs.archivo_sugerido).toBe("app/_supcoflow/support-chat.tsx");
+  });
+  it("T8: una `interfaz_propia` a medias (campo faltante, paquete ajeno, contrato que no es semver, no objeto) es respuesta_inesperada: no se muestra algo a medias", async () => {
+    const casos: unknown[] = [
+      "x", [PROPIA], { ...PROPIA, contrato_version: undefined }, { ...PROPIA, contrato_version: "uno" }, { ...PROPIA, contrato_version: "1.1" },
+      { ...PROPIA, paquete: "otro" }, { ...PROPIA, version: "" }, { ...PROPIA, instalar: undefined }, { ...PROPIA, tenant_id: 3 },
+      { ...PROPIA, project_id: "" }, { ...PROPIA, backend_url: undefined }, { ...PROPIA, csp: "" },
+    ];
+    for (const malo of casos) {
+      await expect(leerWidget(API, CLAVE, "p", falso(200, { ...WIDGET, interfaz_propia: malo })), JSON.stringify(malo)).rejects.toMatchObject({ codigo: 1, error: "respuesta_inesperada" });
+    }
+  });
   it("404 sale como entrada inválida con el mensaje del motor tapado", async () => {
     await expect(leerWidget(API, CLAVE, "p", falso(404, { error: "proyecto_inexistente", message: `no está ${CLAVE}` })))
       .rejects.toSatisfy((e: { error: string; message: string; codigo: number }) =>

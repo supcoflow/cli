@@ -15,6 +15,12 @@ const W: Widget = {
   csp: "connect-src 'self' https://chat.supcoflow.dev;",
 };
 
+const PROPIA = {
+  paquete: "@supcoflow/chat" as const, version: "2.4.0", instalar: "npm i @supcoflow/chat@2.4.0 --save-exact",
+  tenant_id: "t_1", project_id: "proj_1", backend_url: "https://chat.supcoflow.dev",
+  csp: "connect-src 'self' https://chat.supcoflow.dev;", contrato_version: "1.1.0",
+};
+
 function deps(o: Partial<DepsDeWidget> = {}): DepsDeWidget {
   return {
     api: new URL("http://localhost:3000"),
@@ -74,5 +80,28 @@ describe("supcoflow widget", () => {
     const r = await widget(deps({ leerWidget: async () => { throw new Error(`clave ${CLAVE}`); } }), F);
     expect(r.texto).not.toContain(CLAVE);
     expect(JSON.stringify(r.json)).not.toContain(CLAVE);
+  });
+
+  it("T8: sin `interfaz_propia` el texto no habla de ella ni el JSON la lleva", async () => {
+    const r = await widget(deps(), F);
+    expect(r.texto).not.toMatch(/own interface/i);
+    expect(r.json).not.toHaveProperty("interfaz_propia");
+  });
+
+  it("T8: con `interfaz_propia`: el JSON la lleva tal cual y el texto la describe sin dar código para pegar", async () => {
+    const r = await widget(deps({ leerWidget: async () => ({ ...W, interfaz_propia: PROPIA }) }), F);
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toEqual({ ok: true, ...W, interfaz_propia: PROPIA });
+    const t = r.texto!;
+    // Lo de siempre sigue (el widget es el respaldo) y lo nuevo va aparte, rotulado.
+    expect(t).toContain(CONTENIDO);
+    const i = t.indexOf("Own interface");
+    expect(i).toBeGreaterThan(t.indexOf(W.csp));
+    const propia = t.slice(i);
+    expect(propia).toContain(PROPIA.instalar);
+    for (const dato of [PROPIA.tenant_id, PROPIA.project_id, PROPIA.backend_url, PROPIA.csp, PROPIA.contrato_version]) expect(propia).toContain(dato);
+    expect(propia).toContain("node_modules/@supcoflow/chat/contract.json");
+    expect(propia).toMatch(/no code to paste/i);
+    expect(propia).not.toContain("ChatDeIntake");
   });
 });
