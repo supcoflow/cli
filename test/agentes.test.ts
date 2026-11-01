@@ -277,6 +277,15 @@ describe("agents set-key: lo que se acepta como clave", () => {
     expect(r).toMatchObject({ codigo: SALIDA.entradaInvalida, json: { error: "clave_con_forma_invalida" } });
     expect(JSON.stringify(r)).not.toContain("kkkkkkkkkk");
   });
+  it("la clave de Supcoflow (scf_…, la de SUPCOFLOW_TOKEN) pegada como si fuera la de IA → 3 es_una_clave_de_supcoflow, sin repetirla ni mandarla", async () => {
+    for (const via of ["env", "tty"] as const) {
+      const m = armar(via === "env" ? { env: { SUPCOFLOW_TOKEN: CLAVE_DE_LA_PERSONA } } : { tty: true, teclado: CLAVE_DE_LA_PERSONA });
+      const r = await agentesPonerClave(m.d, { ...F, fromEnv: via === "env" ? "SUPCOFLOW_TOKEN" : null } as never);
+      expect(r, via).toMatchObject({ codigo: SALIDA.entradaInvalida, json: { error: "es_una_clave_de_supcoflow" } });
+      expect(loQueSale(r, m.stderr)).not.toContain(CLAVE_DE_LA_PERSONA.slice(5, 30));
+      expect(m.llamadas).toEqual([]);
+    }
+  });
   it("--provider: se manda tal cual (ai_gateway por defecto); uno con forma rara → 3 sin llamar", async () => {
     const m = armar({ env: { K: CLAVE }, respuestas: [structuredClone(LISTA)] });
     await agentesPonerClave(m.d, { ...F, fromEnv: "K", provider: "ai_gateway" } as never);

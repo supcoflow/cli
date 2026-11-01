@@ -297,6 +297,7 @@ async function ponerLaClave(d: DepsDeAgentes, flags: FlagsDeAgentes, manejada: (
   if (delEntorno !== null) {
     const n = normalizarClave(delEntorno);
     if (!n.ok) return laClaveNoSirve(n.motivo, `the environment variable ${flags.fromEnv}`);
+    if (esLaDeSupcoflow(n.clave)) return noEsDeIa(`the environment variable ${flags.fromEnv}`);
     limpia = n.clave;
     manejada(limpia);
   }
@@ -319,6 +320,7 @@ async function ponerLaClave(d: DepsDeAgentes, flags: FlagsDeAgentes, manejada: (
     if (leida === null) return fallo(SALIDA.entradaInvalida, "cancelado", "Cancelled: nothing was changed.");
     const n = normalizarClave(leida);
     if (!n.ok) return laClaveNoSirve(n.motivo, "what you typed");
+    if (esLaDeSupcoflow(n.clave)) return noEsDeIa("what you typed");
     limpia = n.clave;
     manejada(limpia);
   }
@@ -361,6 +363,11 @@ async function ponerLaClave(d: DepsDeAgentes, flags: FlagsDeAgentes, manejada: (
   ].join("\n");
   return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto };
 }
+
+/** La clave de Supcoflow (la que deja `login`, o `SUPCOFLOW_TOKEN`) no es una clave de IA: se frena acá, sin repetirla y sin mandarla. */
+const esLaDeSupcoflow = (clave: string): boolean => clave.startsWith("scf_");
+const noEsDeIa = (de: string): Resultado =>
+  fallo(SALIDA.entradaInvalida, "es_una_clave_de_supcoflow", `What's in ${de} is a Supcoflow key (the one \`supcoflow login\` leaves), not an AI key. Use the key you created at your AI provider.`);
 
 function laClaveNoSirve(motivo: "vacia" | "espacios" | "larga", de: string): Resultado {
   if (motivo === "vacia") return fallo(SALIDA.entradaInvalida, "clave_vacia", `There's no key in ${de}.`);
