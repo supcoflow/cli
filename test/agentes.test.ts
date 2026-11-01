@@ -546,6 +546,7 @@ describe("agents configure (el chat; el motor no deja al triage agent por la ter
     const r = await agentesConfigurar(m.d, { ...F, agent: "triage", option: "plus", dataRetention: "allow" } as never);
     expect(r).toMatchObject({ codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "no_desde_la_terminal" } });
     expect(r.texto).toMatch(/Agents tab/);
+    expect(r.texto).not.toMatch(/yet/);
     expect(m.llamadas).toEqual([]);
   });
   it("--dry-run no llama a nada y dice qué mandaría", async () => {

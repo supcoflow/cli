@@ -134,6 +134,12 @@ describe("describe --json", () => {
     // El triage agent no se configura por la terminal: el motor no lo deja con la clave.
     expect(g("agents configure").resumen).toMatch(/triage agent/);
     expect(g("agents configure").resumen).toMatch(/Agents tab/);
+    // Decisión del dueño (2026-11-01): los topes de mensajes y la aprobación del modelo del triage agent se hacen en la pestaña Agents, no desde la terminal.
+    const conf = g("agents configure").resumen;
+    expect(conf).toMatch(/message caps/);
+    expect(conf).toMatch(/Agents tab/);
+    expect(conf).not.toMatch(/yet/);
+    expect(g("agents check").resumen).toMatch(/exits? 0 if the account is ready, and 4/i);
     // Sólo `agents` nombra --agent, --from-env, --provider, --option y --data-retention.
     for (const c of DESCRIPCION.comandos.filter((x) => !x.nombre.startsWith("agents "))) {
       expect(c.flags.join(" "), c.nombre).not.toMatch(/--(agent|from-env|provider|option|data-retention)\b/);
