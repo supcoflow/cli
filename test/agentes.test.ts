@@ -3,8 +3,9 @@
 // la persona nombra, viaja en el cuerpo de UN pedido al motor, y no sale por ningún lado: ni la pantalla, ni `--json`, ni lo que
 // va a stderr, ni un error (aunque el motor, por un bug, la repitiera). Cada test de abajo mira TODO lo que salió.
 import { describe, expect, it } from "vitest";
+import { configurarElChat, leerCuentasDeIa, ponerCuentaDeIa, quitarCuentaDeIa, validarCuentaDeIa, type Fetch } from "../src/api.ts";
 import {
-  agentesConfigurar, agentesPonerClave, agentesQuitar, agentesValidar, agentesVer, type DepsDeAgentes,
+  agentesConfigurar, agentesPonerClave, agentesQuitar, agentesValidar, agentesVer, sinLaClave, type DepsDeAgentes,
 } from "../src/comandos/agentes.ts";
 import { FalloDeLaTerminal, SALIDA, type Resultado } from "../src/contrato.ts";
 
@@ -574,5 +575,116 @@ describe("las FalloDeLaTerminal que salen de las dependencias se traducen (no se
     const r = await agentesPonerClave(m.d, { ...F, fromEnv: "K" } as never);
     expect(r.codigo).toBe(SALIDA.inesperado);
     sinFugas(r, m.stderr);
+  });
+});
+
+// ─── Revisión 1 de la 0.10.0 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("revisión 1, P2-1: lo que dice el motor NO llega a la pantalla ni cuando `api.ts` lanza (401, 403 de persona) — composición real", () => {
+  // Acá no se arma la respuesta a mano: se usan las funciones REALES de `api.ts` con un fetch falso, que es lo que recorre el binario.
+  const LIBRE = "TEXTO_LIBRE_DEL_MOTOR en castellano";
+  const real = (status: number, cuerpo: Record<string, unknown>): DepsDeAgentes => {
+    const f = (async () => new Response(JSON.stringify(cuerpo), { status })) as Fetch;
+    const m = armar({ env: { K: CLAVE }, tty: true });
+    return {
+      ...m.d,
+      leerCuentas: (a, c, id) => leerCuentasDeIa(a, c, id, f),
+      ponerCuenta: (a, c, id, ag, cu) => ponerCuentaDeIa(a, c, id, ag, cu, f),
+      validarCuenta: (a, c, id, ag) => validarCuentaDeIa(a, c, id, ag, f),
+      quitarCuenta: (a, c, id, ag) => quitarCuentaDeIa(a, c, id, ag, f),
+      configurarChat: (a, c, id, cu) => configurarElChat(a, c, id, cu, f),
+    };
+  };
+  const todos = (d: DepsDeAgentes) => [
+    () => agentesVer(d, { ...F, agent: null } as never),
+    () => agentesPonerClave(d, { ...F, fromEnv: "K" } as never),
+    () => agentesValidar(d, F as never),
+    () => agentesQuitar(d, F as never),
+    () => agentesConfigurar(d, { ...F, option: "estandar", dataRetention: "allow" } as never),
+  ];
+  const casos: [string, number, Record<string, unknown>, number, string][] = [
+    ["401", 401, { error: "sin_sesion", message: `Sesión vencida ${LIBRE}` }, SALIDA.faltaLogin, "clave_invalida"],
+    ["403 requiere_persona", 403, { error: "requiere_persona", message: `Esto lo pide una persona. ${LIBRE}` }, SALIDA.haceFaltaUnaPersona, "requiere_persona"],
+    ["403 clave_de_consulta", 403, { error: "clave_de_consulta", message: `Sólo lee. ${LIBRE}` }, SALIDA.haceFaltaUnaPersona, "clave_de_consulta"],
+  ];
+  for (const [nombre, status, cuerpo, codigo, error] of casos) {
+    it(`${nombre}: frase fija de la terminal, el código de siempre y el error del motor; en los cinco comandos`, async () => {
+      for (const correr of todos(real(status, cuerpo))) {
+        const r = await correr();
+        expect(r.codigo, nombre).toBe(codigo);
+        expect(r.json.error, nombre).toBe(error);
+        expect(loQueSale(r, [])).not.toContain("TEXTO_LIBRE");
+        expect(loQueSale(r, [])).not.toMatch(/[áéíóúñ]/i);
+      }
+    });
+  }
+  it("un 500 sale como motor_inalcanzable con su frase (la de la terminal), no con el texto del motor", async () => {
+    const r = await agentesValidar(real(500, { error: "error_interno", message: LIBRE }), F as never);
+    expect(r).toMatchObject({ codigo: SALIDA.inesperado, json: { error: "motor_inalcanzable" } });
+    expect(loQueSale(r, [])).not.toContain("TEXTO_LIBRE");
+  });
+  it("un 502 y un 503 siguen trayendo su motivo (con la frase de la terminal)", async () => {
+    expect(await agentesValidar(real(502, { error: "proveedor_no_responde", message: LIBRE }), F as never)).toMatchObject({ json: { error: "proveedor_no_responde" } });
+    expect(await agentesValidar(real(503, { error: "cuentas_no_disponibles", message: LIBRE }), F as never)).toMatchObject({ json: { error: "cuentas_no_disponibles" } });
+  });
+});
+
+describe("revisión 1, P2-3: el barrido final (`sinLaClave`) es una defensa que los tests pueden romper", () => {
+  const SIN_PREFIJO = "a3f9c2e1b7d4f6a8c0e2b4d6f8a1c3e5";
+  it("unitario: tapa la clave entera, la clave sin los últimos 4, y lo que tiene forma de clave; en el texto, en el JSON y en sus llaves", () => {
+    const r = sinLaClave({ codigo: 1, texto: `error ${SIN_PREFIJO} y ${SIN_PREFIJO.slice(0, -4)} y vck_abcdef012345`, json: { message: SIN_PREFIJO, lista: [SIN_PREFIJO], [SIN_PREFIJO]: 1 } }, SIN_PREFIJO);
+    const todo = JSON.stringify(r);
+    expect(todo).not.toContain(SIN_PREFIJO.slice(0, 20));
+    expect(todo).not.toContain("vck_abcdef012345");
+    expect(r.codigo).toBe(1);
+  });
+  it("de punta a punta: una clave SIN prefijo conocido que vuelve en una excepción (sólo el barrido la salva)", async () => {
+    const m = armar({ env: { K: SIN_PREFIJO } });
+    m.d.ponerCuenta = async () => { throw new Error(`boom ${SIN_PREFIJO} y ${SIN_PREFIJO.slice(0, -4)}`); };
+    const r = await agentesPonerClave(m.d, { ...F, fromEnv: "K" } as never);
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(loQueSale(r, m.stderr)).not.toContain(SIN_PREFIJO.slice(0, 20));
+  });
+});
+
+describe("revisión 1, P3-3: una clave demasiado corta se rechaza antes de llamar al motor (no deja el texto ilegible)", () => {
+  it("menos de 8 caracteres → 3 clave_con_forma_invalida, sin llamar", async () => {
+    for (const via of ["env", "tty"] as const) {
+      const m = armar(via === "env" ? { env: { K: "e" } } : { tty: true, teclado: "abcdefg" });
+      const r = await agentesPonerClave(m.d, { ...F, fromEnv: via === "env" ? "K" : null } as never);
+      expect(r, via).toMatchObject({ codigo: SALIDA.entradaInvalida, json: { error: "clave_con_forma_invalida" } });
+      expect(r.texto).toMatch(/too short/);
+      expect(m.llamadas).toEqual([]);
+    }
+  });
+  it("ocho caracteres ya pasan (el motor decide la forma)", async () => {
+    const m = armar({ env: { K: "abcdefgh" }, respuestas: [structuredClone(LISTA)] });
+    expect((await agentesPonerClave(m.d, { ...F, fromEnv: "K" } as never)).codigo).toBe(SALIDA.ok);
+  });
+});
+
+describe("revisión 1, P3-4: `idSeguro` y `puesta_por` frenan una clave toda en minúsculas (sin mayúsculas que la delaten)", () => {
+  const MINUSCULA = "vck_abcdef0123456789abcdef0123456789";
+  it("en codigo, proveedor, estado y puesta_por de `show`", async () => {
+    const cuentaMala = cuenta("chat", { proveedor: MINUSCULA, codigo: MINUSCULA, puesta_por: MINUSCULA });
+    const m = armar({ respuestas: [{ status: 200, cuerpo: { cuentas: [{ agente: "chat", estado: "lista", cuenta_lista: true, cuenta: cuentaMala }] } }] });
+    const r = await agentesVer(m.d, { ...F, agent: null } as never);
+    const todo = loQueSale(r, m.stderr);
+    expect(todo).not.toContain("abcdef0123456789");
+    expect(r.json).toMatchObject({ agentes: [{ cuenta: { proveedor: null, codigo: null, puesta_por: null } }] });
+  });
+  it("en el código del motor (`error`) de un rechazo", async () => {
+    const m = armar({ respuestas: [{ status: 422, cuerpo: { error: MINUSCULA, codigo: MINUSCULA, message: "x" } }], env: { K: CLAVE } });
+    const r = await agentesPonerClave(m.d, { ...F, fromEnv: "K" } as never);
+    expect(loQueSale(r, m.stderr)).not.toContain("abcdef0123456789");
+  });
+});
+
+describe("revisión 1, P2-2: `variable_vacia` no manda a escribir la clave en el historial del shell", () => {
+  it("el mensaje habla de un secreto de CI o de cargarla sin eco, no de `export NOMBRE=clave`", async () => {
+    const r = await agentesPonerClave(armar({ env: {} }).d, { ...F, fromEnv: "K" } as never);
+    expect(r.texto).toMatch(/read -rs K/);
+    expect(r.texto).toMatch(/CI/);
+    expect(r.texto).not.toMatch(/export K=/);
   });
 });

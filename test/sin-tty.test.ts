@@ -840,6 +840,16 @@ describe("supcoflow agents (binario): la clave de IA no sale por ningún lado", 
     for (const r of [show, check, quitar, conf, triaje]) sinFugas(r, ["XwVu"]);
   }, 60_000);
 
+  it("revisión 1, P3-1: `supcoflow <la clave>` sale 3 comando_desconocido SIN repetirla", async () => {
+    for (const args of [[CLAVE_DE_IA, "--json"], [CLAVE_DE_IA]]) {
+      const r = await correrSinTty(args);
+      expect(r.codigo).toBe(3);
+      sinFugas(r);
+    }
+    // Un comando desconocido común sigue diciendo cuál es.
+    expect(JSON.parse((await correrSinTty(["nada", "--json"])).stdout).message).toContain("nada");
+  }, 60_000);
+
   it("`agents` sin subcomando, o con uno que no existe, sale 3 comando_desconocido", async () => {
     for (const args of [["agents", "--json"], ["agents", "list", "--json"]]) {
       const r = await correrSinTty(args, { conClave: true });

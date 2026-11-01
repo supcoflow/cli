@@ -73,6 +73,11 @@ describe("normalizarClave: qué se acepta como clave antes de mandarla", () => {
     expect(normalizarClave("k".repeat(TOPE_DE_LA_CLAVE))).toMatchObject({ ok: true });
     expect(normalizarClave("k".repeat(TOPE_DE_LA_CLAVE + 1))).toEqual({ ok: false, motivo: "larga" });
   });
+  it("menos de 8 caracteres → corta (revisión 1, P3-3): el barrido del texto no puede dejarlo ilegible", () => {
+    expect(normalizarClave("abcdefg")).toEqual({ ok: false, motivo: "corta" });
+    expect(normalizarClave("e")).toEqual({ ok: false, motivo: "corta" });
+    expect(normalizarClave("abcdefgh")).toMatchObject({ ok: true });
+  });
   it("NO decide si tiene «la forma» de un proveedor: eso lo dice el motor (cambia de proveedor a proveedor)", () => {
     expect(normalizarClave("cualquier-cosa-sin-espacios")).toMatchObject({ ok: true });
   });
