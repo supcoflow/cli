@@ -150,7 +150,7 @@ That is why:
   appears on the screen. If the terminal can't hide what you type, it doesn't ask (exit 4 `sin_eco`). It is meant for **you** to
   type: an assistant without a terminal gets exit 4 `sin_terminal` and has to tell you to run it yourself, in your own terminal (a shell that
   is not interactive, as the one some assistants give you, can't hide what you type: it exits 4 too), or to use the Agents tab.
-- **`--from-env NAME`** reads it from the environment variable named `NAME` (`export AI_GATEWAY_API_KEY=…` first). It takes the **name**, never the key:
+- **`--from-env NAME`** reads it from the environment variable named `NAME`. It is meant for **CI** (the variable comes from the secret store). On your own machine prefer `set-key` without `--from-env`; if you do use a variable, load it without typing the key in a command, because `export AI_GATEWAY_API_KEY=…` would leave it in your shell history: `read -rs AI_GATEWAY_API_KEY && export AI_GATEWAY_API_KEY`. It takes the **name**, never the key:
   if what you pass looks like a key, it exits 3 `clave_como_nombre` without repeating it, and you should treat that key as exposed and create a new one.
   It is the way for CI. There is no stdin either.
 - **It is never printed.** Not on the screen, not in `--json`, not on stderr, not in an error: every answer of the engine is reduced to fixed

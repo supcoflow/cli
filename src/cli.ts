@@ -4,6 +4,7 @@
 // sale como un 1 limpio, en una línea si se pidió --json, sin traza y con los secretos tapados.
 import { revocarPropia } from "./api.ts";
 import { leerArgumentos } from "./argumentos.ts";
+import { pareceUnaClave } from "./clave-sin-eco.ts";
 import { agentesConfigurar, agentesPonerClave, agentesQuitar, agentesValidar, agentesVer } from "./comandos/agentes.ts";
 import { clavesCrear, clavesListar, clavesRevocar } from "./comandos/claves.ts";
 import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios } from "./comandos/configurar.ts";
@@ -36,7 +37,8 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
     json = flags.json;
 
     if (comando !== null && !COMANDOS.has(comando)) {
-      throw invalida("comando_desconocido", `Unknown command «${comando}». Try \`supcoflow --help\`.`);
+      // Alguien pudo escribir la clave en lugar del comando: lo que parece una clave no se repite.
+      throw invalida("comando_desconocido", pareceUnaClave(comando) ? "Unknown command. Try `supcoflow --help`." : `Unknown command «${comando}». Try \`supcoflow --help\`.`);
     }
     if (flags.help || comando === null) {
       const texto = ayuda(comando);

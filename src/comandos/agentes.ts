@@ -159,6 +159,10 @@ function errorDelMotor(r: Respuesta, agente?: Agente): Resultado {
   return { codigo, json, texto: message };
 }
 
+// Lo que lanza `api.ts` y la terminal escribió ella misma (frases fijas): la red caída y la respuesta que no es JSON. Todo otro `FalloDeLaTerminal` que
+// viene de `conClave` (401, 403 de persona) lleva el `message` del motor, en castellano: acá se cambia por la frase fija de `ERRORES`.
+const DE_LA_TERMINAL = new Set(["motor_inalcanzable", "respuesta_inesperada"]);
+
 /** Un pedido al motor: lo que lanza (la red, una clave que ya no vale…) sale como resultado, con su frase fija. */
 async function alMotor(hacer: () => Promise<Respuesta>, siNoLlega: string): Promise<{ ok: true; r: Respuesta } | { ok: false; resultado: Resultado }> {
   try {
@@ -166,6 +170,11 @@ async function alMotor(hacer: () => Promise<Respuesta>, siNoLlega: string): Prom
   } catch (e) {
     if (e instanceof FalloDeLaTerminal && e.error === "motor_inalcanzable") {
       return { ok: false, resultado: fallo(SALIDA.inesperado, "motor_inalcanzable", siNoLlega === "" ? e.message : `${e.message} ${siNoLlega}`) };
+    }
+    if (e instanceof FalloDeLaTerminal && !DE_LA_TERMINAL.has(e.error)) {
+      // Se arma como si el motor hubiera contestado con ese status y ese código: `errorDelMotor` tiene todas las frases.
+      const status = e.codigo === SALIDA.faltaLogin ? 401 : e.codigo === SALIDA.haceFaltaUnaPersona ? 403 : 400;
+      return { ok: false, resultado: errorDelMotor({ status, cuerpo: { error: e.error } }) };
     }
     return { ok: false, resultado: resultadoDeFallo(e) };
   }
@@ -240,7 +249,7 @@ export async function agentesPonerClave(d: DepsDeAgentes, flags: FlagsDeAgentes)
 }
 
 /** Cambia, en todo lo que sale, la clave literal (y su versión «sin los últimos 4», como la enmascaran algunos proveedores) y lo que tiene forma de clave. */
-function sinLaClave(r: Resultado, clave: string): Resultado {
+export function sinLaClave(r: Resultado, clave: string): Resultado {
   const partes = [clave, clave.length > 8 ? clave.slice(0, -4) : ""].filter((x) => x !== "");
   const limpiar = (s: string): string => taparSecretos(partes.reduce((t, k) => t.split(k).join("[key]"), s));
   const profundo = (v: unknown): unknown => {
@@ -280,7 +289,7 @@ async function ponerLaClave(d: DepsDeAgentes, flags: FlagsDeAgentes, manejada: (
     }
     const valor = d.env[flags.fromEnv];
     if (valor === undefined || valor.trim() === "") {
-      return fallo(SALIDA.entradaInvalida, "variable_vacia", `The environment variable ${flags.fromEnv} isn't set or is empty. Set it in your shell and run this again.`);
+      return fallo(SALIDA.entradaInvalida, "variable_vacia", `The environment variable ${flags.fromEnv} isn't set or is empty. In CI, take it from the secret store. On your own machine, load it without typing the key in a command: \`read -rs ${flags.fromEnv} && export ${flags.fromEnv}\`, then run this again (or just run set-key without --from-env).`);
     }
     delEntorno = valor;
     fuente = `the environment variable ${flags.fromEnv}`;
@@ -369,9 +378,9 @@ const esLaDeSupcoflow = (clave: string): boolean => clave.startsWith("scf_");
 const noEsDeIa = (de: string): Resultado =>
   fallo(SALIDA.entradaInvalida, "es_una_clave_de_supcoflow", `What's in ${de} is a Supcoflow key (the one \`supcoflow login\` leaves), not an AI key. Use the key you created at your AI provider.`);
 
-function laClaveNoSirve(motivo: "vacia" | "espacios" | "larga", de: string): Resultado {
+function laClaveNoSirve(motivo: "vacia" | "espacios" | "larga" | "corta", de: string): Resultado {
   if (motivo === "vacia") return fallo(SALIDA.entradaInvalida, "clave_vacia", `There's no key in ${de}.`);
-  const por = motivo === "larga" ? "is too long to be a key" : "has spaces, line breaks or other characters that aren't part of a key (did you paste two things?)";
+  const por = motivo === "larga" ? "is too long to be a key" : motivo === "corta" ? "is too short to be a key" : "has spaces, line breaks or other characters that aren't part of a key (did you paste two things?)";
   return fallo(SALIDA.entradaInvalida, "clave_con_forma_invalida", `What's in ${de} ${por}. Copy only the key.`);
 }
 

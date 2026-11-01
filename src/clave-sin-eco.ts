@@ -44,7 +44,10 @@ export const entradaOculta = {
 
 // ─── Qué se acepta como clave ──────────────────────────────────────────────────────────────────────────────────
 
-export type ClaveNormalizada = { ok: true; clave: string } | { ok: false; motivo: "vacia" | "espacios" | "larga" };
+export type ClaveNormalizada = { ok: true; clave: string } | { ok: false; motivo: "vacia" | "espacios" | "larga" | "corta" };
+
+/** Ninguna clave de un proveedor mide menos. Con menos, taparla en un texto lo dejaría ilegible (una «e» suelta), y no es una clave. */
+export const MINIMO_DE_LA_CLAVE = 8;
 
 /**
  * Limpia las puntas (una variable de entorno suele traer un salto de línea) y revisa lo que no depende del proveedor: que haya
@@ -56,6 +59,7 @@ export function normalizarClave(crudo: string): ClaveNormalizada {
   if (clave === "") return { ok: false, motivo: "vacia" };
   if (clave.length > TOPE_DE_LA_CLAVE) return { ok: false, motivo: "larga" };
   if (/[\s\u0000-\u001f\u007f-\u009f]/.test(clave)) return { ok: false, motivo: "espacios" };
+  if (clave.length < MINIMO_DE_LA_CLAVE) return { ok: false, motivo: "corta" };
   return { ok: true, clave };
 }
 
