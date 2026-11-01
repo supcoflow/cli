@@ -451,7 +451,7 @@ export async function agentesConfigurar(d: DepsDeAgentes, flags: FlagsDeAgentes)
   if (a.agente !== "chat") {
     // Las rutas que aprueban el modelo del triage agent sólo aceptan una sesión de la consola (no una clave): no hay por dónde.
     return fallo(SALIDA.haceFaltaUnaPersona, "no_desde_la_terminal",
-      "The triage agent's model is approved in the project's Agents tab: the engine doesn't take it from the terminal yet. The AI account (`agents set-key`) can be set from here.");
+      "The triage agent's model is approved in the project's Agents tab, not from the terminal. The AI account (`agents set-key`) can be set from here.");
   }
   if (flags.option === null) return fallo(SALIDA.entradaInvalida, "falta_opcion", `Say the chat's menu option: \`--option\` ${LOS_NOMBRES_DE_LAS_OPCIONES}.`);
   const opcion = OPCION_DEL_MENU.get(flags.option.toLowerCase());

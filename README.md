@@ -139,7 +139,7 @@ The agent that writes the guide uses the triage agent's account.
 | `supcoflow agents set-key --agent chat\|triage` | Sets the key, or **replaces** it (rotates it). The provider checks it for free; a rejected key is not saved. Only a team Owner can. |
 | `supcoflow agents check --agent chat\|triage` | Asks the provider again whether the stored key works, without anyone pasting it: the way out of a `rechazada` or `sin_saldo` account once you fixed it at the provider. Exits 0 if ready, 4 if not. |
 | `supcoflow agents remove --agent chat\|triage` | Deletes the key from Supcoflow. Only a team Owner can. |
-| `supcoflow agents configure --agent chat --option standard --data-retention allow` | The chat's model, from the menu (`agile`, `standard`, `plus`; only the ones that passed our measurement can be chosen), and `deny` to use only providers that don't keep your data. The triage agent's model is approved in the Agents tab: the engine doesn't take it from the terminal yet (exit 4 `no_desde_la_terminal`). |
+| `supcoflow agents configure --agent chat --option standard --data-retention allow` | The chat's model, from the menu (`agile`, `standard`, `plus`; only the ones that passed our measurement can be chosen), and `deny` to use only providers that don't keep your data. The triage agent's model is approved in the Agents tab, not from the terminal (exit 4 `no_desde_la_terminal`); the chat's message caps (per project and per user) are also set only in the Agents tab. |
 
 **The key is write-only.** Once it is set it can't be shown or edited, only replaced or removed, like a «Sensitive» variable.
 That is why:

@@ -268,7 +268,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "agents configure",
-      resumen: "Chooses the chat's model from the menu and whether only providers that don't keep your data may be used; the engine saves and approves it in one step. Only the chat: the triage agent's model is approved in the project's Agents tab (the engine doesn't take it from the terminal yet: exit 4 no_desde_la_terminal). An option that hasn't passed our measurement can't be chosen (exit 3 opcion_sin_medicion). The engine has no way to read the current configuration, so both flags are required: nothing is guessed.",
+      resumen: "Chooses the chat's model from the menu and whether only providers that don't keep your data may be used; the engine saves and approves it in one step. Only the chat: the triage agent's model is approved in the project's Agents tab, not from the terminal (exit 4 no_desde_la_terminal). The chat's message caps (per project and per user) are also set only in the Agents tab. An option that hasn't passed our measurement can't be chosen (exit 3 opcion_sin_medicion). The engine has no way to read the current configuration, so both flags are required: nothing is guessed.",
       flags: [
         "--agent chat: the chat (required)",
         "--option agile|standard|plus: the menu option (the engine's ids agil, estandar and plus work too)",
