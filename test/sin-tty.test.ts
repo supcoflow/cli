@@ -2,7 +2,7 @@
 // motor falso en un puerto libre. Nunca toca el llavero real: SUPCOFLOW_SIN_LLAVERO=1 siempre,
 // porque quitar `security` del PATH no alcanza (la terminal lo llama por ruta absoluta).
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -34,7 +34,13 @@ const motor = {
   estadoDePrueba: "issue_creado",
   // T8: el contrato que declara la «interfaz propia» del /widget; null es el motor de hoy, que no manda el campo.
   contratoDeclarado: null as string | null,
+  // Tanda 9: `normal`, o `repite` (un motor roto que devuelve la clave de IA en su mensaje de error).
+  cuentasModo: "normal" as "normal" | "repite",
 };
+const CUENTA_DE_IA = (agente: string, estado = "lista") => ({
+  id: `cdi_${agente}`, agente, proveedor: "ai_gateway", ultimos4: "XwVu", estado, codigo: null,
+  validada_en: "2026-11-01T10:00:00.000Z", puesta_por: "usr_1", puesta_en: "2026-11-01T09:00:00.000Z",
+});
 // La clave que el motor falso devuelve al crear una de consulta: nada de lo que imprima la terminal puede contenerla.
 const CLAVE_FALSA = `scf_${"1234567890abcdef"}_${"fedcba0987654321".repeat(4)}`;
 const ID_DE_CLAVE = "cla_1234567890abcdef";
@@ -53,6 +59,8 @@ const WIDGET = {
 };
 const INTERFAZ_PROPIA = (contrato: string) => interfazPropiaDelMotor("disponible", contrato);
 const pedidosAlMotor: string[] = [];
+// Tanda 9: lo que llegó de verdad al motor falso (línea, cabeceras y cuerpo), para clavar por dónde viaja la clave de IA.
+const pedidosCrudos: { metodo: string; url: string; cabeceras: string; cuerpo: string }[] = [];
 let servidor: Server;
 let api: string;
 let tmp: string;
@@ -66,10 +74,12 @@ function responder(res: import("node:http").ServerResponse, status: number, cuer
 beforeAll(async () => {
   execFileSync("npm", ["run", "build"], { cwd: RAIZ, stdio: "ignore" });
   servidor = createServer((req, res) => {
-    req.resume();
+    let crudo = "";
+    req.on("data", (c) => (crudo += c));
     req.on("end", () => {
       const ruta = new URL(req.url ?? "/", "http://x").pathname;
       pedidosAlMotor.push(ruta);
+      pedidosCrudos.push({ metodo: req.method ?? "GET", url: req.url ?? "", cabeceras: JSON.stringify(req.headers), cuerpo: crudo });
       const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
       const metodo = req.method ?? "GET";
       const base = `/api/proyectos/${PROYECTO.id}`;
@@ -100,6 +110,27 @@ beforeAll(async () => {
       if (metodo === "GET" && ruta === `${base}/claves`) return responder(res, 200, { claves: [] });
       if (metodo === "POST" && ruta === `${base}/claves/${ID_DE_CLAVE}/confirmar`) return responder(res, 200, { ok: true });
       if (metodo === "POST" && ruta === `${base}/claves/revocar`) return responder(res, 200, { ok: true });
+      // Tanda 9: la cuenta de IA de cada agente. El motor falso guarda la clave que le llega, como mucho, en memoria de la prueba.
+      if (ruta === `${base}/cuentas-de-ia` && metodo === "GET") {
+        return responder(res, 200, { cuentas: [
+          { agente: "chat", estado: "lista", cuenta_lista: true, cuenta: CUENTA_DE_IA("chat") },
+          { agente: "triaje", estado: "falta", cuenta_lista: false, cuenta: null },
+        ] });
+      }
+      if (ruta.startsWith(`${base}/cuentas-de-ia/`)) {
+        const agente = ruta.split("/")[5];
+        if (metodo === "PUT") {
+          if (motor.cuentasModo === "repite") {
+            return responder(res, 422, { error: "clave_rechazada", message: `La clave ${(JSON.parse(crudo) as { clave: string }).clave} fue rechazada`, codigo: "invalid_api_key" });
+          }
+          return responder(res, 200, { cuenta: CUENTA_DE_IA(agente!), reemplazo: false, saldo_usd: 12.5, avisos: [] });
+        }
+        if (metodo === "POST" && ruta.endsWith("/validar")) return responder(res, 200, { cuenta: CUENTA_DE_IA(agente!), cambio_de_estado: false, saldo_usd: 12.5, avisos: [] });
+        if (metodo === "DELETE") return responder(res, 200, { cuenta: CUENTA_DE_IA(agente!, "quitada") });
+      }
+      if (metodo === "PUT" && ruta === `${base}/agentes/chat`) {
+        return responder(res, 200, { perfil: { version: 2, opcion: "estandar", modelo_id: "anthropic/claude-haiku-4.5", esfuerzo: null, sin_guardado_de_datos: false } });
+      }
       if (metodo === "GET" && ruta === `${base}/diagnostico`) {
         return responder(res, 200, {
           listo: true, politica: "relevar",
@@ -175,7 +206,7 @@ afterAll(async () => {
 
 type Corrida = { codigo: number | null; stdout: string; stderr: string; vencido: boolean };
 
-function correr(args: string[], o: { stdin: "ignore"; techoMs?: number; cwd?: string }): Promise<Corrida> {
+function correr(args: string[], o: { stdin: "ignore"; techoMs?: number; cwd?: string; env?: Record<string, string> }): Promise<Corrida> {
   return new Promise((resolve) => {
     // Un entorno armado a mano, sin heredar el de quien corre los tests: una SUPCOFLOW_TOKEN
     // exportada en la máquina no puede colarse.
@@ -189,6 +220,7 @@ function correr(args: string[], o: { stdin: "ignore"; techoMs?: number; cwd?: st
         // mínimo de 2 s (PLAZO_MINIMO_DE_SONDEO_MS); con 3 s sobraban 2000 ms justos y cualquier
         // milisegundo gastado antes del primer sondeo lo salteaba (flaky, T18).
         SUPCOFLOW_API_URL: api, SUPCOFLOW_SIN_LLAVERO: "1", SUPCOFLOW_TRAMO_MS: "9000",
+        ...o.env,
       },
     });
     let stdout = "";
@@ -208,9 +240,9 @@ async function sembrarClave(clave: string) {
 }
 
 // Como corre un asistente: sin terminal y, si hace falta, con una sesión ya iniciada.
-async function correrSinTty(args: string[], o: { conClave?: boolean; cwd?: string } = {}): Promise<Corrida> {
+async function correrSinTty(args: string[], o: { conClave?: boolean; cwd?: string; env?: Record<string, string> } = {}): Promise<Corrida> {
   if (o.conClave) await sembrarClave(CLAVE_A);
-  return correr(args, { stdin: "ignore", cwd: o.cwd });
+  return correr(args, { stdin: "ignore", cwd: o.cwd, env: o.env });
 }
 
 // Un repo de git cuyo origin es d/r, para que `proyecto crear` tenga dónde dejar su archivo.
@@ -245,7 +277,7 @@ describe("supcoflow sin terminal", () => {
   it("`describe --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describe", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(29);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(34);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -699,5 +731,136 @@ describe("supcoflow sin terminal", () => {
   it("ningún caso tocó el llavero real: el único destino fue el archivo del HOME temporal", async () => {
     // con SUPCOFLOW_SIN_LLAVERO=1 la terminal no llama a /usr/bin/security; el archivo existe y es el del tmp
     expect(existsSync(archivo)).toBe(true);
+  });
+});
+
+// ─── Tanda 9: la clave de IA del cliente, por el binario compilado, como la corre un asistente: sin terminal ───
+describe("supcoflow agents (binario): la clave de IA no sale por ningún lado", () => {
+  // Distinguible, con trozos de adelante, del medio y de atrás.
+  const CLAVE_DE_IA = "vck_9f8e7d6c5b4a39281706f5e4d3c2b1a0ZyXwVu";
+  const PEDAZOS = [CLAVE_DE_IA, CLAVE_DE_IA.slice(0, -4), "9f8e7d6c5b4a", "2b1a0ZyXw"];
+  const ENV = { SUPCOFLOW_TEST_CLAVE_IA: CLAVE_DE_IA };
+  let existiaElProyecto: boolean;
+
+  beforeAll(() => { existiaElProyecto = motor.proyectoExiste; motor.proyectoExiste = true; });
+  afterAll(() => { motor.proyectoExiste = existiaElProyecto; motor.cuentasModo = "normal"; });
+
+  const sinFugas = (r: Corrida, puedeAparecer: string[] = []) => {
+    let todo = r.stdout + "\n" + r.stderr;
+    for (const ok of puedeAparecer) todo = todo.split(ok).join("");
+    for (const p of PEDAZOS) expect(todo, `fuga de «${p.slice(0, 8)}…» en la salida`).not.toContain(p);
+  };
+  const solo = (r: Corrida) => r.stdout.trimEnd().split("\n");
+
+  it("set-key --from-env: sale 0; la clave viaja en el cuerpo de UN PUT y en ningún otro lado; la salida no la lleva (texto ni --json)", async () => {
+    for (const json of [true, false]) {
+      pedidosCrudos.length = 0;
+      const r = await correrSinTty(["agents", "set-key", "--agent", "chat", "--from-env", "SUPCOFLOW_TEST_CLAVE_IA", ...(json ? ["--json"] : []), "--repo", "d/r"], { conClave: true, env: ENV });
+      expect(r.codigo, r.stdout + r.stderr).toBe(0);
+      if (json) {
+        expect(solo(r)).toHaveLength(1);
+        expect(JSON.parse(r.stdout)).toMatchObject({ ok: true, agente: "chat", cuenta: { ultimos4: "XwVu", estado: "lista" } });
+      }
+      sinFugas(r, ["XwVu"]);
+      const puts = pedidosCrudos.filter((p) => p.cuerpo.includes("9f8e7d6c5b4a"));
+      expect(puts).toHaveLength(1);
+      expect(puts[0]).toMatchObject({ metodo: "PUT", url: "/api/proyectos/proj_abc/cuentas-de-ia/chat" });
+      expect(JSON.parse(puts[0]!.cuerpo)).toEqual({ clave: CLAVE_DE_IA, proveedor: "ai_gateway" });
+      // Ni en la URL ni en las cabeceras de ningún pedido.
+      for (const p of pedidosCrudos) {
+        expect(p.url).not.toContain("9f8e7d6c");
+        expect(p.cabeceras).not.toContain("9f8e7d6c");
+      }
+    }
+  }, 60_000);
+
+  it("sin terminal y sin --from-env: sale 4 sin_terminal, no pregunta y no manda nada al motor", async () => {
+    pedidosCrudos.length = 0;
+    const r = await correrSinTty(["agents", "set-key", "--agent", "chat", "--json", "--repo", "d/r"], { conClave: true, env: ENV });
+    expect(r.codigo).toBe(4);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: false, error: "sin_terminal" });
+    expect(pedidosCrudos.filter((p) => p.metodo !== "GET")).toEqual([]);
+    sinFugas(r);
+  }, 60_000);
+
+  it("no hay flag para la clave: --key, --api-key, --token con la clave salen 3 flag_desconocido y no la repiten", async () => {
+    for (const f of ["--key", "--api-key", "--token", "--secret"]) {
+      pedidosCrudos.length = 0;
+      const r = await correrSinTty(["agents", "set-key", "--agent", "chat", f, CLAVE_DE_IA, "--json"], { conClave: true });
+      expect(r.codigo, f).toBe(3);
+      expect(JSON.parse(r.stdout).error, f).toBe("flag_desconocido");
+      expect(pedidosCrudos, f).toEqual([]);
+      sinFugas(r);
+    }
+  }, 60_000);
+
+  it("la clave como palabra suelta, o como nombre de variable, sale 3 sin repetirla ni llamar al motor", async () => {
+    for (const args of [
+      ["agents", "set-key", CLAVE_DE_IA, "--agent", "chat", "--json"],
+      ["agents", "set-key", "--agent", "chat", "--from-env", CLAVE_DE_IA, "--json"],
+      ["agents", "set-key", "--agent", "chat", `--from-env=${CLAVE_DE_IA}`, "--json"],
+    ]) {
+      pedidosCrudos.length = 0;
+      const r = await correrSinTty(args, { conClave: true, env: ENV });
+      expect(r.codigo, args.join(" ")).toBe(3);
+      expect(pedidosCrudos, args.join(" ")).toEqual([]);
+      sinFugas(r);
+    }
+  }, 60_000);
+
+  it("un motor roto que repite la clave en su error: sale 3 clave_rechazada y la salida NO la lleva", async () => {
+    motor.cuentasModo = "repite";
+    try {
+      for (const json of [true, false]) {
+        const r = await correrSinTty(["agents", "set-key", "--agent", "triage", "--from-env", "SUPCOFLOW_TEST_CLAVE_IA", ...(json ? ["--json"] : []), "--repo", "d/r"], { conClave: true, env: ENV });
+        expect(r.codigo).toBe(3);
+        sinFugas(r);
+      }
+    } finally {
+      motor.cuentasModo = "normal";
+    }
+  }, 60_000);
+
+  it("show, check, remove y configure: JSON de una línea, sin la clave, con los códigos del contrato", async () => {
+    const show = await correrSinTty(["agents", "show", "--json", "--repo", "d/r"], { conClave: true });
+    expect(show.codigo).toBe(0);
+    expect(solo(show)).toHaveLength(1);
+    expect(JSON.parse(show.stdout)).toMatchObject({ ok: true, agentes: [{ agente: "chat", estado: "lista" }, { agente: "triaje", estado: "falta", cuenta: null }] });
+    const check = await correrSinTty(["agents", "check", "--agent", "chat", "--json", "--repo", "d/r"], { conClave: true });
+    expect(check.codigo).toBe(0);
+    expect(JSON.parse(check.stdout)).toMatchObject({ ok: true, agente: "chat" });
+    const quitar = await correrSinTty(["agents", "remove", "--agent", "triage", "--json", "--repo", "d/r"], { conClave: true });
+    expect(quitar.codigo).toBe(0);
+    const conf = await correrSinTty(["agents", "configure", "--agent", "chat", "--option", "estandar", "--data-retention", "allow", "--json", "--repo", "d/r"], { conClave: true });
+    expect(conf.codigo, conf.stdout).toBe(0);
+    expect(JSON.parse(conf.stdout)).toMatchObject({ ok: true, perfil: { opcion: "estandar" } });
+    const triaje = await correrSinTty(["agents", "configure", "--agent", "triage", "--option", "estandar", "--data-retention", "allow", "--json", "--repo", "d/r"], { conClave: true });
+    expect(triaje.codigo).toBe(4);
+    expect(JSON.parse(triaje.stdout).error).toBe("no_desde_la_terminal");
+    for (const r of [show, check, quitar, conf, triaje]) sinFugas(r, ["XwVu"]);
+  }, 60_000);
+
+  it("`agents` sin subcomando, o con uno que no existe, sale 3 comando_desconocido", async () => {
+    for (const args of [["agents", "--json"], ["agents", "list", "--json"]]) {
+      const r = await correrSinTty(args, { conClave: true });
+      expect(r.codigo, args.join(" ")).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("comando_desconocido");
+    }
+  }, 60_000);
+
+  it("después de todo eso, la clave de IA no quedó escrita en ningún archivo del HOME temporal (credenciales, idempotencia, pruebas, candados)", () => {
+    const hallados: string[] = [];
+    const mirar = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const ruta = join(dir, e.name);
+        if (e.isDirectory()) mirar(ruta);
+        else if (e.isFile() && lstatSync(ruta).size < 5_000_000) {
+          const contenido = readFileSync(ruta, "utf8");
+          if (PEDAZOS.some((p) => contenido.includes(p))) hallados.push(ruta);
+        }
+      }
+    };
+    mirar(tmp);
+    expect(hallados).toEqual([]);
   });
 });

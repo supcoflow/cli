@@ -6,6 +6,7 @@ const VACIOS = {
   json: false, dryRun: false, fromGithub: false, help: false, start: false, wait: false, repo: null, install: null, test: null,
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
   skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
+  agent: null, fromEnv: null, provider: null, option: null, dataRetention: null,
 };
 
 it("lee comando y flags", () => {
@@ -51,7 +52,7 @@ describe("los comandos canónicos, en inglés", () => {
   it("los de dos palabras", () => {
     for (const c of ["repo connect", "project create", "project show", "chat on", "chat off", "chat brand", "chat logo", "sites add", "sites remove",
       "data set", "policy set", "keys create", "keys list", "keys revoke", "guide check", "guide publish", "guide show", "guide use", "guide versions",
-      "install record"]) {
+      "install record", "agents show", "agents set-key", "agents check", "agents remove", "agents configure"]) {
       expect(leerArgumentos(c.split(" ")).comando).toBe(c);
     }
   });
@@ -167,4 +168,47 @@ it("el aviso de un flag desconocido y los demás errores de lectura están en in
   expect(() => leerArgumentos(["login", "--estart"])).toThrowError(/Unknown flag --estart/);
   expect(() => leerArgumentos(["repo", "connect", "ya"])).toThrowError(/more than one command/i);
   expect(() => leerArgumentos(["project", "show", "--repo"])).toThrowError(/--repo/);
+});
+
+describe("tanda 9: `agents` y la clave que nunca va como argumento", () => {
+  it("los cinco comandos de `agents` se leen, y sus flags llevan valor una sola vez", () => {
+    for (const c of ["show", "set-key", "check", "remove", "configure"]) expect(leerArgumentos(["agents", c]).comando, c).toBe(`agents ${c}`);
+    expect(leerArgumentos(["agents", "set-key", "--agent", "chat", "--from-env", "AI_GATEWAY_API_KEY", "--provider", "ai_gateway", "--json"]).flags)
+      .toMatchObject({ agent: "chat", fromEnv: "AI_GATEWAY_API_KEY", provider: "ai_gateway", json: true });
+    expect(leerArgumentos(["agents", "configure", "--agent", "chat", "--option", "estandar", "--data-retention", "deny"]).flags)
+      .toMatchObject({ agent: "chat", option: "estandar", dataRetention: "deny" });
+    for (const f of ["--agent", "--from-env", "--provider", "--option", "--data-retention"]) {
+      expect(() => leerArgumentos(["agents", "set-key", f, "a", f, "b"]), f).toThrowError(expect.objectContaining({ codigo: 3, error: "argumentos_invalidos" }));
+      expect(() => leerArgumentos(["agents", "set-key", f, ""]), f).toThrowError(expect.objectContaining({ codigo: 3 }));
+    }
+  });
+  it("`agents` solo, o con otra palabra, no es un comando: lo rechaza el despacho", () => {
+    expect(leerArgumentos(["agents"]).comando).toBe("agents");
+    expect(leerArgumentos(["agents", "borrar"]).comando).toBe("agents");
+  });
+  it("NO existe un flag para la clave: --key, --api-key, --token, --secret, --value salen 3 flag_desconocido, sin repetir el valor", () => {
+    const CLAVE = "vck_9f8e7d6c5b4a39281706f5e4d3c2b1a0ZyXwVu";
+    for (const f of ["--key", "--api-key", "--token", "--secret", "--value", "--clave", "--password"]) {
+      for (const forma of [[f, CLAVE], [`${f}=${CLAVE}`]]) {
+        let msg = "";
+        try { leerArgumentos(["agents", "set-key", "--agent", "chat", ...forma]); } catch (e) { msg = JSON.stringify(e) + String((e as Error).message); expect((e as { error: string }).error, f).toBe("flag_desconocido"); }
+        expect(msg, f).not.toBe("");
+        expect(msg, `${f} no debe repetir la clave`).not.toContain("9f8e7d6c");
+      }
+    }
+  });
+  it("la clave como tercera palabra (`agents set-key vck_…`) es argumentos_de_mas, sin repetirla", () => {
+    const CLAVE = "vck_9f8e7d6c5b4a39281706f5e4d3c2b1a0ZyXwVu";
+    let e: unknown;
+    try { leerArgumentos(["agents", "set-key", CLAVE]); } catch (x) { e = x; }
+    expect(e).toMatchObject({ codigo: 3, error: "argumentos_de_mas" });
+    expect(JSON.stringify(e) + (e as Error).message).not.toContain("9f8e7d6c");
+  });
+  it("una clave pegada como valor de otro flag que no la espera tampoco se repite en el error de un flag desconocido", () => {
+    const CLAVE = "vck_9f8e7d6c5b4a39281706f5e4d3c2b1a0ZyXwVu";
+    expect(() => leerArgumentos(["agents", "set-key", `--${CLAVE}`])).toThrowError(expect.objectContaining({ codigo: 3 }));
+    let msg = "";
+    try { leerArgumentos(["agents", "set-key", `--${CLAVE}`]); } catch (e) { msg = (e as Error).message; }
+    expect(msg).not.toContain("9f8e7d6c");
+  });
 });
