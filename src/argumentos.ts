@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { COMANDOS_VIEJOS, FLAGS_VIEJOS } from "./alias.ts";
+import { pareceUnaClave } from "./clave-sin-eco.ts";
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 
 export type Flags = {
@@ -15,6 +16,8 @@ export type Flags = {
   files: string[]; shape: string | null;
   authorizeSpend: boolean; message: string | null; testId: string | null;
   ceiling: string | null; expectPolicy: string | null;
+  // Tanda 9 (`agents`). NO hay un flag para la clave de IA: entra sin eco por la terminal o de la variable que `fromEnv` NOMBRA.
+  agent: string | null; fromEnv: string | null; provider: string | null; option: string | null; dataRetention: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -23,6 +26,7 @@ export const COMANDOS_COMPUESTOS = [
   "data set", "policy set", "keys create", "keys list", "keys revoke",
   "guide check", "guide publish", "guide show", "guide use", "guide versions",
   "install record",
+  "agents show", "agents set-key", "agents check", "agents remove", "agents configure",
 ] as const;
 // Sólo estas primeras palabras admiten una segunda: cualquier otro par sigue siendo «de más». Entran también las de
 // los nombres viejos (`guia publicar`), que se resuelven más abajo.
@@ -30,6 +34,7 @@ const PRIMERAS_PALABRAS = new Set([...COMANDOS_COMPUESTOS, ...Object.keys(COMAND
 const FLAGS_CON_VALOR = [
   "repo", "install", "test", "site", "title", "greeting", "file", "allow", "mode", "name", "save-to", "id", "source", "skill", "app",
   "message", "test-id", "ceiling", "expect-policy", "shape",
+  "agent", "from-env", "provider", "option", "data-retention",
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
@@ -59,7 +64,9 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
     const code = (e as { code?: string }).code;
     if (code === "ERR_PARSE_ARGS_UNKNOWN_OPTION") {
       const m = /'(--?[^']+)'/.exec((e as Error).message);
-      throw invalida("flag_desconocido", `Unknown flag ${m ? m[1] : "you passed"}. Try \`supcoflow --help\`.`);
+      // Sólo se repite lo que tiene forma de nombre de flag: una clave pegada donde va un flag (`--vck_…`) no se imprime.
+      const nombre = m && /^--?[a-z][a-z0-9-]{0,30}$/.test(m[1]!) && !pareceUnaClave(m[1]!.replace(/^-+/, "")) ? m[1] : "you passed";
+      throw invalida("flag_desconocido", `Unknown flag ${nombre}. Try \`supcoflow --help\`.`);
     }
     throw invalida("argumentos_invalidos", `${(e as Error).message} Try \`supcoflow --help\`.`);
   }
@@ -132,6 +139,11 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       testId: un("test-id"),
       ceiling: un("ceiling"),
       expectPolicy: un("expect-policy"),
+      agent: un("agent"),
+      fromEnv: un("from-env"),
+      provider: un("provider"),
+      option: un("option"),
+      dataRetention: un("data-retention"),
       theme: tema,
     },
   };

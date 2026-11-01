@@ -18,7 +18,8 @@ export type DepsDeConfigurar = DepsDelProyectoDelRepo & {
 export type { Fetch };
 
 export const fallo = (codigo: Resultado["codigo"], error: string, message: string): Resultado => ({ codigo, json: { ok: false, error, message }, texto: message });
-const PIDEN_UNA_PERSONA = new Set(["skill_no_aprobada"]);
+// Tanda 9: sin la cuenta de IA del agente (`falta_ia_del_chat` al prender el chat; `falta_ia_del_triaje` en la prueba y la guía) no arranca; la pone una persona.
+const PIDEN_UNA_PERSONA = new Set(["skill_no_aprobada", "falta_ia_del_chat", "falta_ia_del_triaje"]);
 const TRANSITORIOS = new Set(["sitios_cambiaron", "idempotency_en_curso"]);
 
 export function desenlace(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => Resultado): Resultado {

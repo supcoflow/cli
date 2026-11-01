@@ -32,9 +32,15 @@ export function emitir(r: Resultado, modoJson: boolean, out: (s: string) => void
 }
 
 // Un mensaje de error de afuera (fetch, el sistema) podría traer la clave o el device_code
-// tal cual; la clave se tapa ANTES que los 64 hex porque los contiene.
+// tal cual; la clave se tapa ANTES que los 64 hex porque los contiene. Tanda 9: también las claves de IA del cliente
+// (la del AI Gateway empieza con `vck_`; la de OpenRouter, con `sk-or-`; otras, con `sk-`): no se imprimen nunca, ni en un mensaje del motor.
 export function taparSecretos(s: string): string {
-  return s.replace(/scf_[0-9a-f]{16}_[0-9a-f]{64}/g, "scf_…").replace(/\b[0-9a-f]{64}\b/g, "[device_code]");
+  return s
+    .replace(/scf_[0-9a-f]{16}_[0-9a-f]{64}/g, "scf_…")
+    .replace(/\bvck_[A-Za-z0-9_-]{4,}/g, "vck_…")
+    .replace(/\bsk-or-[A-Za-z0-9_-]{8,}/g, "sk-or-…")
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}/g, "sk-…")
+    .replace(/\b[0-9a-f]{64}\b/g, "[device_code]");
 }
 
 export function resultadoDeFallo(e: unknown): Resultado {

@@ -4,6 +4,7 @@
 // sale como un 1 limpio, en una línea si se pidió --json, sin traza y con los secretos tapados.
 import { revocarPropia } from "./api.ts";
 import { leerArgumentos } from "./argumentos.ts";
+import { agentesConfigurar, agentesPonerClave, agentesQuitar, agentesValidar, agentesVer } from "./comandos/agentes.ts";
 import { clavesCrear, clavesListar, clavesRevocar } from "./comandos/claves.ts";
 import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios } from "./comandos/configurar.ts";
 import { guiaPublicar, guiaRevisar, guiaUsar, guiaVer, guiaVersiones } from "./comandos/guia.ts";
@@ -49,6 +50,8 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       skill: flags.skill !== null, app: flags.app !== null, shape: flags.shape !== null,
       authorizeSpend: flags.authorizeSpend, message: flags.message !== null, testId: flags.testId !== null,
       ceiling: flags.ceiling !== null, expectPolicy: flags.expectPolicy !== null,
+      agent: flags.agent !== null, fromEnv: flags.fromEnv !== null, provider: flags.provider !== null, option: flags.option !== null,
+      dataRetention: flags.dataRetention !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
@@ -132,6 +135,16 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await guiaUsar(e.guia, flags), json };
       case "guide versions":
         return { r: await guiaVersiones(e.guia, flags), json };
+      case "agents show":
+        return { r: await agentesVer(e.agentes, flags), json };
+      case "agents set-key":
+        return { r: await agentesPonerClave(e.agentes, flags), json };
+      case "agents check":
+        return { r: await agentesValidar(e.agentes, flags), json };
+      case "agents remove":
+        return { r: await agentesQuitar(e.agentes, flags), json };
+      case "agents configure":
+        return { r: await agentesConfigurar(e.agentes, flags), json };
       case "widget":
         return { r: await widget(e.widget, flags), json };
       case "install record":

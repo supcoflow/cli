@@ -37,7 +37,8 @@ the English ones.
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
 | `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
-| `supcoflow diagnose` | Free: how far the installation is (N of 7) and whether a test would go in (including whether this machine can save the test request). |
+| `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
+| `supcoflow diagnose` | Free: how far the installation is (N of 7, or N of 8 when the engine also counts the chat's AI account) and whether a test would go in (including whether this machine can save the test request and the triage agent's AI account). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
 | `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. |
 
@@ -124,6 +125,50 @@ owner/repo`, and the ones that write accept `--dry-run`.
 | `supcoflow policy set --mode save` | What the engine does with a problem that comes in through the chat: `investigate` (spends) or `save`. Saving only stops what the chat does automatically; a person can still ask for the investigation from the console, and it costs. |
 | `supcoflow keys create --name ci --save-to ~/ci.key` | Read-only key for CI: the secret stays only in that file (0600, outside a repo), never in the output. |
 | `supcoflow keys list` / `keys revoke --id cla_…` | List and revoke read-only keys. |
+
+## The AI accounts of the agents
+
+Each agent that thinks (the **chat** and the **triage agent**) runs on an AI account of yours: a key from AI Gateway (create it
+[here](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway%2Fapi-keys&title=AI+Gateway+API+Keys)). The place to manage them is
+the **Agents** tab of the project in the console; the terminal does the same, and a code assistant can look at the state.
+The agent that writes the guide uses the triage agent's account.
+
+| Command | What it does |
+|---|---|
+| `supcoflow agents show [--agent chat\|triage]` | The state of each account: `lista` (ready), `rechazada` (the provider rejects the key), `sin_saldo` (out of balance or the key's cap reached) or `falta` (missing), the provider, the last 4 characters of the key and when it was last checked. Exits 0 even if one is missing: it is a reading. |
+| `supcoflow agents set-key --agent chat\|triage` | Sets the key, or **replaces** it (rotates it). The provider checks it for free; a rejected key is not saved. Only a team Owner can. |
+| `supcoflow agents check --agent chat\|triage` | Asks the provider again whether the stored key works, without anyone pasting it: the way out of a `rechazada` or `sin_saldo` account once you fixed it at the provider. Exits 0 if ready, 4 if not. |
+| `supcoflow agents remove --agent chat\|triage` | Deletes the key from Supcoflow. Only a team Owner can. |
+| `supcoflow agents configure --agent chat --option standard --data-retention allow` | The chat's model, from the menu (`agile`, `standard`, `plus`; only the ones that passed our measurement can be chosen), and `deny` to use only providers that don't keep your data. The triage agent's model is approved in the Agents tab: the engine doesn't take it from the terminal yet (exit 4 `no_desde_la_terminal`). |
+
+**The key is write-only.** Once it is set it can't be shown or edited, only replaced or removed, like a «Sensitive» variable.
+That is why:
+
+- **It never goes as an argument.** There is no `--key` flag (it would be `flag_desconocido`): a key in the command line stays
+  in your shell history and in the list of processes, and if an assistant runs the command it lands in the assistant's context.
+- **`supcoflow agents set-key --agent chat`** asks for it **without echo** in an interactive terminal: nothing you type or paste
+  appears on the screen. If the terminal can't hide what you type, it doesn't ask (exit 4 `sin_eco`). It is meant for **you** to
+  type: an assistant without a terminal gets exit 4 `sin_terminal` and has to tell you to run it yourself, in your own terminal (a shell that
+  is not interactive, as the one some assistants give you, can't hide what you type: it exits 4 too), or to use the Agents tab.
+- **`--from-env NAME`** reads it from the environment variable named `NAME` (`export AI_GATEWAY_API_KEY=…` first). It takes the **name**, never the key:
+  if what you pass looks like a key, it exits 3 `clave_como_nombre` without repeating it, and you should treat that key as exposed and create a new one.
+  It is the way for CI. There is no stdin either.
+- **It is never printed.** Not on the screen, not in `--json`, not on stderr, not in an error: every answer of the engine is reduced to fixed
+  phrases and a short list of fields (provider, last 4, state, dates), and anything shaped like a key is covered. It is not
+  written to any file of this machine either (no retry key: setting is idempotent in intention, and if the answer doesn't arrive you look
+  with `agents show`).
+
+```bash
+supcoflow agents show --json
+supcoflow agents set-key --agent chat                                       # you type the key; it isn't shown
+supcoflow agents set-key --agent triage --from-env AI_GATEWAY_API_KEY --json   # CI
+supcoflow agents check --agent chat
+supcoflow agents configure --agent chat --option standard --data-retention allow
+```
+
+`diagnose` counts the chat's account as one more point of the installation («N of 8», `ia_del_chat`: without it the chat doesn't show
+on your site) and shows the triage agent's apart, with the test (`ia_del_triaje`: without it a test doesn't run). The engine only reports them once AI accounts are
+required: before that, `diagnose` says «N of 7» as always. `chat on` and `test` exit 4 `falta_ia_del_chat` / `falta_ia_del_triaje` when the account is missing.
 
 ## The guide
 
@@ -254,7 +299,7 @@ the repo from the `origin`, or `--repo owner/repo`.
 
 | Command | What it does |
 |---|---|
-| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the month's balance and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 7, puntos }` and `prueba: { listo, puntos }`. The seventh point, `interfaz`, is explained in «Put the chat in the app». |
+| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the month's balance and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 7 \| 8, puntos }` and `prueba: { listo, puntos }`. The seventh point, `interfaz`, is explained in «Put the chat in the app»; the AI accounts, in «The AI accounts of the agents». |
 | `supcoflow test` | Without `--authorize-spend` it sends nothing: it exits 4 with the test's ceiling, the balance, the cap and what is committed this month, and the exact command to launch it. It also says, before you authorize anything, whether this machine can save the test request (`maquina: { ok, impedimentos }`) and any request still waiting for confirmation (`intento_pendiente: { techo_usd, politica }`). |
 | `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate` | Requests the test: the problem comes in through the same door as the chat and runs an investigation that **spends** up to the ceiling you authorize (with the `save` policy it goes as far as the saved case and doesn't spend). Exits 5 with the id. `--message "…"` uses your own text. |
 | `supcoflow test --wait` | Follows the last test up to 90 s: 5 while it runs (call it again), 0 with the issue, 4 if it needs a look in the console (it brings the link). The charge is shown as it is: `pendiente` right at the close, never 0. `--test-id prb_…` follows another one. |

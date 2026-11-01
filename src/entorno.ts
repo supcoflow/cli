@@ -11,7 +11,10 @@ import { basename, dirname, join } from "node:path";
 import {
   buscarProyecto, canjear, configurar, leerDiagnostico, leerPrueba, leerWidget, pedirPrueba, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
   listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, leerVersionesDeLaGuia, type Yo,
+  configurarElChat, leerCuentasDeIa, ponerCuentaDeIa, quitarCuentaDeIa, validarCuentaDeIa,
 } from "./api.ts";
+import { entradaOculta } from "./clave-sin-eco.ts";
+import type { DepsDeAgentes } from "./comandos/agentes.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
 import type { DepsDeClaves } from "./comandos/claves.ts";
 import type { DepsDeGuia } from "./comandos/guia.ts";
@@ -387,6 +390,55 @@ export function archivosDelRepo(avisar: (s: string) => void): DepsDeProyecto["ar
 
 const LOCALES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+// Pregunta la clave de IA SIN ECO. Es lo único que lee el teclado: modo «raw» (el terminal no devuelve lo que se tipea) y cada tecla pasa por
+// `entradaOculta` (src/clave-sin-eco.ts), que no escribe nada. Lanza si no puede ponerlo en ese modo: quien llama NO cae a preguntar con eco.
+// El texto de la pregunta va a stderr (stdout queda para el resultado). Se restaura el terminal pase lo que pase, también si el proceso se corta.
+export function leerClaveSinEco(pregunta: string): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const entrada = process.stdin;
+    if (entrada.isTTY !== true || typeof entrada.setRawMode !== "function") {
+      reject(new Error("stdin is not a terminal that can hide input"));
+      return;
+    }
+    try {
+      entrada.setRawMode(true);
+    } catch {
+      reject(new Error("raw mode is not available"));
+      return;
+    }
+    let estado = entradaOculta.nueva();
+    const restaurar = () => {
+      try {
+        entrada.setRawMode(false);
+      } catch {
+        // ya cerrado
+      }
+    };
+    const alSalir = () => restaurar();
+    process.once("exit", alSalir);
+    const terminar = (valor: string | null) => {
+      entrada.off("data", alLlegar);
+      entrada.off("end", alCerrar);
+      process.off("exit", alSalir);
+      restaurar();
+      entrada.pause();
+      process.stderr.write("\n");
+      resolve(valor);
+    };
+    const alLlegar = (trozo: string) => {
+      estado = entradaOculta.procesar(estado, String(trozo));
+      if (estado.fin === "listo") terminar(estado.texto);
+      else if (estado.fin === "cancelado") terminar(null);
+    };
+    const alCerrar = () => terminar(null);
+    entrada.setEncoding("utf8");
+    entrada.on("data", alLlegar);
+    entrada.once("end", alCerrar);
+    process.stderr.write(pregunta);
+    entrada.resume();
+  });
+}
+
 export type Entorno = {
   env: Record<string, string | undefined>;
   api: URL;
@@ -406,6 +458,7 @@ export type Entorno = {
   configurar: DepsDeCatalogo;
   guia: DepsDeGuia;
   claves: DepsDeClaves;
+  agentes: DepsDeAgentes;
   widget: DepsDeWidget;
   instalacion: DepsDeInstalacion;
   prueba: DepsDePrueba;
@@ -517,6 +570,18 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       listarClaves: (a, clave, id) => listarClaves(a, clave, id, fetch),
       esClaveDeConsultaDelProyecto: (a, clave, id) => esClaveDeConsultaDelProyecto(a, clave, id, fetch),
       idempotencia, candados, secretos,
+    },
+    // La clave de IA: del entorno que el proceso heredó o de una pregunta sin eco, y sólo si stdin, stdout y stderr son la terminal (si no, no se ve la pregunta).
+    agentes: {
+      ...configurarEnElMotor,
+      env,
+      esTty: process.stdin.isTTY === true && process.stdout.isTTY === true && process.stderr.isTTY === true,
+      leerClaveOculta: leerClaveSinEco,
+      leerCuentas: (a, clave, id) => leerCuentasDeIa(a, clave, id, fetch),
+      ponerCuenta: (a, clave, id, agente, cuerpo) => ponerCuentaDeIa(a, clave, id, agente, cuerpo, fetch),
+      validarCuenta: (a, clave, id, agente) => validarCuentaDeIa(a, clave, id, agente, fetch),
+      quitarCuenta: (a, clave, id, agente) => quitarCuentaDeIa(a, clave, id, agente, fetch),
+      configurarChat: (a, clave, id, cuerpo) => configurarElChat(a, clave, id, cuerpo, fetch),
     },
     widget: {
       api, guardado, git: gitReal, cwd, archivos: archivosDelRepo(avisar),

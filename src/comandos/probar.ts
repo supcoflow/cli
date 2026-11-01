@@ -25,7 +25,7 @@ import path from "node:path";
 import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento, Widget } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
-import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeLaInterfaz, puntoDeSesion, puntoDelRepo, TOTAL_DE_INSTALACION, type Punto } from "../diagnostico.ts";
+import { agruparPuntos, contarBuenos, lineaDeLoRevisado, nombreDelPunto, puntoDeLaInterfaz, puntoDeSesion, puntoDelRepo, totalDeLaInstalacion, type Punto } from "../diagnostico.ts";
 import { leerInstalacionAnotada, RUTA_DE_LA_INSTALACION, type LecturaDeLaInstalacion } from "../instalacion.ts";
 import type { PoliticaEsperada, RegistroDePruebas, RevisionDeLaMaquina } from "../pruebas-guardadas.ts";
 import { leerRepoLocal } from "../repo-local.ts";
@@ -179,13 +179,14 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   const revision = await revisarLaMaquina(d, p.proyecto.id);
   const prueba = [puntoDeLaMaquina(revision), ...agrupados.prueba];
   const buenos = contarBuenos(instalacion);
+  const total = totalDeLaInstalacion(instalacion);
   const listo = g.listo && revision.maquina.ok && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
   const datos = {
     proyecto: { id: p.proyecto.id, repo: p.proyecto.repo },
     ...datosDelDiagnostico(g),
     listo,
     puntos: [...instalacion, ...prueba],
-    instalacion: { ok: buenos, total: TOTAL_DE_INSTALACION, puntos: instalacion },
+    instalacion: { ok: buenos, total, puntos: instalacion },
     prueba: { listo: g.listo && revision.maquina.ok, puntos: prueba },
     ...datosDeLaMaquina(revision),
     ...datosDelIntentoPendiente(revision),
@@ -193,11 +194,11 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   const resumen = `Monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}; a test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
   const motivos = [
     ...prueba.filter((x) => !x.ok).map((x) => x.mensaje),
-    ...(buenos < TOTAL_DE_INSTALACION ? [`the installation isn't complete (${buenos} of ${TOTAL_DE_INSTALACION})`] : []),
+    ...(buenos < total ? [`the installation isn't complete (${buenos} of ${total})`] : []),
   ];
   const listaParaProbar = listo ? "Ready for a test: yes." : `Ready for a test: no, because ${motivos.join("; ") || "the engine says it isn't ready"}`;
   const cuerpo = [
-    lineaDeLoRevisado(buenos),
+    lineaDeLoRevisado(buenos, instalacion),
     ...lineasDePuntos(instalacion, nombreDelPunto),
     listaParaProbar,
     ...lineasDePuntos(prueba),
@@ -395,7 +396,8 @@ function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, intento: In
       return fallo(SALIDA.inesperado, r.error, `${r.message} Run \`${comandoDeReintento(intento)}\` again to ask for a new test.`);
   }
   if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", r.message);
-  if (r.status === 403 || r.error === "chat_deshabilitado") return fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
+  // Sin la cuenta de IA del triage agent (tanda 9) la prueba no arranca: la pone una persona en la pestaña Agents. El motor ya dice cuál falta.
+  if (r.status === 403 || r.error === "chat_deshabilitado" || r.error === "falta_ia_del_triaje") return fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
   return fallo(SALIDA.entradaInvalida, r.error, r.message);
 }
 
