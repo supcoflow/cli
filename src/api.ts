@@ -27,7 +27,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -170,7 +170,7 @@ export async function revocarPropia(api: URL, clave: string, f: Fetch, plazoMs?:
 // cada pedido (404, 409, 422 de comandos) lo decide quien llama. Los `message` del motor son texto de
 // afuera: pasan por taparSecretos antes de salir en una línea de la terminal.
 async function conClave(
-  api: URL, clave: string, ruta: string, init: RequestInit, f: Fetch, plazoMs?: number,
+  api: URL, clave: string, ruta: string, init: RequestInit, f: Fetch, plazoMs?: number, pasan: readonly number[] = [],
 ): Promise<Respuesta> {
   const r = await pedir(api, ruta, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...bearer(clave) } }, f, plazoMs);
   const error = texto(r.cuerpo.error) ?? "respuesta_inesperada";
@@ -187,7 +187,9 @@ async function conClave(
   if (r.status === 400 && error === "repo_invalido") {
     throw new FalloDeLaTerminal(SALIDA.entradaInvalida, error, message("The repo must be owner/repo."));
   }
-  if (r.status >= 500) throw sinServicio(r.status);
+  // `pasan`: los 5xx que traen un motivo de verdad y el comando necesita leer (las cuentas de IA: 502 «el proveedor no contestó», 503 «el motor
+  // no tiene llavero»). El resto de los 5xx sigue siendo «el motor no anda».
+  if (r.status >= 500 && !pasan.includes(r.status)) throw sinServicio(r.status);
   return r;
 }
 
@@ -617,4 +619,55 @@ export async function leerPrueba(api: URL, clave: string, proyectoId: string, pr
     issue: issue === null ? null : { numero: issue.numero as number, url: issue.url as string },
     cobro: { estado: texto(cobro.estado), usd, techo_usd: cobro.techo_usd },
   };
+}
+
+// ---- Las cuentas de IA de los agentes (tanda 9: `agents`) ----
+//
+// La clave de IA del cliente viaja en el cuerpo de UN pedido (`ponerCuentaDeIa`) y en ningún otro: ni en la ruta, ni en una cabecera, ni
+// en un log. Estas funciones devuelven la respuesta entera (qué significa cada 4xx lo decide el comando) con todo texto pasado por
+// `taparSecretos`: lo que el motor diga no puede traer una clave a la pantalla.
+
+const rutaDeLasCuentas = (proyectoId: string) => `${rutaDelProyecto(proyectoId)}/cuentas-de-ia`;
+// 502: el proveedor no contestó (la clave no se guardó ni se marcó); 503: el motor no tiene llavero. Los dos traen su motivo.
+const CON_MOTIVO = [502, 503] as const;
+
+function tapada<T>(v: T): T {
+  if (typeof v === "string") return taparSecretos(v) as T;
+  if (Array.isArray(v)) return v.map(tapada) as T;
+  if (typeof v === "object" && v !== null) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, tapada(x)])) as T;
+  return v;
+}
+
+async function deLasCuentas(
+  api: URL, clave: string, ruta: string, init: RequestInit, f: Fetch, plazoMs?: number,
+): Promise<Respuesta> {
+  const r = await conClave(api, clave, ruta, init, f, plazoMs, CON_MOTIVO);
+  return { status: r.status, cuerpo: tapada(r.cuerpo) };
+}
+
+export function leerCuentasDeIa(api: URL, clave: string, proyectoId: string, f: Fetch): Promise<Respuesta> {
+  return deLasCuentas(api, clave, rutaDeLasCuentas(proyectoId), { method: "GET" }, f);
+}
+
+/** Pone o ROTA la cuenta de un agente. Es el único pedido que lleva la clave de IA, y la lleva sólo en el cuerpo. */
+export function ponerCuentaDeIa(
+  api: URL, clave: string, proyectoId: string, agente: string, cuerpo: { clave: string; proveedor: string }, f: Fetch,
+): Promise<Respuesta> {
+  return deLasCuentas(api, clave, `${rutaDeLasCuentas(proyectoId)}/${encodeURIComponent(agente)}`,
+    { method: "PUT", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function validarCuentaDeIa(api: URL, clave: string, proyectoId: string, agente: string, f: Fetch): Promise<Respuesta> {
+  return deLasCuentas(api, clave, `${rutaDeLasCuentas(proyectoId)}/${encodeURIComponent(agente)}/validar`, { method: "POST" }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function quitarCuentaDeIa(api: URL, clave: string, proyectoId: string, agente: string, f: Fetch): Promise<Respuesta> {
+  return deLasCuentas(api, clave, `${rutaDeLasCuentas(proyectoId)}/${encodeURIComponent(agente)}`, { method: "DELETE" }, f);
+}
+
+/** La opción del menú del chat y el interruptor de datos (el motor la guarda y la aprueba en un paso). */
+export function configurarElChat(
+  api: URL, clave: string, proyectoId: string, cuerpo: { opcion: string; sin_guardado_de_datos: boolean }, f: Fetch,
+): Promise<Respuesta> {
+  return deLasCuentas(api, clave, `${rutaDelProyecto(proyectoId)}/agentes/chat`, { method: "PUT", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f);
 }

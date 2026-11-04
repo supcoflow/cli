@@ -11,7 +11,7 @@ describe("describe --json", () => {
     expect(r.json.ok).toBe(true);
     const comandos = r.json.comandos as { nombre: string }[];
     expect(comandos.map((c) => c.nombre).slice(0, 7)).toEqual(["login", "logout", "whoami", "describe", "repo connect", "project create", "project show"]);
-    expect(comandos).toHaveLength(29);
+    expect(comandos).toHaveLength(34);
     expect(Object.keys(r.json.codigos as object)).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
     const facultades = r.json.facultades as { nombre: string; con_api_key: boolean }[];
     const sin = facultades.filter((f) => !f.con_api_key).map((f) => f.nombre);
@@ -61,7 +61,7 @@ describe("describe --json", () => {
 
   it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
     const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "whoami", "describe", "repo connect", "project create", "project show", "catalog", "diagnose", "test"].includes(c.nombre));
-    expect(configurar).toHaveLength(19);
+    expect(configurar).toHaveLength(24);
     for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
   });
 
@@ -111,10 +111,48 @@ describe("describe --json", () => {
     expect(w.resumen).toMatch(/no code to paste/);
   });
 
-  it("la versión es la del package.json, y es la 0.9.0", () => {
+  it("tanda 9: los cinco comandos de `agents`, con la clave siempre sin eco y nunca como argumento", () => {
+    const g = (n: string) => DESCRIPCION.comandos.find((x) => x.nombre === n)!;
+    for (const n of ["agents show", "agents set-key", "agents check", "agents remove", "agents configure"]) {
+      const c = g(n);
+      expect(c, n).toBeDefined();
+      expect(c.flags.join(" "), n).toContain("--agent");
+      expect(c.flags.join(" "), n).toContain("--repo");
+      expect(c.ejemplos.length, n).toBeGreaterThan(0);
+      expect(c.codigos, n).toContain(4);
+    }
+    const s = g("agents set-key");
+    const t = `${s.resumen} ${s.flags.join(" ")}`;
+    expect(t).toMatch(/without echo|isn't shown|not shown/i);
+    expect(t).toContain("--from-env");
+    expect(t).toMatch(/never (as|an) argument|never goes as an argument|never as an argument/i);
+    for (const e of ["sin_terminal", "sin_eco", "clave_rechazada", "requiere_dueno", "variable_vacia"]) expect(t, e).toContain(e);
+    expect(s.ejemplos.join(" ")).not.toMatch(/vck_|sk-/);
+    // La clave es de sólo escritura: `show` la nombra así, y no hay flag que la reciba.
+    expect(g("agents show").resumen).toMatch(/never shown|can't be shown/i);
+    for (const c of DESCRIPCION.comandos) expect(c.flags.join(" "), c.nombre).not.toMatch(/--(key|api-key|token|secret|value)\b/);
+    // El triage agent no se configura por la terminal: el motor no lo deja con la clave.
+    expect(g("agents configure").resumen).toMatch(/triage agent/);
+    expect(g("agents configure").resumen).toMatch(/Agents tab/);
+    // Decisión del dueño (2026-11-01): los topes de mensajes y la aprobación del modelo del triage agent se hacen en la pestaña Agents, no desde la terminal.
+    const conf = g("agents configure").resumen;
+    expect(conf).toMatch(/message caps/);
+    expect(conf).toMatch(/Agents tab/);
+    expect(conf).not.toMatch(/yet/);
+    expect(g("agents check").resumen).toMatch(/exits? 0 if the account is ready, and 4/i);
+    // Sólo `agents` nombra --agent, --from-env, --provider, --option y --data-retention.
+    for (const c of DESCRIPCION.comandos.filter((x) => !x.nombre.startsWith("agents "))) {
+      expect(c.flags.join(" "), c.nombre).not.toMatch(/--(agent|from-env|provider|option|data-retention)\b/);
+    }
+    // El diagnóstico cuenta la cuenta del chat y muestra la del triage agent.
+    const dg = g("diagnose");
+    expect(`${dg.resumen} ${dg.flags.join(" ")}`).toMatch(/AI account/);
+  });
+
+  it("la versión es la del package.json, y es la 0.10.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.9.0");
+    expect(pkg.version).toBe("0.10.0");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -126,6 +164,7 @@ describe("describe --json", () => {
     expect(dg.codigos).toEqual([0, 1, 2, 3, 4]);
     expect(dg.ejemplos).toContain("supcoflow diagnose --json");
     expect(dg.resumen).toMatch(/N of 7/);
+    expect(dg.resumen).toMatch(/N of 8/);
     expect(dg.resumen).toMatch(/interface/);
     expect(dg.resumen).toMatch(/doesn't stop a test/);
     expect(`${dg.resumen} ${dg.flags.join(" ")}`).toContain("aviso");
@@ -186,8 +225,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.9.0", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.9.0" });
+  it("describe --json se escribe en una sola línea con la versión 0.10.0", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.10.0" });
   });
 });
 

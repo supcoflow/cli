@@ -8,12 +8,14 @@ const DE_CONFIGURAR_CON_REPO = [
   "guide check", "guide publish", "guide show", "guide use", "guide versions",
 ] as const;
 
+const DE_AGENTS = ["agents show", "agents set-key", "agents check", "agents remove", "agents configure"] as const;
+
 export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: readonly string[]; texto: string }[] = [
   { flags: ["start"], comandos: ["login", "repo connect"], texto: "--start belongs to `supcoflow login` and `supcoflow repo connect`." },
   { flags: ["wait"], comandos: ["login", "repo connect", "test"], texto: "--wait belongs to `supcoflow login`, `supcoflow repo connect` and `supcoflow test`." },
   {
-    flags: ["repo"], comandos: ["repo connect", "project create", "project show", ...DE_CONFIGURAR_CON_REPO, "widget", "install record", "diagnose", "test"],
-    texto: "--repo belongs to `supcoflow repo connect`, `project create|show`, `widget`, `install record`, `diagnose`, `test` and the commands that configure a project (not to `catalog`).",
+    flags: ["repo"], comandos: ["repo connect", "project create", "project show", ...DE_CONFIGURAR_CON_REPO, ...DE_AGENTS, "widget", "install record", "diagnose", "test"],
+    texto: "--repo belongs to `supcoflow repo connect`, `project create|show`, `widget`, `install record`, `diagnose`, `test`, `agents` and the commands that configure a project (not to `catalog`).",
   },
   { flags: ["install", "test"], comandos: ["project create"], texto: "--install and --test belong to `supcoflow project create`." },
   { flags: ["site"], comandos: ["sites add", "sites remove"], texto: "--site belongs to `supcoflow sites add|remove`." },
@@ -30,6 +32,9 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
     texto: "--authorize-spend, --ceiling, --expect-policy, --message and --test-id belong to `supcoflow test`.",
   },
   { flags: ["skill", "app", "shape"], comandos: ["install record"], texto: "--skill, --app and --shape belong to `supcoflow install record`." },
+  { flags: ["agent"], comandos: DE_AGENTS, texto: "--agent belongs to `supcoflow agents show|set-key|check|remove|configure`." },
+  { flags: ["fromEnv", "provider"], comandos: ["agents set-key"], texto: "--from-env and --provider belong to `supcoflow agents set-key`." },
+  { flags: ["option", "dataRetention"], comandos: ["agents configure"], texto: "--option and --data-retention belong to `supcoflow agents configure`." },
 ];
 
 /** `--file` se repite sólo en `install record` (la interfaz propia vive en varios archivos); en los demás va una vez. */

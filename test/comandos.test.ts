@@ -426,3 +426,31 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("login", "wait")).toBeNull();
   });
 });
+
+describe("tanda 9: flags de `agents`", () => {
+  const sin = (c: string, ...f: string[]) => flagQueNoAplica(c, f);
+  const AGENTES = ["agents show", "agents set-key", "agents check", "agents remove", "agents configure"];
+  it("--agent y --repo valen en los cinco comandos de `agents`, y en ningún otro", () => {
+    for (const c of AGENTES) {
+      expect(sin(c, "agent", "repo"), c).toBeNull();
+    }
+    for (const c of ["whoami", "config", "chat on", "diagnose", "test", "keys list", "login"]) expect(sin(c, "agent"), c).toMatch(/supcoflow agents/);
+  });
+  it("--from-env y --provider sólo en `agents set-key`", () => {
+    expect(sin("agents set-key", "fromEnv", "provider", "agent")).toBeNull();
+    for (const c of AGENTES.filter((x) => x !== "agents set-key").concat(["whoami", "keys create"])) {
+      expect(sin(c, "fromEnv"), `${c} --from-env`).toMatch(/agents set-key/);
+      expect(sin(c, "provider"), `${c} --provider`).toMatch(/agents set-key/);
+    }
+  });
+  it("--option y --data-retention sólo en `agents configure`", () => {
+    expect(sin("agents configure", "option", "dataRetention", "agent")).toBeNull();
+    for (const c of AGENTES.filter((x) => x !== "agents configure").concat(["chat brand", "config"])) {
+      expect(sin(c, "option"), `${c} --option`).toMatch(/agents configure/);
+      expect(sin(c, "dataRetention"), `${c} --data-retention`).toMatch(/agents configure/);
+    }
+  });
+  it("el texto de un flag que no aplica no repite el valor (no recibe ninguno)", () => {
+    expect(sin("whoami", "fromEnv")).not.toMatch(/vck_/);
+  });
+});

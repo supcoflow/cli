@@ -143,6 +143,13 @@ describe("desenlace por sí solo", () => {
     expect(desenlace({ status: 500, cuerpo: { error: "x" } }, nunca).codigo).toBe(1);
     expect(desenlace({ status: 400, cuerpo: null as never }, nunca).codigo).toBe(1);
   });
+  it("tanda 9: falta la cuenta de IA (falta_ia_del_chat / falta_ia_del_triaje) es una persona que la pone en Agents: 4, con el mensaje del motor", () => {
+    for (const error of ["falta_ia_del_chat", "falta_ia_del_triaje"]) {
+      const r = desenlace({ status: 409, cuerpo: { error, message: "Falta la cuenta de IA del chat. Configurala en la pestaña Agentes del proyecto." } }, nunca);
+      expect(r, error).toMatchObject({ codigo: 4, json: { error } });
+      expect(r.texto).toMatch(/Configurala/);
+    }
+  });
   it("el resto sigue igual: 4xx de validación 3, skill_no_aprobada 4, transitorios 1", () => {
     expect(desenlace({ status: 400, cuerpo: { error: "x" } }, nunca).codigo).toBe(3);
     expect(desenlace({ status: 409, cuerpo: { error: "skill_no_aprobada" } }, nunca).codigo).toBe(4);

@@ -1,5 +1,6 @@
-// El diagnóstico en dos grupos (0.8.0): «¿está instalado?» (siete puntos desde la 0.9.0, gratis) y «¿una prueba entraría ahora?».
-// Cuatro puntos del grupo `instalacion` son del motor; los otros sólo los ve la terminal: que la llamada autenticó
+// El diagnóstico en dos grupos (0.8.0): «¿está instalado?» (siete puntos desde la 0.9.0, gratis; ocho desde la 0.10.0 si el motor cuenta la cuenta de
+// IA del chat) y «¿una prueba entraría ahora?».
+// Cuatro (cinco, con la cuenta de IA del chat) puntos del grupo `instalacion` son del motor; los otros sólo los ve la terminal: que la llamada autenticó
 // (`sign-in`), que el `origin` de esta carpeta es el repo del proyecto (`repo`) y, desde la 0.9.0 (T8, el punto 7), que la
 // interfaz propia de la app, si hay una anotada, sigue ahí y cumple el contrato que el proyecto declara (`interfaz`).
 import type { LecturaDeLaInstalacion } from "./instalacion.ts";
@@ -12,20 +13,28 @@ export type Punto = { punto: string; ok: boolean; mensaje: string; grupo: "insta
 
 
 // El orden y los nombres con que se dicen: los ids de los puntos del motor son datos suyos y no cambian.
-const DE_LA_INSTALACION: readonly { punto: string; como: string }[] = [
+// `opcional`: el motor lo manda sólo si la cuenta del cliente ya rige (`ia_del_chat`, 0.10.0). Un opcional que el motor no mandó no cuenta ni se
+// reclama; uno que mandó cuenta como cualquier otro (el total pasa de 7 a 8). Sin esto, un motor sin el interruptor prendido bajaría el N sin culpa.
+const DE_LA_INSTALACION: readonly { punto: string; como: string; opcional?: true }[] = [
   { punto: "sign-in", como: "sign-in" },
   { punto: "repo", como: "repo" },
   { punto: "instalacion", como: "GitHub App" },
   { punto: "sitios", como: "allowed sites" },
   { punto: "chat", como: "chat" },
+  { punto: "ia_del_chat", como: "chat AI account", opcional: true },
   { punto: "guia", como: "guide" },
   { punto: "interfaz", como: "interface" },
 ];
-export const TOTAL_DE_INSTALACION = DE_LA_INSTALACION.length;
-const DEL_MOTOR = new Set(["instalacion", "sitios", "chat", "guia"]);
+/** Los puntos de la instalación que cuentan: los fijos más los opcionales que el motor mandó. */
+const queCuentan = (instalacion: Pick<Punto, "punto">[]) =>
+  DE_LA_INSTALACION.filter((x) => x.opcional !== true || instalacion.some((p) => p.punto === x.punto));
+export const totalDeLaInstalacion = (instalacion: Pick<Punto, "punto">[]): number => queCuentan(instalacion).length;
+const DEL_MOTOR = new Set(["instalacion", "sitios", "chat", "ia_del_chat", "guia"]);
 
-export const lineaDeLoRevisado = (n: number) =>
-  `Checked ${DE_LA_INSTALACION.map((x) => x.como).slice(0, -1).join(", ")} and ${DE_LA_INSTALACION.at(-1)!.como}: ${n} of ${TOTAL_DE_INSTALACION}, at no cost.`;
+export const lineaDeLoRevisado = (n: number, instalacion: Pick<Punto, "punto">[]) => {
+  const nombres = queCuentan(instalacion).map((x) => x.como);
+  return `Checked ${nombres.slice(0, -1).join(", ")} and ${nombres.at(-1)!}: ${n} of ${nombres.length}, at no cost.`;
+};
 
 export const nombreDelPunto = (punto: string) => DE_LA_INSTALACION.find((x) => x.punto === punto)?.como ?? punto;
 
@@ -88,8 +97,8 @@ export function agruparPuntos(g: Pick<Diagnostico, "puntos">, locales: Punto[]):
   const delMotor = g.puntos.map((p) => ({ ...p, grupo: p.grupo ?? (DEL_MOTOR.has(p.punto) ? "instalacion" : "prueba") }) as Punto);
   const instalacion = [...locales, ...delMotor.filter((p) => p.grupo === "instalacion")];
   // Un punto del grupo que el motor no mandó no se da por bueno: se dice que falta y cuenta como no ok.
-  for (const { punto } of DE_LA_INSTALACION) {
-    if (!instalacion.some((p) => p.punto === punto)) {
+  for (const { punto, opcional } of DE_LA_INSTALACION) {
+    if (opcional !== true && !instalacion.some((p) => p.punto === punto)) {
       instalacion.push({ punto, ok: false, mensaje: "The engine didn't report this point.", grupo: "instalacion" });
     }
   }
@@ -100,6 +109,6 @@ export function agruparPuntos(g: Pick<Diagnostico, "puntos">, locales: Punto[]):
   return { instalacion: instalacion.sort((a, b) => orden(a) - orden(b)), prueba: delMotor.filter((p) => p.grupo === "prueba") };
 }
 
-/** Cuántos de los seis puntos de la instalación están bien (los extras que un motor nuevo sume no cambian el seis). */
+/** Cuántos de los puntos de la instalación están bien (los extras que un motor nuevo sume no cambian la cuenta). */
 export const contarBuenos = (instalacion: Punto[]): number =>
-  DE_LA_INSTALACION.filter(({ punto }) => instalacion.some((p) => p.punto === punto && p.ok)).length;
+  queCuentan(instalacion).filter(({ punto }) => instalacion.some((p) => p.punto === punto && p.ok)).length;

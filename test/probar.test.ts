@@ -240,6 +240,69 @@ describe("diagnose", () => {
   });
 });
 
+// ─── Tanda 9: la cuenta de IA en `diagnose`. El motor suma dos puntos SÓLO cuando los portones rigen: `ia_del_chat` (grupo de la instalación:
+// sin ella el chat no se dibuja) e `ia_del_triaje` (grupo de la prueba). Con el interruptor apagado no vienen y todo queda como siempre. ───
+describe("diagnose: los puntos de la cuenta de IA (tanda 9)", () => {
+  const conCuentas = (chat: boolean, triaje: boolean) => async () => ({
+    ...DIAG,
+    listo: chat && triaje,
+    puntos: [
+      DIAG.puntos[0]!, DIAG.puntos[1]!, DIAG.puntos[2]!,
+      { punto: "ia_del_chat", ok: chat, mensaje: chat ? "The chat's AI account is ready." : "There is no AI account for the chat: add one in the project's Agents tab. Without it the chat doesn't show on your site.", grupo: "instalacion" as const },
+      DIAG.puntos[3]!,
+      { punto: "ia_del_triaje", ok: triaje, mensaje: triaje ? "The triage agent's AI account is ready." : "There is no AI account for the triage agent: add one in the project's Agents tab. A test (and any report) would wait until then.", grupo: "prueba" as const },
+      DIAG.puntos[4]!,
+    ],
+  });
+
+  it("con las dos cuentas listas: el chat cuenta en la instalación (8 of 8) y el triage agent en la prueba", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(true, true) });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toMatchObject({ listo: true, instalacion: { ok: 8, total: 8 }, prueba: { listo: true } });
+    const lineas = r.texto.split("\n");
+    expect(lineas[0]).toBe("Checked sign-in, repo, GitHub App, allowed sites, chat, chat AI account, guide and interface: 8 of 8, at no cost.");
+    expect(lineas.some((l) => l.includes("[ok] chat AI account: The chat's AI account is ready."))).toBe(true);
+    // El del triage agent va aparte, con los de la prueba, y no cuenta en el N.
+    const idx = lineas.indexOf("Ready for a test: yes.");
+    expect(lineas.findIndex((l) => l.includes("ia_del_triaje"))).toBeGreaterThan(idx);
+    const inst = (r.json.instalacion as { puntos: { punto: string }[] }).puntos.map((x) => x.punto);
+    expect(inst).toContain("ia_del_chat");
+    expect(inst).not.toContain("ia_del_triaje");
+    expect((r.json.prueba as { puntos: { punto: string }[] }).puntos.map((x) => x.punto)).toContain("ia_del_triaje");
+  });
+  it("falta la cuenta del chat: baja el N (7 of 8), sale 4 y el texto dice qué hacer", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(false, true) });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json).toMatchObject({ ok: false, error: "no_listo", instalacion: { ok: 7, total: 8 } });
+    expect(r.texto).toContain("7 of 8, at no cost.");
+    expect(r.texto).toMatch(/\[missing\] chat AI account: There is no AI account for the chat/);
+    expect(r.texto).toMatch(/the installation isn't complete \(7 of 8\)/);
+  });
+  it("falta la cuenta del triage agent: no baja el N de la instalación, pero la prueba no está lista y sale 4", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(true, false) });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json).toMatchObject({ instalacion: { ok: 8, total: 8 }, prueba: { listo: false } });
+    expect(r.texto).toContain("Ready for a test: no, because There is no AI account for the triage agent");
+  });
+  it("un motor sin esos puntos (el interruptor apagado, o uno anterior) queda como siempre: 7 of 7, y no se inventa una falta", async () => {
+    const { d } = deps(motor());
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.json).toMatchObject({ listo: true, instalacion: { ok: 7, total: 7 } });
+    expect(r.texto.split("\n")[0]).toBe("Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: 7 of 7, at no cost.");
+    expect(r.texto).not.toContain("AI account");
+  });
+  it("sólo lee: no pide ninguna cuenta ni escribe nada", async () => {
+    const m = motor();
+    const { d, almacen } = deps(m, undefined, { leerDiagnostico: conCuentas(true, true) });
+    await diagnosticar(d, { repo: null });
+    expect(m.posts).toEqual([]);
+    expect(almacen.datos.size).toBe(0);
+  });
+});
+
 // ─── T8: el séptimo punto de `diagnose` (la interfaz propia). Es local: lee `.supcoflow/instalacion.json` del clon y,
 // si hay una interfaz propia anotada, mira que sus archivos sigan y que el contrato anotado sea el que declara el proyecto. ───
 describe("diagnose: el punto 7, la interfaz", () => {
@@ -719,6 +782,8 @@ describe("test --authorize-spend: el ciclo de la clave", () => {
     ["409 chat_deshabilitado", { tipo: "rechazo", status: 409, error: "chat_deshabilitado", message: "Apagado.", cuerpo: {} }, 4, {}],
     ["429 tope_mensual", { tipo: "rechazo", status: 429, error: "tope_mensual", message: "Tope.", cuerpo: { comprometido_usd: 9.5, tope_usd: 10 } }, 6, { comprometido_usd: 9.5, tope_usd: 10 }],
     ["403 requiere_api_key", { tipo: "rechazo", status: 403, error: "requiere_api_key", message: "Con la API key.", cuerpo: {} }, 4, {}],
+    // Tanda 9: sin la cuenta de IA del triage agent la prueba no arranca; la arregla una persona en la pestaña Agents.
+    ["409 falta_ia_del_triaje", { tipo: "rechazo", status: 409, error: "falta_ia_del_triaje", message: "Falta la cuenta de IA del triage agent. Configurala en la pestaña Agentes del proyecto.", cuerpo: { agente: "triaje", por_que: "falta" } }, 4, {}],
     ["403 clave_de_consulta", { tipo: "rechazo", status: 403, error: "clave_de_consulta", message: "Sólo lee.", cuerpo: {} }, 4, {}],
     ["400 falta_idempotency_key", { tipo: "rechazo", status: 400, error: "falta_idempotency_key", message: "Falta.", cuerpo: {} }, 3, {}],
     ["404", { tipo: "rechazo", status: 404, error: "proyecto_inexistente", message: "No existe.", cuerpo: {} }, 3, {}],

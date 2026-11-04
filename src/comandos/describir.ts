@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -228,6 +228,59 @@ export const DESCRIPCION: {
       codigos: [0, 1, 2, 3, 4],
     },
     {
+      nombre: "agents show",
+      resumen: "Shows the AI account of each agent of the repo's project (the chat and the triage agent): its state (`lista` ready, `rechazada` rejected by the provider, `sin_saldo` out of balance, `falta` missing), the provider, the last 4 characters of the key and when it was last checked; never the key (it is write-only: once set it is never shown or editable, only replaced or removed). `cuenta_lista` says only that the ACCOUNT is ready, not that the agent's configuration is approved. A missing account is not an error here (exit 0): the skill reads `agentes[].estado` and, if one is missing, does NOT ask for the key in the chat: it tells the person to type `supcoflow agents set-key --agent …` themselves or to set it in the Agents tab. In the JSON the triage agent is `triaje`.",
+      flags: [
+        "--agent chat|triage: only that agent (both by default)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--json: { proyecto, repo, agentes: [{ agente, estado, cuenta_lista, cuenta: { proveedor, ultimos4, estado, codigo, validada_en, puesta_por, puesta_en } | null }] }",
+      ],
+      ejemplos: ["supcoflow agents show --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "agents set-key",
+      resumen: "Sets or REPLACES (rotates) the AI account of an agent: the provider (AI Gateway) checks the key for free, and the engine stores it encrypted and never shows it again. The key is read without echo from an interactive terminal (a person types it themselves) or from the environment variable `--from-env NAME` names; it never goes as an argument (there is no flag for it: `--key` is flag_desconocido), never from stdin and never through the output: not the screen, not `--json`, not stderr, not an error. Without a terminal and without --from-env it exits 4 sin_terminal and asks for nothing; if the terminal can't hide what is typed it exits 4 sin_eco and doesn't ask. Only a team Owner can (403 requiere_dueno exits 4). A rejected key is not saved (exit 3 clave_rechazada, clave_con_forma_invalida); a provider that didn't answer saved nothing (exit 1 proveedor_no_responde). If the key was saved but the account has no balance it exits 4 cuenta_sin_saldo with guardada: true. Others: 3 falta_agente / agente_invalido / variable_vacia / nombre_de_variable_invalido / clave_como_nombre (the value you passed to --from-env looks like a key: it isn't repeated, and you should treat that key as exposed) / clave_vacia / clave_con_forma_invalida / es_una_clave_de_supcoflow (what you gave is your Supcoflow key, not an AI key) / proveedor_invalido / cancelado; 4 sin_proyecto.",
+      flags: [
+        "--agent chat|triage: which agent's account (required)",
+        "--from-env NAME: the NAME of an environment variable that holds the key (not the key itself); without it, the key is asked for without echo",
+        "--provider id: the provider (ai_gateway by default)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--dry-run: says what it would do, asking for and sending nothing",
+        "--json: { agente, cuenta: { … }, reemplazo, saldo_usd, avisos }",
+      ],
+      ejemplos: ["supcoflow agents set-key --agent chat", "supcoflow agents set-key --agent triage --from-env AI_GATEWAY_API_KEY --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "agents check",
+      resumen: "Asks the provider again, for free and without anyone pasting the key, whether the key stored for an agent works: the way out of a `rechazada` or `sin_saldo` account once it is fixed at the provider. Exits 0 if the account is ready, and 4 (cuenta_rechazada / cuenta_sin_saldo, ok: false, with the same data) if it is not; 4 sin_cuenta if there is no account yet; 1 proveedor_no_responde if the provider didn't answer (it says nothing about the key). The JSON adds `cambio_de_estado`, `saldo_usd` (the account's balance when the provider gives it) and `avisos` (warning codes).",
+      flags: ["--agent chat|triage: which agent's account (required)", "--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json"],
+      ejemplos: ["supcoflow agents check --agent chat --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "agents remove",
+      resumen: "Removes the AI account of an agent: the key is deleted from Supcoflow (the audit row stays, without the secret). Only a team Owner can (exit 4 requiere_dueno). Removing what isn't there leaves the same as removing it: exit 0 with `sin_cuenta: true`.",
+      flags: ["--agent chat|triage: which agent's account (required)", "--repo owner/repo: the repo, if it isn't this folder's «origin»", "--dry-run: says what it would do without doing it", "--json"],
+      ejemplos: ["supcoflow agents remove --agent triage --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "agents configure",
+      resumen: "Chooses the chat's model from the menu and whether only providers that don't keep your data may be used; the engine saves and approves it in one step. Only the chat: the triage agent's model is approved in the project's Agents tab, not from the terminal (exit 4 no_desde_la_terminal). The chat's message caps (per project and per user) are also set only in the Agents tab. An option that hasn't passed our measurement can't be chosen (exit 3 opcion_sin_medicion). The engine has no way to read the current configuration, so both flags are required: nothing is guessed.",
+      flags: [
+        "--agent chat: the chat (required)",
+        "--option agile|standard|plus: the menu option (the engine's ids agil, estandar and plus work too)",
+        "--data-retention allow|deny: `deny` means only providers that don't keep your data",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--dry-run: says what it would send without sending it",
+        "--json: { agente, perfil: { version, opcion, modelo_id, esfuerzo, sin_guardado_de_datos } } or { sin_cambios: true, version }",
+      ],
+      ejemplos: ["supcoflow agents configure --agent chat --option standard --data-retention allow --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
       nombre: "widget",
       resumen: "Shows what to paste into the app to get the chat, built by the engine with the project's ids: the package and its exact version, the Next.js wrapper file (`nextjs.contenido`, as is, without rewriting the ids), the file name to use (`nextjs.archivo_sugerido`) and the earlier names the chat may already be installed under (`nextjs.archivos_anteriores`), how to use it, the CSP line and the <script> one (not for Next.js). If the engine describes the app's own interface (`interfaz_propia`: the app builds the chat with its own components; there is no code to paste) it passes it on as the engine sent it: `estado` (`sin_publicar`: the version isn't on npm yet, so the text doesn't offer the path; `disponible`), the package with its exact version, the ids, the backend, the CSP line, the presentation contract (`contrato.version`, `contrato.archivo`, `contrato.documento`), the entry points (`entradas`) and the docs (`documentos`). A halfway `interfaz_propia` is ignored with a warning on stderr and the widget is shown as always. It writes no files. Exits 4 sin_proyecto if the repo has no project; 1 respuesta_inesperada if the engine sends the widget itself halfway.",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: the engine's object as is (`interfaz_propia` only when the engine sends it)"],
@@ -251,8 +304,8 @@ export const DESCRIPCION: {
     },
     {
       nombre: "diagnose",
-      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7) and, apart, whether a test of the project would go in and how far it would get: policy, monthly balance against the test's ceiling, open tests, whether THIS machine can save the test request (the local point `maquina`, checked without writing anything) and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each point; if `maquina` isn't ok, `listo` and `prueba.listo` are false and the N of 7 doesn't change. The seventh point, `interfaz`, is local and only reads: if .supcoflow/instalacion.json records an own interface (`forma: interfaz_propia`) it checks that the recorded files are still there and that the recorded contract is not behind a new major version (the first number) of the one the project declares (`interfaz_propia.contrato.version` in `widget`; a newer minor or patch only adds optional points and stays ok, saying so); without an own interface it is ok («Not applicable»). It is advice, marked `aviso: true` in the JSON: it lowers the N of 7 but doesn't stop a test.",
-      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { instalacion: { ok, total: 7, puntos }, prueba: { listo, puntos }, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, … }"],
+      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7; N of 8 when the engine also reports the chat's AI account, `ia_del_chat`, which it does once AI accounts are required: without that account the chat doesn't show on the site) and, apart, whether a test of the project would go in and how far it would get: policy, monthly balance against the test's ceiling, open tests, whether THIS machine can save the test request (the local point `maquina`, checked without writing anything), the triage agent's AI account (`ia_del_triaje`, when the engine reports it: without it a test doesn't run) and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each point; if `maquina` isn't ok, `listo` and `prueba.listo` are false and the N of 7 doesn't change. The seventh point, `interfaz`, is local and only reads: if .supcoflow/instalacion.json records an own interface (`forma: interfaz_propia`) it checks that the recorded files are still there and that the recorded contract is not behind a new major version (the first number) of the one the project declares (`interfaz_propia.contrato.version` in `widget`; a newer minor or patch only adds optional points and stays ok, saying so); without an own interface it is ok («Not applicable»). It is advice, marked `aviso: true` in the JSON: it lowers the N of 7 but doesn't stop a test.",
+      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { instalacion: { ok, total: 7 | 8, puntos }, prueba: { listo, puntos }, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, … }"],
       ejemplos: ["supcoflow diagnose --json"],
       codigos: [0, 1, 2, 3, 4],
     },
