@@ -27,7 +27,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.10.0";
+const VERSION = "0.10.1";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -214,8 +214,9 @@ function aProyecto(v: unknown, status: number): Proyecto {
   const c = (typeof v === "object" && v !== null ? v : {}) as Record<string, unknown>;
   const [id, slug, repo, rama, installCommand, testCommand] =
     [c.id, c.slug, c.repo, c.rama, c.install_command, c.test_command].map(texto);
-  if (!id || !slug || !repo || !rama || installCommand === null || testCommand === null) throw inesperada(status);
-  return { id, slug, repo, rama, installCommand, testCommand };
+  if (!id || !slug || !repo || !rama || installCommand === null) throw inesperada(status);
+  // El motor ya no exige el comando de test (si falta, guarda vacío): ni ausente, ni null, ni vacío es un error.
+  return { id, slug, repo, rama, installCommand, testCommand: testCommand ?? "" };
 }
 
 // Un fallo propio del pedido que el mapeo común no cubrió (404, 409…): sale como entrada inválida

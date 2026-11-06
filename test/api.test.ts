@@ -102,6 +102,13 @@ describe("conexión y proyecto", () => {
     expect(await ultimaConexion(API, CLAVE, "d/r", falso(200, { pedido: null }, vistos))).toBeNull();
     expect(new URL(vistos[0]!.url).searchParams.get("repo")).toBe("d/r");
   });
+  it("el motor ya no exige el comando de test: sin test_command, o vacío, no es error", async () => {
+    const { test_command: _t, ...sinTest } = PROYECTO;
+    for (const p of [sinTest, { ...PROYECTO, test_command: "" }, { ...PROYECTO, test_command: null }]) {
+      expect(await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k", falso(201, { proyecto: p, reusado: false })))
+        .toMatchObject({ tipo: "ok", proyecto: { id: "proj_r-1", installCommand: "npm ci", testCommand: "" } });
+    }
+  });
   it("crearProyecto manda la Idempotency-Key y distingue cada respuesta", async () => {
     const vistos: Request[] = [];
     expect(await crearProyecto(API, CLAVE, PEDIDO.id, {}, "k-1", falso(201, { proyecto: PROYECTO, reusado: false }, vistos)))

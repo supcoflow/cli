@@ -111,11 +111,18 @@ describe("proyecto crear", () => {
     expect((await proyectoCrear(d, sinFlags)).codigo).toBe(0);
     expect(vistas[0]).toBe(vistas[1]);
   });
-  it("D-06: comandos faltantes es 3 con la pista de los flags", async () => {
-    const { d } = deps({ crearProyecto: async () => ({ tipo: "comandos_faltantes", faltantes: ["test_command"], message: "No encontré el comando de test." }) });
+  it("D-06: comandos faltantes es 3 con la pista del flag de instalación, sin pedir el de test", async () => {
+    const { d } = deps({ crearProyecto: async () => ({ tipo: "comandos_faltantes", faltantes: ["install_command"], message: "No encontré el comando de instalación." }) });
     const r = await proyectoCrear(d, sinFlags);
-    expect(r).toMatchObject({ codigo: 3, json: { error: "comandos_faltantes", faltantes: ["test_command"] } });
-    expect(r.texto).toContain("--test");
+    expect(r).toMatchObject({ codigo: 3, json: { error: "comandos_faltantes", faltantes: ["install_command"] } });
+    expect(r.texto).toContain("--install");
+    expect(r.texto).not.toContain("--test");
+  });
+  it("un proyecto sin comando de test se crea igual y no promete que corre", async () => {
+    const { d } = deps({ crearProyecto: async () => ({ tipo: "ok", proyecto: { ...PROY, testCommand: "" }, reusado: false }) });
+    const r = await proyectoCrear(d, sinFlags);
+    expect(r.codigo).toBe(0);
+    expect(r.texto).not.toMatch(/tests? with|test command/i);
   });
   it("un proyecto.json del mismo proyecto pero con otro slug o repo no se pisa: 4 archivo_distinto", async () => {
     const { d, archivos } = deps({ buscarProyecto: async () => PROY });
