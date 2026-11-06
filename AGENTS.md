@@ -45,8 +45,11 @@ Run `npm test` and `npm run build` before you finish. `dist/` is a build output 
 - **Exit codes:** 0 ok, 1 unexpected, 2 login needed, 3 invalid input, 4 a person is needed, 5 waiting for a person
   (call again), 6 limit reached.
 - **`--json`** prints one line of JSON on stdout (errors as `{"ok":false,"error":…,"message":…}`); warnings go to
-  stderr. Without an interactive terminal, or with `--json`, a command never asks questions: it exits 3 naming the
-  missing flag.
+  stderr. In general, without an interactive terminal, or with `--json`, a command does not ask questions: it exits 3
+  naming the missing flag. **The exception is `agents set-key`:** without a terminal it exits 4 `sin_terminal` (a
+  person is needed), and with a terminal it asks for the key without echo even with `--json`. The key never goes
+  through the assistant: tell the person to run it in their own terminal. Do not "fix" this in tests without changing
+  the command.
 - **`--dry-run`** exists wherever a command can be simulated.
 - **`describe --json` is the contract.** If you add or change a command, flag, error code or exit code, update what
   `describe` reports and its tests (`test/describir.test.ts`, `test/contrato.test.ts`) and the README table.
