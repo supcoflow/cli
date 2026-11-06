@@ -387,3 +387,9 @@ The terminal always talks to `https://app.supcoflow.dev`. No file in the repo ca
 else's repo and running `supcoflow` doesn't send your key to another server. For development, only the
 `SUPCOFLOW_API_URL` environment variable moves it (`https`, or `http` against `localhost`), and what is saved stays
 tied to the API that issued it: a key from a local engine never travels to production.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+**Name and logo.** The code is MIT-licensed. The name «Supcoflow» and its logo are not part of the license: you can fork and change the code, but a modified version must not be called Supcoflow or look like it comes from Supcoflow. Saying your project «works with Supcoflow» is fine.
