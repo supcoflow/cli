@@ -166,8 +166,7 @@ export async function proyectoCrear(d: DepsDeProyecto, flags: Pick<Flags, "repo"
       // Otro intento lleva otro contenido (los flags): con la misma clave el motor contestaría 409.
       await d.idempotencia.olvidar(OPERACION, repo);
       const install = flags.install ?? "…";
-      const test = flags.test ?? "…";
-      const message = `${alta.message || "The project is missing commands."} Pass them yourself: \`supcoflow project create --install ${comillas(install)} --test ${comillas(test)}\`.`;
+      const message = `${alta.message || "The project is missing the install command."} Pass it yourself: \`supcoflow project create --install ${comillas(install)}\`.`;
       return fallo(SALIDA.entradaInvalida, "comandos_faltantes", message, { faltantes: alta.faltantes });
     }
     case "no_conectada":
@@ -230,7 +229,7 @@ export async function proyectoVer(d: DepsDeProyecto, flags: Pick<Flags, "repo">)
     return {
       codigo: SALIDA.ok,
       json: { ok: true, proyecto, github: { estado: github.estado, verificado_en: github.verificadoEn }, contexto },
-      texto: `${linea} ${p.id} (${p.repo}, branch ${p.rama}): installs with \`${p.installCommand}\`, tests with \`${p.testCommand}\`. GitHub: ${github.estado ?? "not verified"}.`,
+      texto: `${linea} ${p.id} (${p.repo}, branch ${p.rama}): installs with \`${p.installCommand}\`. GitHub: ${github.estado ?? "not verified"}.`,
     };
   } catch (e) {
     return resultadoDeFallo(e);

@@ -28,7 +28,7 @@ the English ones.
 | `supcoflow logout` | Revokes the key in use and deletes it from this machine. |
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
 | `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it gives you a link and you confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
-| `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the commands, `--install "…" --test "…"`. |
+| `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks `.supcoflow/guide.md` against the engine without publishing anything. |
 | `supcoflow guide publish` | Uploads `.supcoflow/guide.md` directly (with the commit and branch your clone declares, not verified in GitHub). `--from-github` verifies against the main branch instead of uploading the file. |
@@ -100,7 +100,7 @@ supcoflow login --wait --json      # exits 5 until the person approves; 0 when t
 supcoflow repo connect --start --json   # exits 5 with the URL to confirm
 supcoflow repo connect --wait --json    # exits 5 until someone confirms; 0 connected
 supcoflow project create --json         # 4 if there is a different .supcoflow/proyecto.json (it doesn't overwrite)
-supcoflow project create --install "pnpm i" --test "pnpm test"
+supcoflow project create --install "pnpm i"
 supcoflow project show --json
 
 supcoflow whoami --json

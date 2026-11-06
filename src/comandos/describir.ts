@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.10.0";
+const VERSION = "0.10.1";
 
 export const DESCRIPCION: {
   version: string;
@@ -68,12 +68,12 @@ export const DESCRIPCION: {
       resumen: "Creates (or reuses) the already connected repo's project and records it in .supcoflow/proyecto.json; a different existing file is never overwritten (exits 4). Before connecting or creating anything it checks what it can see and exits 4 contexto_incoherente (motivo proyecto_del_clon_distinto: the clone notes a project your account doesn't see for this repo; archivo_del_clon_ilegible: .supcoflow/proyecto.json can't be read; dueno_distinto_del_login: a possible mismatch, the repo's owner on GitHub isn't the GitHub login of your key; sin_github: the account isn't signed in with GitHub) without touching anything.",
       flags: [
         "--install \"…\": the install command, when the engine can't work it out",
-        "--test \"…\": the test command, same",
+        "--test \"…\": the test command; not used today (the engine doesn't run it), you can leave it out",
         "--repo owner/repo: the repo, if it isn't this folder's «origin» (without reading or writing this clone's file)",
         "--dry-run: says what it would create without creating anything",
         "--json",
       ],
-      ejemplos: ["supcoflow project create --json", "supcoflow project create --install \"pnpm i\" --test \"pnpm test\""],
+      ejemplos: ["supcoflow project create --json", "supcoflow project create --install \"pnpm i\""],
       codigos: [0, 1, 2, 3, 4],
     },
     {
