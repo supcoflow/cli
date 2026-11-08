@@ -330,12 +330,20 @@ it ignores the file and doesn't track it: the first time, the terminal creates a
 folder (only if there isn't one; it never edits yours), and then asks git (`git check-ignore`) about the file and its
 `.tmp`, for every repo that contains the written or the real path. A file that is already tracked or added to the index
 is refused with the exact `git rm --cached …` to run (the terminal never runs it or deletes anything of yours), and so
-is a missing or failing git. Those refusals also name a folder outside any git repo to use instead, as a command you can
-paste: `XDG_CONFIG_HOME=/var/tmp/supcoflow-501 supcoflow diagnose` (the first of `/var/tmp` and the system temp folder that
-exists, is writable, and is not inside a repo, by its real path too; a per-user `supcoflow-<uid>` subfolder that the
-terminal creates when it saves). It never suggests a path under the same repo, and if no folder qualifies it suggests
-none. Keep the same `XDG_CONFIG_HOME` on the commands that follow (`test --wait` too), and note it also moves the
-credentials file, so your sign-in must come from the keychain or `SUPCOFLOW_TOKEN`. The same goes for every write or delete of `idempotencia.json`. `diagnose` and `test`
+is a missing or failing git. When git is what refuses (not for permissions or broken links), the message also names a folder outside any git repo to
+use instead, as a command you can paste: `XDG_CONFIG_HOME=/Users/Shared/supcoflow-501 supcoflow diagnose`. It is always a
+folder that **persists** and is **private** to you, never a temporary one (the saved request is what lets a repeat resume
+the same test instead of asking for another, and a cleaned temp folder would lose it). On macOS that is
+`/Users/Shared/supcoflow-<uid>` (the terminal creates it with `0700` when it saves); on Linux there is no such place
+outside your home that you can write without being root, so nothing is suggested and you keep the `git rm --cached …`
+advice or point `XDG_CONFIG_HOME` at a folder you choose. The suggested path is the real destination
+(`<folder>/supcoflow`, where the files go), is checked by its real path too, and is never under the same repo. Because a
+shared folder lets other users create names in it, before **every** read or write there (credentials, `pruebas.json`,
+`idempotencia.json`) the terminal checks that the folder under it is yours, with `0700`, not a link someone else made and
+not writable by others, and that the shared folder itself is sticky; if not, it reads and writes nothing (`diagnose` shows
+`carpeta_compartida_insegura` before you authorize; `test` exits 1 `prueba_no_guardada`). Keep the same `XDG_CONFIG_HOME` on the
+commands that follow (`test --wait` too); it also moves the credentials file, so your sign-in must come from the
+keychain or `SUPCOFLOW_TOKEN`. The git rules apply equally to every write or delete of `idempotencia.json`. `diagnose` and `test`
 check all this (and permissions, broken links and unreadable files) **before** you authorize, without writing
 anything: «no obstacle found» is a check, not a promise that the disk won't fill up later. The credentials don't use
 this exception: inside a repo they are still refused.

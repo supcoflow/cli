@@ -5,11 +5,12 @@
 // Qué promete y qué no: «no se detectaron impedimentos» no es «se va a poder escribir». Un disco que se llena después, o
 // un cambio al mismo tiempo, no se pueden garantizar sin escribir. El guardado estricto, justo antes del POST, se queda.
 import path from "node:path";
+import { revisarCarpetaPrivada, type FsPrivada } from "./carpeta-privada.ts";
 import { mirarProteccionDeGit, rutaReal, type FsDeProteccion, type GitDeRuta, type Impedimento } from "./repo.ts";
 
 /** Lo que el prechequeo necesita saber del disco. Todo se ve SIN escribir; `estado` sigue los enlaces. */
 export type EstadoEnDisco = { existe: false } | { existe: true; tipo: "archivo" | "carpeta" | "otro"; propio: boolean };
-export type FsDelLugar = FsDeProteccion & {
+export type FsDelLugar = FsDeProteccion & FsPrivada & {
   estado(p: string): EstadoEnDisco;
   /** ¿Se puede leer (`leer`) o escribir y entrar (`escribir`: crear, renombrar y borrar adentro)? */
   puede(p: string, que: "leer" | "escribir"): boolean;
@@ -45,6 +46,10 @@ export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: Git
       impedimentos.push({ codigo: "padre_sin_permiso", detalle: `${dir} doesn't exist and I can't create it: ${ancestro} isn't a folder I can write in.` });
     }
   }
+
+  // Bajo una carpeta compartida: que siga siendo de la persona, antes de leer nada de ahí.
+  const privada = revisarCarpetaPrivada(dir, d.fs);
+  if (privada !== null) impedimentos.push(privada);
 
   const archivo = d.fs.estado(path.join(real, nombre));
   if (archivo.existe) {

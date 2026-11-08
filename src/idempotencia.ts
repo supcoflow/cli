@@ -5,6 +5,7 @@
 // un desenlace que no hace falta repetir.
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
+import { SinLugarSeguro } from "./guardado/carpeta-privada.ts";
 import { SinProteccionDeGit } from "./guardado/protegido.ts";
 
 export type RegistroDeIdempotencia = {
@@ -33,7 +34,7 @@ export function crearRegistroDeIdempotencia(d: {
   // arreglar. Por eso, en estricto, cada «aviso y sigo» de abajo lanza.
   const noGuardada = (causa?: unknown) => new FalloDeLaTerminal(
     SALIDA.inesperado, "idempotencia_no_guardada",
-    `I couldn't save the retry key in ${d.rutaDelArchivo}; without it, a retry would create another key. Check that file and try again.${causa instanceof SinProteccionDeGit ? ` ${causa.message}` : ""}`,
+    `I couldn't save the retry key in ${d.rutaDelArchivo}; without it, a retry would create another key. Check that file and try again.${causa instanceof SinLugarSeguro ? ` ${causa.message}` : ""}`,
   );
 
   return {
@@ -42,8 +43,8 @@ export function crearRegistroDeIdempotencia(d: {
       try {
         const guardada = await d.almacen.leer(c);
         if (guardada !== null) return guardada.valor;
-      } catch {
-        if (opciones.estricta) throw noGuardada();
+      } catch (e) {
+        if (opciones.estricta) throw noGuardada(e);
         // Un archivo que no se entiende no se reescribe (perdería otras claves); se sigue sin guardar.
         const nueva = d.generar();
         d.avisar(`I couldn't read ${d.rutaDelArchivo}: I'm going on with an idempotency key that isn't saved.`);
@@ -57,7 +58,7 @@ export function crearRegistroDeIdempotencia(d: {
         await d.almacen.escribir(c, { valor: nueva, escritoEn: d.ahora() });
       } catch (e) {
         if (opciones.estricta) throw noGuardada(e);
-        if (e instanceof SinProteccionDeGit) {
+        if (e instanceof SinLugarSeguro) {
           d.avisar(`I'm not saving the idempotency key in ${d.rutaDelArchivo}: a retry will send a different one. ${e.message}`);
         } else {
           d.avisar(`I couldn't save the idempotency key in ${d.rutaDelArchivo}: a retry will send a different one.`);
@@ -69,8 +70,8 @@ export function crearRegistroDeIdempotencia(d: {
       // Sólo lo usa el modo estricto: «no sé si hay un intento a medias» no puede leerse como «no hay».
       try {
         return (await d.almacen.leer(cuenta(operacion, alcance))) !== null;
-      } catch {
-        throw noGuardada();
+      } catch (e) {
+        throw noGuardada(e);
       }
     },
     async olvidar(operacion, alcance) {
@@ -82,7 +83,9 @@ export function crearRegistroDeIdempotencia(d: {
       } catch (e) {
         d.avisar(e instanceof SinProteccionDeGit
           ? `I didn't delete the idempotency key from ${d.rutaDelArchivo}, so as not to rewrite a file git doesn't ignore. ${e.message}`
-          : `I couldn't delete the idempotency key from ${d.rutaDelArchivo}.`);
+          : e instanceof SinLugarSeguro
+            ? `I didn't delete the idempotency key from ${d.rutaDelArchivo}, because it isn't safe to touch. ${e.message}`
+            : `I couldn't delete the idempotency key from ${d.rutaDelArchivo}.`);
       }
     },
   };

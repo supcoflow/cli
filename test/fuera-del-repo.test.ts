@@ -1,7 +1,7 @@
 // La carpeta concreta FUERA de todo repo que la terminal sugiere cuando git no deja guardar el pedido de la prueba bajo la
 // carpeta personal (que es un repo). Con disco y git reales, como proteccion-de-git.test.ts. Nunca otra ruta bajo el mismo repo.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -109,7 +109,12 @@ describe("carpetaFueraDeUnRepo", () => {
 // Revisión 1, P2-1: la terminal guarda en <XDG_CONFIG_HOME>/supcoflow, no en <XDG_CONFIG_HOME>. Se valida ESE destino.
 describe("carpetaFueraDeUnRepo: el destino real es <carpeta>/supcoflow", () => {
   const sub = () => join(afuera, "supcoflow-501");
-  const crear = (p: string) => { mkdirSync(p, { recursive: true }); chmodSync(p, 0o700); };
+  // Crea la cadena desde `afuera` (la compartida, que se queda 1777) hasta `p`, cada tramo 0700.
+  const crear = (p: string) => {
+    for (const tramo of [sub(), p]) { mkdirSync(tramo, { recursive: true }); chmodSync(tramo, 0o700); }
+    expect(modoDe(afuera)).toBe(0o1777);
+  };
+  const modoDe = (p: string) => statSync(p).mode & 0o7777;
 
   it("el destino es un enlace hacia un repo (con un archivo agregado al índice): se salta la candidata", () => {
     const repo = join(tmp, "repo");

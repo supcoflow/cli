@@ -4,12 +4,13 @@
 // por su `.tmp`. Las credenciales no lo usan: dentro de un repo se siguen negando.
 import path from "node:path";
 import type { Almacen } from "./index.ts";
+import { SinLugarSeguro } from "./carpeta-privada.ts";
 import { asegurarProteccionDeGit, type FsDeProteccion, type GitDeRuta, type Impedimento } from "./repo.ts";
 
 /** Git no garantiza que este archivo quede fuera del repo: no se escribió (ni se borró) nada. */
-export class SinProteccionDeGit extends Error {
-  constructor(readonly impedimento: Impedimento) {
-    super(impedimento.detalle);
+export class SinProteccionDeGit extends SinLugarSeguro {
+  constructor(impedimento: Impedimento) {
+    super(impedimento);
   }
 }
 
