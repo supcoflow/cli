@@ -4,6 +4,15 @@ import { chatMarca } from "../src/comandos/configurar.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "../src/comandos/describir.ts";
 import { leerArgumentos } from "../src/argumentos.ts";
 
+describe("describe --json: la carpeta de afuera es condicional", () => {
+  it("`diagnose` y `test` no prometen una alternativa: sólo «when a suitable folder is available»", () => {
+    for (const nombre of ["diagnose", "test"]) {
+      const c = DESCRIPCION.comandos.find((x) => x.nombre === nombre)!;
+      expect(c.resumen, nombre).toMatch(/when a suitable (persistent, private )?folder (outside any repo )?is available/);
+    }
+  });
+});
+
 describe("describe --json", () => {
   it("lista los comandos, los siete códigos y las facultades que la clave no tiene", () => {
     const r = comandoDescribir();

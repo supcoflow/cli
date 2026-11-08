@@ -9,6 +9,7 @@ import type { Diagnostico } from "../src/api.ts";
 import { diagnosticar, probar, type DepsDePrueba } from "../src/comandos/probar.ts";
 import { fsDelLugarReal, fsReal, gitReal } from "../src/entorno.ts";
 import { almacenDeArchivo } from "../src/guardado/archivo.ts";
+import { carpetaFueraDeUnRepo } from "../src/guardado/fuera-del-repo.ts";
 import { almacenEnCarpetaPrivada, revisarCarpetaPrivada, SinLugarSeguro } from "../src/guardado/carpeta-privada.ts";
 import { revisarElLugar } from "../src/guardado/lugar.ts";
 import { almacenProtegido } from "../src/guardado/protegido.ts";
@@ -126,6 +127,84 @@ describe("revisarCarpetaPrivada", () => {
 
   it("con `crear`, si otro usuario ganó la carrera (la raíz recién creada figura ajena), no sirve", () => {
     expect(revisarCarpetaPrivada(dir, conAjenos([raiz]), { crear: true })).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+  });
+});
+
+// Revisión 2, P2-R2-1: la carpeta compartida de confianza es la MÁS ALTA que otros pueden escribir; una raíz por usuario que
+// se declara 01777 no se vuelve «la compartida» para saltarse sus propias comprobaciones.
+describe("P2-R2-1: la raíz personal se exige propia y 0700 desde la base compartida", () => {
+  it("una raíz propia con 01777 (hijo propio 0700) se rechaza", () => {
+    crearPrivada(dir);
+    chmodSync(raiz, 0o1777);
+    expect(revisarCarpetaPrivada(dir, fsDelLugarReal)).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+  });
+
+  it("una raíz ajena con 01777 se rechaza, y el almacén no lee lo que haya adentro", async () => {
+    crearPrivada(dir);
+    chmodSync(raiz, 0o1777);
+    writeFileSync(join(dir, "pruebas.json"), JSON.stringify({ c: { valor: "plantado", escritoEn: 1 } }));
+    const ruta = join(dir, "pruebas.json");
+    const ajena = conAjenos([raiz]);
+    expect(revisarCarpetaPrivada(dir, ajena)).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+    await expect(almacenEnCarpetaPrivada(almacenDeArchivo(ruta, fsReal), { ruta, fs: ajena }).leer("c")).rejects.toBeInstanceOf(SinLugarSeguro);
+  });
+
+  it("un enlace AJENO que apunta a otra carpeta compartida se rechaza (sin seguirlo)", () => {
+    const otra = join(tmp, "otra-compartida");
+    mkdirSync(otra);
+    chmodSync(otra, 0o1777);
+    symlinkSync(otra, raiz);
+    expect(revisarCarpetaPrivada(dir, conAjenos([raiz]))).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+  });
+
+  it("una raíz con modo 01777 que otro usuario recién creó tampoco pasa con `crear`", () => {
+    mkdirSync(raiz);
+    chmodSync(raiz, 0o1777);
+    expect(revisarCarpetaPrivada(dir, fsDelLugarReal, { crear: true })).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+    expect(existsSync(dir)).toBe(false);
+  });
+});
+
+// Revisión 2, P2-R2-2: un enlace propio introduce la cadena REAL de su destino; sus ancestros también se comprueban.
+describe("P2-R2-2: los ancestros de la ruta real de un enlace propio", () => {
+  function raizEnlazadaAUnPadreAbierto(modoDelPadre: number) {
+    const padre = join(tmp, "padre-abierto");
+    mkdirSync(padre);
+    chmodSync(padre, modoDelPadre);
+    const real = join(padre, "mia");
+    crearPrivada(real);
+    crearPrivada(join(real, "supcoflow"));
+    symlinkSync(real, raiz);
+  }
+
+  it("raíz = enlace propio a una carpeta propia 0700 dentro de un padre que otros escriben SIN sticky: se rechaza", () => {
+    raizEnlazadaAUnPadreAbierto(0o777);
+    expect(revisarCarpetaPrivada(dir, fsDelLugarReal)).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+  });
+
+  it("lo mismo, y coincide con revisar la ruta real directamente", () => {
+    raizEnlazadaAUnPadreAbierto(0o777);
+    const real = realpathSync(dir);
+    expect(revisarCarpetaPrivada(real, fsDelLugarReal)).toMatchObject({ codigo: "carpeta_compartida_insegura" });
+    expect(revisarCarpetaPrivada(dir, fsDelLugarReal)).not.toBeNull();
+  });
+
+  it("el almacén tampoco escribe por ese enlace", async () => {
+    raizEnlazadaAUnPadreAbierto(0o777);
+    const ruta = join(dir, "pruebas.json");
+    await expect(almacenEnCarpetaPrivada(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsDelLugarReal }).escribir("c", { valor: "v", escritoEn: 1 })).rejects.toBeInstanceOf(SinLugarSeguro);
+    expect(existsSync(ruta)).toBe(false);
+  });
+
+  it("el mismo enlace hacia un padre con sticky (como una compartida) sí vale si la cadena real es toda propia y privada", () => {
+    raizEnlazadaAUnPadreAbierto(0o1777);
+    expect(revisarCarpetaPrivada(dir, fsDelLugarReal)).toBeNull();
+  });
+
+  it("el selector coincide con el rechazo", () => {
+    raizEnlazadaAUnPadreAbierto(0o777);
+    // `compartida` es la candidata; su `supcoflow-501` es el enlace
+    expect(carpetaFueraDeUnRepo({ fs: fsDelLugarReal, candidatos: [compartida], usuario: "501" })).toBeNull();
   });
 });
 
