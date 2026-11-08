@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fsDelLugarReal, fsReal, gitReal } from "../src/entorno.ts";
-import { carpetaFueraDeUnRepo, comandoConLaCarpeta } from "../src/guardado/fuera-del-repo.ts";
+import { candidatasFueraDelRepo, carpetaFueraDeUnRepo, comandoConLaCarpeta } from "../src/guardado/fuera-del-repo.ts";
+import type { FsDelLugar } from "../src/guardado/lugar.ts";
 import { asegurarProteccionDeGit, mirarProteccionDeGit } from "../src/guardado/repo.ts";
 
 const ENV = { PATH: process.env.PATH ?? "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", HOME: "/nonexistent" };
@@ -21,6 +22,7 @@ beforeEach(() => {
   afuera = join(tmp, "afuera");
   mkdirSync(casa, { recursive: true });
   mkdirSync(afuera, { recursive: true });
+  chmodSync(afuera, 0o1777); // como /Users/Shared: de todos, con sticky
   git(casa, "init", "-q");
 });
 afterEach(() => {
@@ -28,7 +30,24 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-const buscar = (candidatos: string[], usuario = "501") => carpetaFueraDeUnRepo({ fs: fsDelLugarReal, candidatos, usuario });
+const buscar = (candidatos: string[], usuario = "501", fs: FsDelLugar = fsDelLugarReal) => carpetaFueraDeUnRepo({ fs, candidatos, usuario });
+const conAjenos = (ajenos: string[]): FsDelLugar => ({
+  ...fsDelLugarReal,
+  ficha(p, seguir) {
+    const f = fsDelLugarReal.ficha(p, seguir);
+    return f.existe && ajenos.includes(p) ? { ...f, uid: (f.uid ?? 0) + 1 } : f;
+  },
+});
+
+describe("candidatasFueraDelRepo: sólo lugares que persisten (nunca una carpeta temporal del sistema)", () => {
+  it("no incluye /var/tmp, /tmp ni la carpeta temporal del sistema", () => {
+    const c = candidatasFueraDelRepo();
+    for (const temporal of ["/var/tmp", "/tmp", tmpdir(), "/private/tmp", "/private/var/tmp"]) expect(c).not.toContain(temporal);
+  });
+  it("en macOS es /Users/Shared; donde no hay un lugar compartido que persista, no hay candidatas", () => {
+    expect(candidatasFueraDelRepo()).toEqual(process.platform === "darwin" ? ["/Users/Shared"] : []);
+  });
+});
 
 describe("carpetaFueraDeUnRepo", () => {
   it("elige una carpeta que existe, se puede escribir y no está en ningún repo; es una subcarpeta propia del usuario", () => {
@@ -70,6 +89,7 @@ describe("carpetaFueraDeUnRepo", () => {
 
   it("si la subcarpeta ya existe y es una carpeta que se puede usar, la sugiere", () => {
     mkdirSync(join(afuera, "supcoflow-501"));
+    chmodSync(join(afuera, "supcoflow-501"), 0o700);
     expect(buscar([afuera])).toBe(join(afuera, "supcoflow-501"));
   });
 
@@ -83,6 +103,61 @@ describe("carpetaFueraDeUnRepo", () => {
 
   it("sirve para dos usuarios distintos sin pisarse: el nombre lleva al usuario", () => {
     expect(buscar([afuera], "502")).toBe(join(afuera, "supcoflow-502"));
+  });
+});
+
+// Revisión 1, P2-1: la terminal guarda en <XDG_CONFIG_HOME>/supcoflow, no en <XDG_CONFIG_HOME>. Se valida ESE destino.
+describe("carpetaFueraDeUnRepo: el destino real es <carpeta>/supcoflow", () => {
+  const sub = () => join(afuera, "supcoflow-501");
+  const crear = (p: string) => { mkdirSync(p, { recursive: true }); chmodSync(p, 0o700); };
+
+  it("el destino es un enlace hacia un repo (con un archivo agregado al índice): se salta la candidata", () => {
+    const repo = join(tmp, "repo");
+    mkdirSync(repo);
+    git(repo, "init", "-q");
+    writeFileSync(join(repo, "pruebas.json"), "{}");
+    git(repo, "add", "-f", "pruebas.json");
+    crear(sub());
+    symlinkSync(repo, join(sub(), "supcoflow"));
+    expect(buscar([afuera])).toBeNull();
+  });
+
+  it("el destino tiene adentro un repo anidado: se salta", () => {
+    crear(join(sub(), "supcoflow"));
+    mkdirSync(join(sub(), "supcoflow", ".git"));
+    expect(buscar([afuera])).toBeNull();
+  });
+
+  it("el destino es un archivo, o es una carpeta sin permiso: se salta", () => {
+    crear(sub());
+    writeFileSync(join(sub(), "supcoflow"), "x");
+    expect(buscar([afuera])).toBeNull();
+    rmSync(join(sub(), "supcoflow"));
+    crear(join(sub(), "supcoflow"));
+    chmodSync(join(sub(), "supcoflow"), 0o500);
+    try { expect(buscar([afuera])).toBeNull(); } finally { chmodSync(join(sub(), "supcoflow"), 0o700); }
+  });
+
+  it("el destino, la raíz o el enlace figuran de otro usuario: se salta", () => {
+    crear(join(sub(), "supcoflow"));
+    expect(buscar([afuera], "501", conAjenos([join(sub(), "supcoflow")]))).toBeNull();
+    expect(buscar([afuera], "501", conAjenos([sub()]))).toBeNull();
+  });
+
+  it("una raíz que otros pueden leer (0755) no se sugiere", () => {
+    mkdirSync(sub());
+    chmodSync(sub(), 0o755);
+    expect(buscar([afuera])).toBeNull();
+  });
+
+  it("la candidata compartida sin sticky (otro podría reemplazar la raíz) no se sugiere", () => {
+    chmodSync(afuera, 0o777);
+    expect(buscar([afuera])).toBeNull();
+  });
+
+  it("con la raíz y el destino ya hechos, propios y privados, se sugiere", () => {
+    crear(join(sub(), "supcoflow"));
+    expect(buscar([afuera])).toBe(sub());
   });
 });
 
