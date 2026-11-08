@@ -15,7 +15,7 @@ export type FsDelLugar = FsDeProteccion & {
   puede(p: string, que: "leer" | "escribir"): boolean;
 };
 
-export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: GitDeRuta }): Promise<Impedimento[]> {
+export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: GitDeRuta; fuera?: () => string | null }): Promise<Impedimento[]> {
   const impedimentos: Impedimento[] = [];
   const dir = path.dirname(d.ruta);
   const nombre = path.basename(d.ruta);
@@ -59,7 +59,7 @@ export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: Git
     impedimentos.push({ codigo: "tmp_es_carpeta", detalle: `${tmp} is a folder: I remove that name before saving, and I can't remove a folder.` });
   }
 
-  const git = await mirarProteccionDeGit({ dir, archivos: [nombre, nombre + ".tmp"], fs: d.fs, git: d.git });
+  const git = await mirarProteccionDeGit({ dir, archivos: [nombre, nombre + ".tmp"], fs: d.fs, git: d.git, fuera: d.fuera });
   if (!git.protegido) impedimentos.push(git.impedimento);
   return impedimentos;
 }

@@ -13,11 +13,12 @@ export class SinProteccionDeGit extends Error {
   }
 }
 
-export function almacenProtegido(base: Almacen, d: { ruta: string; fs: FsDeProteccion; git: GitDeRuta }): Almacen {
+/** `fuera`: una carpeta fuera de todo repo para sugerir si git no deja guardar acá (opcional; sin ella el aviso es el de siempre). */
+export function almacenProtegido(base: Almacen, d: { ruta: string; fs: FsDeProteccion; git: GitDeRuta; fuera?: () => string | null }): Almacen {
   const dir = path.dirname(d.ruta);
   const archivos = [path.basename(d.ruta), path.basename(d.ruta) + ".tmp"];
   async function proteger(): Promise<void> {
-    const p = await asegurarProteccionDeGit({ dir, archivos, fs: d.fs, git: d.git });
+    const p = await asegurarProteccionDeGit({ dir, archivos, fs: d.fs, git: d.git, fuera: d.fuera });
     if (!p.protegido) throw new SinProteccionDeGit(p.impedimento);
   }
   return {

@@ -144,10 +144,10 @@ describe("el aviso trae la carpeta de afuera sólo cuando mudarse arregla algo",
     expect((p as { impedimento: { detalle: string } }).impedimento.detalle).not.toContain("XDG_CONFIG_HOME");
   });
 
-  it("asegurar (la escritura de verdad) dice lo mismo que mirar", async () => {
+  it("asegurar (la escritura de verdad) trae la misma sugerencia (crea su .gitignore, y git sigue sin ignorar lo seguido)", async () => {
     seguido();
     const p = await asegurarProteccionDeGit({ dir: dir(), archivos: ["pruebas.json", "pruebas.json.tmp"], fs: fsReal, git: gitReal, fuera: () => join(afuera, "supcoflow-501") });
-    expect(p).toMatchObject({ protegido: false, impedimento: { codigo: "git_lo_sigue" } });
+    expect(p).toMatchObject({ protegido: false, impedimento: { codigo: "git_no_lo_ignora" } });
     expect((p as { impedimento: { detalle: string } }).impedimento.detalle).toContain(`XDG_CONFIG_HOME=${join(afuera, "supcoflow-501")}`);
   });
 

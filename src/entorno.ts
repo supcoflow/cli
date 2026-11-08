@@ -29,6 +29,7 @@ import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenProtegido } from "./guardado/protegido.ts";
+import { candidatasFueraDelRepo, carpetaFueraDeUnRepo, usuarioParaLaCarpeta } from "./guardado/fuera-del-repo.ts";
 import { revisarElLugar, type FsDelLugar } from "./guardado/lugar.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
@@ -493,7 +494,10 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   const rutaDeIdempotencia = join(dirname(rutaDelArchivo), "idempotencia.json");
   // Estos dos registros (y sólo estos) pueden vivir bajo una carpeta personal que es un repo de git: el almacén
   // protegido comprueba con git, antes de cada escritura y cada borrado, que los deja afuera del repo.
-  const protegido = (ruta: string) => almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal });
+  // `fuera`: si git no deja guardar ahí, el aviso propone una carpeta que no esté en ningún repo (XDG_CONFIG_HOME bajo la
+  // carpeta personal no sirve: cae en el mismo repo).
+  const fuera = () => carpetaFueraDeUnRepo({ fs: fsDelLugarReal, candidatos: candidatasFueraDelRepo(), usuario: usuarioParaLaCarpeta() });
+  const protegido = (ruta: string) => almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal, fuera });
   const idempotencia = crearRegistroDeIdempotencia({
     origen: api.origin,
     almacen: protegido(rutaDeIdempotencia),
@@ -506,7 +510,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
   const pruebas = crearRegistroDePruebas({
     origen: api.origin, almacen: protegido(rutaDePruebas), rutaDelArchivo: rutaDePruebas, ahora: Date.now, avisar,
-    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal }),
+    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal, fuera }),
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();

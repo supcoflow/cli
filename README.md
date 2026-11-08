@@ -330,7 +330,12 @@ it ignores the file and doesn't track it: the first time, the terminal creates a
 folder (only if there isn't one; it never edits yours), and then asks git (`git check-ignore`) about the file and its
 `.tmp`, for every repo that contains the written or the real path. A file that is already tracked or added to the index
 is refused with the exact `git rm --cached …` to run (the terminal never runs it or deletes anything of yours), and so
-is a missing or failing git. The same goes for every write or delete of `idempotencia.json`. `diagnose` and `test`
+is a missing or failing git. Those refusals also name a folder outside any git repo to use instead, as a command you can
+paste: `XDG_CONFIG_HOME=/var/tmp/supcoflow-501 supcoflow diagnose` (the first of `/var/tmp` and the system temp folder that
+exists, is writable, and is not inside a repo, by its real path too; a per-user `supcoflow-<uid>` subfolder that the
+terminal creates when it saves). It never suggests a path under the same repo, and if no folder qualifies it suggests
+none. Keep the same `XDG_CONFIG_HOME` on the commands that follow (`test --wait` too), and note it also moves the
+credentials file, so your sign-in must come from the keychain or `SUPCOFLOW_TOKEN`. The same goes for every write or delete of `idempotencia.json`. `diagnose` and `test`
 check all this (and permissions, broken links and unreadable files) **before** you authorize, without writing
 anything: «no obstacle found» is a check, not a promise that the disk won't fill up later. The credentials don't use
 this exception: inside a repo they are still refused.

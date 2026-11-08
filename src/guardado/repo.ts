@@ -75,6 +75,32 @@ function raicesQueContienen(dir: string, fs: FsDeRutas): Map<string, string[]> {
 
 const sinProteger = (codigo: string, detalle: string): Proteccion => ({ protegido: false, impedimento: { codigo, detalle } });
 
+/** `XDG_CONFIG_HOME=<ruta>` listo para pegar en una terminal: entre comillas simples si la ruta lo necesita. */
+export function comandoConLaCarpeta(carpeta: string): string {
+  return /^[\w@%+=:,./-]+$/.test(carpeta) ? `XDG_CONFIG_HOME=${carpeta}` : `XDG_CONFIG_HOME='${carpeta.replace(/'/g, `'\\''`)}'`;
+}
+
+// Los impedimentos que mudarse a una carpeta fuera de todo repo arregla: los de git (afuera de un repo no se le pregunta
+// nada a git y no hace falta `.gitignore`). Los demás (permisos, una ruta rota) se llevarían el mismo problema a otro lado.
+const SE_ARREGLAN_MUDANDOSE = new Set(["git_no_lo_ignora", "git_lo_sigue", "git_no_contesta", "no_se_pudo_crear_gitignore"]);
+
+/**
+ * Suma, a un impedimento de git, la carpeta concreta fuera de todo repo (`fuera`) y cómo usarla. Nunca inventa una ruta ni
+ * cambia el resto del texto; si `fuera` no encuentra una o falla, el aviso queda como estaba.
+ */
+function conLaSalida(p: Proteccion, fuera: (() => string | null) | undefined): Proteccion {
+  if (p.protegido || fuera === undefined || !SE_ARREGLAN_MUDANDOSE.has(p.impedimento.codigo)) return p;
+  let carpeta: string | null;
+  try {
+    carpeta = fuera();
+  } catch {
+    return p;
+  }
+  if (carpeta === null) return p;
+  const detalle = `${p.impedimento.detalle} Or keep these files outside any git repo: run supcoflow with \`${comandoConLaCarpeta(carpeta)}\` (a folder outside any repo; I create it when I save), for example \`${comandoConLaCarpeta(carpeta)} supcoflow diagnose\`.`;
+  return { protegido: false, impedimento: { codigo: p.impedimento.codigo, detalle } };
+}
+
 function queHacer(raiz: string, archivo: string): string {
   const rel = path.relative(raiz, archivo);
   return `Take it out of the repo with \`git -C ${raiz} rm --cached -- ${rel}\` or have git ignore it; I won't touch your repo myself.`;
@@ -118,8 +144,8 @@ async function mirar(
 }
 
 /** Sin escribir nada: lo mismo que `asegurarProteccionDeGit` va a comprobar, para avisar antes. */
-export function mirarProteccionDeGit(d: { dir: string; archivos: string[]; fs: FsDeProteccion; git: GitDeRuta }): Promise<Proteccion> {
-  return mirar(d, (carpeta) => d.fs.existe(path.join(carpeta, ".gitignore")));
+export async function mirarProteccionDeGit(d: { dir: string; archivos: string[]; fs: FsDeProteccion; git: GitDeRuta; fuera?: () => string | null }): Promise<Proteccion> {
+  return conLaSalida(await mirar(d, (carpeta) => d.fs.existe(path.join(carpeta, ".gitignore"))), d.fuera);
 }
 
 /**
@@ -127,7 +153,11 @@ export function mirarProteccionDeGit(d: { dir: string; archivos: string[]; fs: F
  * uno con `*` (en exclusiva: si aparece otro al mismo tiempo no se pisa; y nunca se edita uno que ya estaba),
  * y después le pregunta a git por cada archivo y su `.tmp`. Falla cerrada.
  */
-export async function asegurarProteccionDeGit(d: { dir: string; archivos: string[]; fs: FsDeProteccion; git: GitDeRuta }): Promise<Proteccion> {
+export async function asegurarProteccionDeGit(d: { dir: string; archivos: string[]; fs: FsDeProteccion; git: GitDeRuta; fuera?: () => string | null }): Promise<Proteccion> {
+  return conLaSalida(await asegurar(d), d.fuera);
+}
+
+async function asegurar(d: { dir: string; archivos: string[]; fs: FsDeProteccion; git: GitDeRuta }): Promise<Proteccion> {
   let raices: Map<string, string[]>;
   try {
     raices = raicesQueContienen(d.dir, d.fs);
