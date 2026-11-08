@@ -33,12 +33,30 @@ describe("el bloque `Host <alias>` y su `HostName`", () => {
     expect(hn("gh-x", "Host gh-? \n  HostName github.com\n")).toBe("github.com");
     expect(hn("gh-xx", "Host gh-?\n  HostName github.com\n")).toBeNull();
     expect(hn("gh-bad", "Host gh-* !gh-bad\n  HostName github.com\n")).toBeNull();
+    // ssh pasa el alias que se le da a minúsculas, pero un patrón del Host se compara tal cual (R2-H3)
     expect(hn("GH-Work", "Host gh-work\n  HostName github.com\n")).toBe("github.com");
+    expect(hn("gh-work", "Host GH-Work\n  HostName github.com\n")).toBeNull();
   });
   it("gana el primer HostName que aplica (como ssh), también el de `Host *` y el global", () => {
     expect(hn("a", "Host a\n  HostName gitlab.com\nHost *\n  HostName github.com\n")).toBe("gitlab.com");
     expect(hn("a", "Host *\n  HostName github.com\nHost a\n  HostName gitlab.com\n")).toBe("github.com");
     expect(hn("a", "HostName github.com\nHost a\n  HostName gitlab.com\n")).toBe("github.com");
+  });
+  it("R2-H3: un patrón en mayúsculas no activa el bloque; gana el bloque que sí aplica", () => {
+    expect(hn("alias", "Host ALIAS\n  HostName github.com\nHost alias\n  HostName gitlab.com\n")).toBe("gitlab.com");
+    expect(hn("alias", "Host ALIAS\n  HostName github.com\n")).toBeNull();
+    expect(hn("alias", "Host AL*\n  HostName github.com\n")).toBeNull();
+  });
+  it("R2-H2: lo que sigue a un # sin comillas es un comentario, no patrones del Host", () => {
+    expect(hn("alias", "Host other # alias\n  HostName github.com\nHost alias\n  HostName gitlab.com\n")).toBe("gitlab.com");
+    expect(hn("alias", "Host other #alias\n  HostName github.com\n")).toBeNull();
+    expect(hn("alias", "Host alias\n  HostName github.com # el de trabajo\n")).toBe("github.com");
+    expect(hn("alias", 'Host "al#ias"\n  HostName github.com\n')).toBeNull(); // el # entre comillas es parte del patrón
+  });
+  it("R2-H2: comillas sin cerrar, barra invertida o un # pegado a una palabra: duda (null), no se reinterpreta", () => {
+    for (const linea of ['Host "alias', "Host ali\\as", "Host ali#as", 'HostName "github.com']) {
+      expect(hn("alias", `${linea}\n  HostName github.com\nHost alias\n  HostName github.com\n`)).toBeNull();
+    }
   });
   it("un Host que no es este alias no cuenta", () => {
     expect(hn("a", "Host b\n  HostName github.com\n")).toBeNull();
@@ -95,6 +113,49 @@ describe("Include, si es simple", () => {
   it("un archivo que falta se ignora (como ssh)", () => {
     expect(hn("a", "Include falta\nHost a\n  HostName github.com\n")).toBe("github.com");
   });
+  it("R2-H4: el `*` no entra en los archivos ocultos (salvo que el patrón empiece con punto)", () => {
+    const base = { [`${HOME}/.ssh/config.d/.hidden`]: "Host alias\n  HostName github.com\n", [`${HOME}/.ssh/config.d/visible`]: "Host other\n  User git\n" };
+    expect(hn("alias", "Include /home/u/.ssh/config.d/*\nHost alias\n  HostName gitlab.com\n", base)).toBe("gitlab.com");
+    expect(hn("alias", "Include config.d/.h*\nHost alias\n  HostName gitlab.com\n", base)).toBe("github.com");
+  });
+  it("R2-H4: `~usuario` y `~` solos no se interpretan: duda", () => {
+    for (const inc of ["~root/ssh-config", "~"]) {
+      expect(hn("alias", `Include ${inc}\nHost alias\n  HostName gitlab.com\n`, { [`${HOME}/.ssh/~root/ssh-config`]: "Host alias\n  HostName github.com\n" })).toBeNull();
+    }
+  });
+  it("R2-H5: una carpeta con muchísimas entradas no se enumera entera: duda", () => {
+    const muchos: LectorDeConfig = {
+      leer: () => "Host alias\n  HostName github.com\n",
+      listar: () => Array.from({ length: 5000 }, (_, i) => `f${i}`),
+    };
+    expect(hostnameDeAlias("alias", { ...muchos, leer: (r) => (r.endsWith("/config") ? "Include d/*\n" : "Host alias\n  HostName github.com\n") }, HOME)).toBeNull();
+  });
+  it("R2-H5 con archivos reales: una carpeta con más entradas que el tope no se enumera entera (duda), pero con pocas sí", () => {
+    const home = mkdtempSync(join(tmpdir(), "scf-ssh-"));
+    const d = join(home, ".ssh", "config.d");
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(home, ".ssh", "config"), "Include config.d/*\nHost a\n  HostName github.com\n");
+    for (let i = 0; i < 30; i++) writeFileSync(join(d, `f${i}`), "User git\n");
+    expect(hostnameDeAlias("a", lectorReal, home)).toBe("github.com");
+    for (let i = 30; i < 600; i++) writeFileSync(join(d, `f${i}`), "User git\n");
+    expect(hostnameDeAlias("a", lectorReal, home)).toBeNull();
+  });
+  it("R2-H1: un Include bajo un Host que no aplica no aporta nada, ni siquiera si el archivo trae su propio `Host alias`", () => {
+    const hijo = { "/x/extra": "Host alias\n  HostName github.com\n" };
+    expect(hn("alias", "Host other\n  Include /x/extra\nHost alias\n  HostName gitlab.com\n", hijo)).toBe("gitlab.com");
+    expect(hn("alias", "Host other\n  Include /x/extra\n", hijo)).toBeNull();
+  });
+  it("R2-H1: un Include bajo un Match (desconocido) tampoco puede dar una aceptación, ni con su propio `Host alias`", () => {
+    const hijo = { "/x/extra": "Host alias\n  HostName github.com\n" };
+    // ante la duda (el hijo abre sus propios bloques bajo un Match), no se acepta nada: ni su github.com ni el gitlab.com de después
+    expect(hn("alias", "Match originalhost other\n  Include /x/extra\nHost alias\n  HostName gitlab.com\n", hijo)).toBeNull();
+    expect(hn("alias", "Match originalhost other\n  Include /x/extra\n", hijo)).toBeNull();
+    expect(hn("alias", "Match originalhost other\n  Include /x/sin-bloques\nHost alias\n  HostName gitlab.com\n", { "/x/sin-bloques": "User git\n" })).toBe("gitlab.com");
+  });
+  it("R2-H1: un Include bajo un Host que SÍ aplica con Host/Match propios adentro: duda; sin ellos, sirve", () => {
+    expect(hn("alias", "Host alias\n  Include /x/extra\n", { "/x/extra": "Host alias\n  HostName github.com\n" })).toBeNull();
+    expect(hn("alias", "Host alias\n  Include /x/extra\n", { "/x/extra": "HostName github.com\n" })).toBe("github.com");
+  });
   it("lo no simple (variables, `?`, `[`, `{`, comodín en la carpeta, `%`) deja la duda: null, sin adivinar", () => {
     for (const inc of ["${HOME}/x", "x?", "x[1]", "x{a,b}", "dir*/x", "%d/x", "**/x"]) {
       expect(hn("a", `Include ${inc}\nHost a\n  HostName github.com\n`)).toBeNull();
@@ -130,11 +191,13 @@ describe("nada se ejecuta: con archivos de verdad, un Match exec / ProxyCommand 
     expect(hostnameDeAlias("solo-match", lectorReal, home)).toBeNull();
     expect(existsSync(marca)).toBe(false);
   });
-  it("un Include que apunta a algo enorme o a una carpeta no se lee: null", () => {
+  it("un Include que apunta a algo enorme o a una carpeta (algo que está pero no se puede leer): duda, null", () => {
     const home = mkdtempSync(join(tmpdir(), "scf-ssh-"));
     mkdirSync(join(home, ".ssh", "carpeta"), { recursive: true });
     writeFileSync(join(home, ".ssh", "config"), "Include carpeta\nHost a\n  HostName github.com\n");
-    expect(hostnameDeAlias("a", lectorReal, home)).toBe("github.com");
+    expect(hostnameDeAlias("a", lectorReal, home)).toBeNull();
+    writeFileSync(join(home, ".ssh", "config"), "Include falta\nHost a\n  HostName github.com\n");
+    expect(hostnameDeAlias("a", lectorReal, home)).toBe("github.com"); // lo que no existe se ignora, como ssh
     writeFileSync(join(home, ".ssh", "enorme"), "# " + "x".repeat(400 * 1024));
     writeFileSync(join(home, ".ssh", "config"), "Include enorme\nHost a\n  HostName github.com\n");
     expect(hostnameDeAlias("a", lectorReal, home)).toBeNull();

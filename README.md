@@ -53,7 +53,7 @@ your `~/.ssh/config` (and the files it includes with a simple `Include`) **as pl
 `Host github-work` block and its `HostName`, and accepts the alias only if that is exactly `github.com` or
 `ssh.github.com`. It **never runs `ssh`** or anything else, and it ignores `Match` blocks entirely (a `Match ... exec`
 would run a program of yours): if the alias is only resolved by a `Match`, or the file can't be read with certainty
-(an `Include` with variables or `[ ]`, a `%h` in the name), it doesn't guess. With a port in the URL
+(an `Include` with variables, `~user` or `[ ]`, a `%h` in the name, a file it can't read, quotes it can't close), it doesn't guess. A `*` in an `Include` skips hidden files, like `ssh` does, and an `Include` under a `Host` or `Match` that doesn't apply adds nothing. With a port in the URL
 (`ssh://git@alias:2222/o/r`) the port must be one GitHub serves over SSH (22, or 443 on `ssh.github.com`). When it can't
 tell, or `origin` is simply another server, the error says so, suggests `--repo owner/repo` and tells you once, in your
 own clone, which GitHub repo this is:

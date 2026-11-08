@@ -279,3 +279,20 @@ describe("los ejemplos publicados sirven", () => {
     expect(DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen).toMatch(/BEFORE `repo connect`/);
   });
 });
+
+describe("el alias de SSH en el contrato (revisión 2): se lee como texto y nunca se ejecuta", () => {
+  it("project show dice que ~/.ssh/config se lee como texto, que nada se corre, que Match se ignora y la prioridad", () => {
+    const t = DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen;
+    expect(t).toContain("read as plain text");
+    expect(t).toContain("`ssh` and anything else is never run");
+    expect(t).toContain("`Match` blocks are ignored");
+    expect(t).toContain("Origin wins over `supcoflow`");
+    expect(t).not.toMatch(/ssh -G/);
+  });
+  it("el README dice lo mismo y no promete `ssh -G`", () => {
+    const r = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    expect(r).toContain("**as plain text**");
+    expect(r).toContain("**never runs `ssh`**");
+    expect(r).not.toMatch(/ssh -G/);
+  });
+});
