@@ -48,18 +48,22 @@ take the repo from the folder's `origin`; `--repo owner/repo` picks it by hand.
 ### When the `origin` isn't a GitHub address
 
 The terminal recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
-`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`), it asks
-`ssh -G github-work` (which only prints your SSH configuration for that name and never connects) and accepts the
-alias only if its `hostname` is exactly `github.com` or `ssh.github.com`. If `ssh` isn't there, doesn't answer, or
-the alias points to another server, or if `origin` is simply another server, it doesn't guess: the error says so,
-suggests `--repo owner/repo` and tells you once, in your own clone, which GitHub repo this is:
+`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`), it reads
+your `~/.ssh/config` (and the files it includes with a simple `Include`) **as plain text**: it looks for the
+`Host github-work` block and its `HostName`, and accepts the alias only if that is exactly `github.com` or
+`ssh.github.com`. It **never runs `ssh`** or anything else, and it ignores `Match` blocks entirely (a `Match ... exec`
+would run a program of yours): if the alias is only resolved by a `Match`, or the file can't be read with certainty
+(an `Include` with variables or `[ ]`, a `%h` in the name), it doesn't guess. With a port in the URL
+(`ssh://git@alias:2222/o/r`) the port must be one GitHub serves over SSH (22, or 443 on `ssh.github.com`). When it can't
+tell, or `origin` is simply another server, the error says so, suggests `--repo owner/repo` and tells you once, in your
+own clone, which GitHub repo this is:
 
 ```bash
 git remote add supcoflow https://github.com/owner/repo.git   # it's never fetched
 ```
 
 A remote called `supcoflow` with those same strict forms ties the clone to that repo for every command. If `origin`
-is a GitHub address, `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
+is a GitHub address (including an alias your configuration says is GitHub), `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
 that read or write a file of the clone (`guide check`, `guide publish`, `install record`) only use this clone if it is
 that repo; otherwise they exit 3 saying what the clone is, without asking the engine. (`project create --repo` keeps
 creating or reusing the project; when this clone is not that repo it does so without reading or writing this clone's

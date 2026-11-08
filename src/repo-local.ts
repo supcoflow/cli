@@ -1,10 +1,11 @@
 // El repo de GitHub de la carpeta donde se corre la terminal, o el que pide `--repo`.
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 
-// Resuelve el host de un alias de SSH al nombre real (`hostname` de `ssh -G`); null si no se pudo.
-export type ResolverAlias = (host: string, usuario: string) => Promise<string | null>;
+// Dice el nombre real del host de un alias de SSH (el `HostName` de su bloque `Host` en `~/.ssh/config`, leído como texto);
+// null si no se pudo saber con certeza.
+export type ResolverAlias = (host: string) => Promise<string | null>;
 export type Git = ((args: string[], cwd: string) => Promise<{ codigo: number | null; stdout: string }>) & {
-  /** Sólo el git real lo trae: con él, un `origin` con alias de SSH se resuelve con `ssh -G`. Sin él, no se resuelve. */
+  /** Sólo el git real lo trae: con él, un `origin` con alias de SSH se resuelve leyendo `~/.ssh/config` como texto. Sin él, no se resuelve. */
   resolverAlias?: ResolverAlias;
 };
 
@@ -42,59 +43,36 @@ export function repoDelOrigin(url: string): string | null {
 
 // El `origin` con forma de alias de SSH (`git@github-gf0:dueño/repo`, `ssh://git@github-gf0/dueño/repo`): el host no
 // es github.com, pero el dueño/repo sí tiene la forma de uno de GitHub. Si hay con qué (el git real), el host se
-// resuelve con `ssh -G <alias>` y se acepta sólo si el nombre real es GitHub (ver `resolverAliasConSsh`); si no se puede,
-// se le dice qué asociar a mano, una vez.
-const FORMAS_DE_ALIAS = [
+// resuelve leyendo `~/.ssh/config` como texto (ver `ssh-config.ts`: nunca se corre `ssh` ni nada) y se acepta sólo si el
+// nombre real es GitHub; si no se puede, se le dice qué asociar a mano, una vez.
+// El puerto sólo existe en la forma `ssh://`; en la forma `git@host:o/r` no hay puerto (null).
+const FORMAS_DE_ALIAS_CON_PUERTO = [
   /^[A-Za-z0-9._-]+@([A-Za-z0-9._-]+):([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/,
-  /^ssh:\/\/[A-Za-z0-9._-]+@([A-Za-z0-9._-]+)(?::\d+)?\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/,
+  /^ssh:\/\/[A-Za-z0-9._-]+@([A-Za-z0-9._-]+)(?::(\d+))?\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/,
 ];
 
-const FORMAS_DE_ALIAS_CON_USUARIO = [
-  /^([A-Za-z0-9._-]+)@([A-Za-z0-9._-]+):([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/,
-  /^ssh:\/\/([A-Za-z0-9._-]+)@([A-Za-z0-9._-]+)(?::\d+)?\/([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/,
-];
-
-function aliasConUsuario(url: string): { usuario: string; host: string; repo: string } | null {
+function aliasConPuerto(url: string): { host: string; repo: string; puerto: number | null } | null {
   const limpia = url.trim();
-  for (const forma of FORMAS_DE_ALIAS_CON_USUARIO) {
-    const m = forma.exec(limpia);
-    if (!m) continue;
-    const repo = `${m[3]}/${m[4]}`;
-    if (m[2]!.toLowerCase() === "github.com" || !esRepoValido(repo)) return null;
-    return { usuario: m[1]!, host: m[2]!, repo };
-  }
-  return null;
+  const scp = FORMAS_DE_ALIAS_CON_PUERTO[0]!.exec(limpia);
+  const ssh = scp ? null : FORMAS_DE_ALIAS_CON_PUERTO[1]!.exec(limpia);
+  const host = scp ? scp[1]! : ssh ? ssh[1]! : null;
+  if (host === null) return null;
+  const repo = scp ? `${scp[2]}/${scp[3]}` : `${ssh![3]}/${ssh![4]}`;
+  if (host.toLowerCase() === "github.com" || !esRepoValido(repo)) return null;
+  return { host, repo, puerto: ssh && ssh[2] !== undefined ? Number(ssh[2]) : null };
 }
 
 export function aliasDelOrigin(url: string): { host: string; repo: string } | null {
-  const a = aliasConUsuario(url);
+  const a = aliasConPuerto(url);
   return a ? { host: a.host, repo: a.repo } : null;
 }
 
 // Los nombres reales de host de GitHub para git por SSH: `github.com`, y `ssh.github.com` (el SSH de GitHub por el
 // puerto 443). Se compara exacto, sin mayúsculas y sin el punto final de un nombre absoluto.
 const HOSTS_DE_GITHUB = new Set(["github.com", "ssh.github.com"]);
-const HOSTNAME_VALIDO = /^[A-Za-z0-9._-]{1,253}$/;
 
 export function esHostDeGithub(hostname: string): boolean {
   return HOSTS_DE_GITHUB.has(hostname.toLowerCase().replace(/\.$/, ""));
-}
-
-// `ssh -G <usuario>@<alias>` NO se conecta: imprime la configuración que ssh usaría, y de ahí se lee `hostname`. Lo que
-// pasa por la línea de comandos es sólo el alias y el usuario, ya limitados por la forma del origin a [A-Za-z0-9._-],
-// y además se rechazan los que empiezan con `-` (serían una opción de ssh) y se pone `--` antes. Es la configuración
-// de la propia persona (`~/.ssh/config`, que un repo no puede tocar); la misma que usa git para traer o subir.
-export function resolverAliasConSsh(correr: (args: string[]) => Promise<{ codigo: number | null; stdout: string }>): ResolverAlias {
-  return async (host, usuario) => {
-    if (host.startsWith("-") || usuario.startsWith("-")) return null;
-    const r = await correr(["-G", "--", `${usuario}@${host}`]);
-    if (r.codigo !== 0) return null;
-    for (const linea of r.stdout.split("\n")) {
-      const m = /^hostname\s+(\S+)\s*$/i.exec(linea.trim());
-      if (m) return HOSTNAME_VALIDO.test(m[1]!) ? m[1]! : null;
-    }
-    return null;
-  };
 }
 
 // Lo que se muestra de un `origin`: nunca el usuario:clave@ de una URL (podría ser un token). Las credenciales se quitan de la
@@ -118,14 +96,22 @@ export function origenParaMostrar(url: string): string {
   return mostrable.length > TOPE_DEL_ORIGEN_MOSTRADO ? mostrable.slice(0, TOPE_DEL_ORIGEN_MOSTRADO) + "…" : mostrable;
 }
 
+// El puerto de la URL no cambia qué bloque `Host` aplica (se busca por el alias), pero sí adónde se conecta: GitHub sólo
+// atiende por SSH en el 22 (`github.com`) y en el 443 (`ssh.github.com`, y también en el 22). Con otro puerto, o con
+// un 443 en `github.com`, la URL no apunta a GitHub y no se acepta.
+function puertoDeGithub(hostname: string, puerto: number | null): boolean {
+  if (puerto === null || puerto === 22) return true;
+  return puerto === 443 && hostname.toLowerCase().replace(/\.$/, "") === "ssh.github.com";
+}
+
 export type MotivoLocal = "sin_git" | "sin_origin" | "origin_no_es_github" | "origin_alias_ssh";
 export type RepoLocal = {
   repo: string | null; raiz: string | null; motivo?: MotivoLocal;
   /** El `origin` tal cual se puede mostrar (sin usuario:clave@); sólo si no dio un repo de GitHub. */
   origen?: string;
   /** Si el origin tiene forma de alias de SSH: el host y el dueño/repo que habría que asociar. `real` es el host al que
-   *  `ssh -G` lo resolvió (otro que GitHub); `sinResolver`, que se intentó y no se pudo. Sin ninguno de los dos, no se intentó. */
-  alias?: { host: string; repo: string; real?: string; sinResolver?: true };
+   *  lo resuelve `~/.ssh/config` (otro que GitHub); `sinResolver`, que se intentó y no se pudo; `puerto`, que es GitHub pero con un puerto que GitHub no atiende por SSH. Sin ninguno de los dos, no se intentó. */
+  alias?: { host: string; repo: string; real?: string; sinResolver?: true; puerto?: number };
   /** ¿Existe ya un remoto llamado `supcoflow` (que no dio un repo de GitHub)? Cambia el comando sugerido. */
   hayRemotoSupcoflow?: boolean;
 };
@@ -144,15 +130,16 @@ export async function leerRepoLocal(git: Git, cwd: string): Promise<RepoLocal> {
   const repoDelOrigen = url ? repoDelOrigin(url) : null;
   // Si `origin` es de GitHub, gana `origin`, como siempre.
   if (repoDelOrigen) return { repo: repoDelOrigen, raiz };
-  const conUsuario = url ? aliasConUsuario(url) : null;
-  const alias: RepoLocal["alias"] | null = conUsuario ? { host: conUsuario.host, repo: conUsuario.repo } : null;
+  const conPuerto = url ? aliasConPuerto(url) : null;
+  const alias: RepoLocal["alias"] | null = conPuerto ? { host: conPuerto.host, repo: conPuerto.repo } : null;
   // Con el git real, el alias se resuelve: si el nombre real es GitHub, este origin ES ese repo de GitHub.
-  // (Un alias o usuario que empieza con `-` sería una opción de ssh: no se le pasa nunca.)
-  if (conUsuario && alias && git.resolverAlias && !conUsuario.host.startsWith("-") && !conUsuario.usuario.startsWith("-")) {
+  if (conPuerto && alias && git.resolverAlias) {
     let real: string | null = null;
-    try { real = await git.resolverAlias(conUsuario.host, conUsuario.usuario); } catch { real = null; }
-    if (real !== null && esHostDeGithub(real)) return { repo: conUsuario.repo, raiz };
-    if (real === null) alias.sinResolver = true; else alias.real = real;
+    try { real = await git.resolverAlias(conPuerto.host); } catch { real = null; }
+    if (real !== null && esHostDeGithub(real)) {
+      if (puertoDeGithub(real, conPuerto.puerto)) return { repo: conPuerto.repo, raiz };
+      alias.puerto = conPuerto.puerto!; // es GitHub, pero con un puerto donde GitHub no atiende por SSH
+    } else if (real === null) alias.sinResolver = true; else alias.real = real;
   }
   const asociado = await git(["remote", "get-url", REMOTO_DE_ASOCIACION], cwd);
   const urlAsociada = asociado.codigo === 0 ? asociado.stdout.trim() : "";
@@ -185,8 +172,9 @@ export function frasePorQueNoAtaClon(local: RepoLocal, repo: string | null): str
     : ` If this is ${sugerido} on GitHub, tell me once: \`${comandoDeAsociacion(sugerido, local.hayRemotoSupcoflow === true)}\` (it's never fetched).`;
   if (local.motivo === "origin_alias_ssh" && repo === null && local.alias) {
     const a = local.alias;
-    const queEs = a.real !== undefined ? `, which ssh resolves to \`${a.real}\`, not github.com.`
-      : a.sinResolver ? ", and I couldn't resolve it with ssh."
+    const queEs = a.real !== undefined ? `, which your SSH configuration points to \`${a.real}\`, not github.com.`
+      : a.puerto !== undefined ? `, but port ${a.puerto} isn't one GitHub serves over SSH (22, or 443 on ssh.github.com).`
+      : a.sinResolver ? ", and I couldn't tell from your SSH configuration (read as text, nothing is run) that it is github.com."
       : ", which I don't resolve.";
     return `Your origin uses the SSH alias \`${a.host}\`${queEs}${como}`;
   }
