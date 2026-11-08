@@ -5,10 +5,10 @@ import { ayuda, comandoDescribir, DESCRIPCION } from "../src/comandos/describir.
 import { leerArgumentos } from "../src/argumentos.ts";
 
 describe("describe --json: la carpeta de afuera es condicional", () => {
-  it("`diagnose` y `test` no prometen una alternativa: sólo «when a suitable folder is available»", () => {
+  it("`diagnose` y `test` no prometen una alternativa: sólo «a suitable folder is available»", () => {
     for (const nombre of ["diagnose", "test"]) {
       const c = DESCRIPCION.comandos.find((x) => x.nombre === nombre)!;
-      expect(c.resumen, nombre).toMatch(/when a suitable (persistent, private )?folder (outside any repo )?is available/);
+      expect(c.resumen, nombre).toMatch(/a suitable folder is available/);
     }
   });
 });

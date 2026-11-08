@@ -340,7 +340,7 @@ advice or point `XDG_CONFIG_HOME` at a folder you choose. The suggested path is 
 (`<folder>/supcoflow`, where the files go), is checked by its real path too, and is never under the same repo. Because a
 shared folder lets other users create names in it, before **every** read or write there (credentials, `pruebas.json`,
 `idempotencia.json`) the terminal checks that the folder under it is yours, with `0700`, not a link someone else made and
-not writable by others, and that the shared folder itself is sticky; if not, it reads and writes nothing (`diagnose` shows
+not writable by others (also along the real path of a link of yours), the top-most shared folder above it is sticky, and the per-user folder under it is yours alone; if not, it reads and writes nothing (`diagnose` shows
 `carpeta_compartida_insegura` before you authorize; `test` exits 1 `prueba_no_guardada`). Keep the same `XDG_CONFIG_HOME` on the
 commands that follow (`test --wait` too); it also moves the credentials file, so your sign-in must come from the
 keychain or `SUPCOFLOW_TOKEN`. The git rules apply equally to every write or delete of `idempotencia.json`. `diagnose` and `test`

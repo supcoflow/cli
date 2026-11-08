@@ -6,7 +6,7 @@
 // personal normal (~/.config/supcoflow) no cambia en nada.
 import path from "node:path";
 import type { Almacen } from "./index.ts";
-import type { Impedimento } from "./repo.ts";
+import { rutaReal, type Impedimento } from "./repo.ts";
 
 export type Ficha =
   | { existe: false }
@@ -16,6 +16,8 @@ export type FsPrivada = {
   /** `lstat` (no sigue el enlace) o `stat` (lo sigue). */
   ficha(p: string, seguirEnlaces: boolean): Ficha;
   crearDir(p: string, modo: number): void;
+  realpath(p: string): string;
+  existe(p: string): boolean;
   /** El usuario que corre la terminal; `null` donde no hay (no se puede comparar dueños). */
   miUid(): number | null;
 };
@@ -40,22 +42,15 @@ function esCompartida(f: Extract<Ficha, { existe: true }>, miUid: number | null)
 }
 
 /**
- * `null` si `dir` es utilizable; si no, qué falla. Con `crear`, crea con 0700 lo que falta y lo vuelve a verificar (así, si
- * otro usuario ganó la carrera por el nombre, se ve). Sin `crear` no escribe nada.
+ * Recorre `cadena` (de la raíz al destino) con las reglas de una carpeta personal bajo una compartida. La carpeta compartida
+ * de confianza es la MÁS ALTA que otros pueden escribir (no la más cercana al destino): una raíz por usuario que se declara
+ * 01777 no se vuelve «la compartida» para saltarse sus propias comprobaciones (revisión 2, P2-R2-1).
  */
-export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: boolean } = {}): Impedimento | null {
-  const destino = path.resolve(dir);
-  const cadena: string[] = [];
-  for (let p = destino; ; p = path.dirname(p)) {
-    cadena.unshift(p);
-    if (path.dirname(p) === p) break;
-  }
+function recorrer(cadena: string[], fs: FsPrivada, o: { crear: boolean }): Impedimento | null {
   const miUid = fs.miUid();
-
-  // La carpeta compartida más cercana por encima del destino.
   let desde = -1;
   let compartida: Extract<Ficha, { existe: true }> | null = null;
-  for (let i = cadena.length - 2; i >= 0; i--) {
+  for (let i = 0; i < cadena.length - 1; i++) {
     const f = fs.ficha(cadena[i]!, true);
     if (f.existe && f.tipo === "carpeta" && esCompartida(f, miUid)) {
       desde = i;
@@ -73,7 +68,7 @@ export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: b
     const c = cadena[i]!;
     let f = fs.ficha(c, false);
     if (!f.existe) {
-      if (o.crear !== true) return null; // nada más abajo existe todavía
+      if (!o.crear) return null; // nada más abajo existe todavía
       try {
         fs.crearDir(c, 0o700);
       } catch {
@@ -95,6 +90,35 @@ export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: b
     }
   }
   return null;
+}
+
+const cadenaDe = (destino: string): string[] => {
+  const cadena: string[] = [];
+  for (let p = destino; ; p = path.dirname(p)) {
+    cadena.unshift(p);
+    if (path.dirname(p) === p) break;
+  }
+  return cadena;
+};
+
+/**
+ * `null` si `dir` es utilizable; si no, qué falla. Con `crear`, crea con 0700 lo que falta y lo vuelve a verificar (así, si
+ * otro usuario ganó la carrera por el nombre, se ve). Sin `crear` no escribe nada.
+ *
+ * Se revisa dos veces: la cadena ESCRITA (con sus enlaces: uno ajeno no se sigue) y, si un enlace propio la desvía, la cadena
+ * REAL de su destino, con los mismos requisitos para sus ancestros (revisión 2, P2-R2-2). Ante la duda, se rechaza.
+ */
+export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: boolean } = {}): Impedimento | null {
+  const destino = path.resolve(dir);
+  const escrita = recorrer(cadenaDe(destino), fs, { crear: o.crear === true });
+  if (escrita !== null) return escrita;
+  let real: string;
+  try {
+    real = rutaReal(destino, fs);
+  } catch {
+    return impedimento(`I can't tell where ${destino} really is (a broken link?).`);
+  }
+  return real === destino ? null : recorrer(cadenaDe(real), fs, { crear: false });
 }
 
 /**
