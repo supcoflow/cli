@@ -38,13 +38,13 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function deps(rutaDir = dir, o: Partial<DepsDePrueba> = {}) {
+function deps(rutaDir = dir, o: Partial<DepsDePrueba> = {}, fuera?: () => string | null) {
   const ruta = join(rutaDir, "pruebas.json");
   const posts: unknown[] = [];
   const pruebas = crearRegistroDePruebas({
-    origen: "http://localhost:3000", almacen: almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal }),
+    origen: "http://localhost:3000", almacen: almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal, fuera }),
     rutaDelArchivo: ruta, ahora: () => 1, avisar: () => {},
-    revisarElLugar: () => revisarElLugar({ ruta, fs: fsDelLugarReal, git: gitReal }),
+    revisarElLugar: () => revisarElLugar({ ruta, fs: fsDelLugarReal, git: gitReal, fuera }),
   });
   const d: DepsDePrueba = {
     api: new URL("http://localhost:3000"),
@@ -141,6 +141,54 @@ describe("V-3: lo que se ve antes del sí", () => {
     const { maquina } = await ver(d);
     expect(maquina).toEqual({ ok: true, impedimentos: [] });
     expect(existsSync(dir)).toBe(false);
+  });
+});
+
+describe("V-3: git no deja guardar bajo la carpeta personal: diagnose propone una carpeta de afuera, antes del sí de gasto", () => {
+  function archivoSeguido() {
+    const casa = join(tmp, "casa");
+    mkdirSync(dir, { recursive: true });
+    git(casa, "init", "-q");
+    writeFileSync(join(dir, "pruebas.json"), "{}");
+    git(casa, "add", "-f", ".config/supcoflow/pruebas.json");
+    git(casa, "commit", "-qm", "x");
+  }
+
+  it("diagnose y test --json traen el comando con la carpeta de afuera, y sigue el `git rm --cached`; no se escribe nada", async () => {
+    archivoSeguido();
+    const afuera = join(tmp, "afuera", "supcoflow-501");
+    mkdirSync(join(tmp, "afuera"), { recursive: true });
+    const { d } = deps(dir, {}, () => afuera);
+    const { t, g, maquina } = await ver(d);
+    const detalle = maquina.impedimentos.find((i) => i.codigo === "git_lo_sigue")!.detalle;
+    expect(detalle).toContain(`XDG_CONFIG_HOME=${afuera}`);
+    expect(detalle).toMatch(/rm --cached/);
+    expect(t.texto).toContain(`XDG_CONFIG_HOME=${afuera}`);
+    expect(g.texto).toContain(`XDG_CONFIG_HOME=${afuera}`);
+    expect(t.codigo).toBe(4);
+    expect(existsSync(afuera)).toBe(false);
+  });
+
+  it("la sugerencia, probada de verdad: con esa carpeta como XDG_CONFIG_HOME la máquina queda sana y se guarda el pedido", async () => {
+    archivoSeguido();
+    const sugerida = join(tmp, "afuera", "supcoflow-501");
+    mkdirSync(join(tmp, "afuera"), { recursive: true });
+    const { maquina } = await ver(deps(dir, {}, () => sugerida).d);
+    expect(maquina.ok).toBe(false);
+    const nuevaDir = join(sugerida, "supcoflow");
+    const { d, posts } = deps(nuevaDir);
+    expect((await probar(d, F)).json.maquina).toEqual({ ok: true, impedimentos: [] });
+    const r = await probar(d, { ...F, authorizeSpend: true, ceiling: "2", expectPolicy: "save" });
+    expect(r.codigo).toBe(5);
+    expect(posts).toHaveLength(1);
+    expect(existsSync(join(nuevaDir, "pruebas.json"))).toBe(true);
+    expect(existsSync(join(nuevaDir, ".gitignore"))).toBe(false); // afuera de todo repo no se toca git
+  });
+
+  it("sin carpeta de afuera que sirva, el aviso no inventa una ruta", async () => {
+    archivoSeguido();
+    const { maquina } = await ver(deps(dir, {}, () => null).d);
+    expect(maquina.impedimentos.find((i) => i.codigo === "git_lo_sigue")!.detalle).not.toContain("XDG_CONFIG_HOME");
   });
 });
 

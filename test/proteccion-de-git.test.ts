@@ -28,10 +28,10 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(tmp, { recursive: true, force: true }));
 
-const armarPruebas = (d = dir, g: GitDeRuta = gitReal) => {
+const armarPruebas = (d = dir, g: GitDeRuta = gitReal, fuera?: () => string | null) => {
   const ruta = join(d, "pruebas.json");
   return crearRegistroDePruebas({
-    origen: "http://127.0.0.1:4555", almacen: almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: g }),
+    origen: "http://127.0.0.1:4555", almacen: almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: g, fuera }),
     rutaDelArchivo: ruta, ahora: () => 1, avisar: () => {},
   });
 };
@@ -83,6 +83,19 @@ describe("el home es un repo de git: archivo ya seguido o agregado", () => {
     expect(readFileSync(ruta, "utf8")).toBe(antes);
     expect(enElIndice()).toBe("");
     expect(git(home, "status", "--porcelain")).not.toMatch(/M /);
+  });
+
+  it("seguido, con una carpeta de afuera que sirve: se niega igual, y el mensaje trae el comando con esa carpeta", async () => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "pruebas.json"), "{}");
+    git(home, "add", "-f", ".config/supcoflow/pruebas.json");
+    git(home, "commit", "-qm", "x");
+    const afuera = join(tmp, "afuera", "supcoflow-501");
+    await expect(armarPruebas(dir, gitReal, () => afuera).abrir("proj_1", INTENTO)).rejects.toMatchObject({
+      error: "prueba_no_guardada",
+      message: expect.stringContaining(`XDG_CONFIG_HOME=${afuera}`),
+    });
+    expect(existsSync(afuera)).toBe(false);
   });
 
   it("sólo agregado al índice: se niega", async () => {
