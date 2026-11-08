@@ -34,7 +34,7 @@ import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
 import { crearRegistroDePruebas } from "./pruebas-guardadas.ts";
-import type { Git } from "./repo-local.ts";
+import { resolverAliasConSsh, type Git } from "./repo-local.ts";
 import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
 
@@ -269,7 +269,20 @@ const gitConPlazo = (plazoMs: number): Git => (args, cwd) =>
     });
   });
 
-export const gitReal: Git = gitConPlazo(5_000);
+// `ssh -G` sólo imprime la configuración que usaría (no se conecta). Entorno mínimo (PATH y HOME, para que lea su
+// `~/.ssh/config`): SUPCOFLOW_TOKEN no le llega. Sin ssh, o si tarda más de 3 s, es «no se pudo», no un fallo.
+const sshG = (args: string[]) =>
+  new Promise<{ codigo: number | null; stdout: string }>((resolve) => {
+    execFile("ssh", args, { timeout: 3_000, env: { PATH: process.env.PATH ?? "", ...(process.env.HOME ? { HOME: process.env.HOME } : {}) } }, (e, stdout) => {
+      if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
+      const codigo = (e as NodeJS.ErrnoException).code;
+      resolve({ codigo: typeof codigo === "number" ? codigo : null, stdout: "" });
+    });
+  });
+
+// El git real sabe resolver un `origin` con alias de SSH (`git@github-gf0:o/r`); el resto de los `Git` (el de la guía, los
+// de los tests) no.
+export const gitReal: Git = Object.assign(gitConPlazo(5_000), { resolverAlias: resolverAliasConSsh(sshG) });
 
 // El commit y la rama que la terminal DECLARA al subir la guía: 3 segundos (no 5) porque esto es un extra que nunca
 // debe hacer esperar a nadie.

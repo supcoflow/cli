@@ -145,3 +145,112 @@ describe("revisión 1, hallazgo 1: las credenciales se quitan ANTES de recortar"
     expect(r.sinClon).toContain("`https://gitlab.com/o/r.git`");
   });
 });
+
+// ─── el alias de SSH se resuelve con `ssh -G` (sólo si hay con qué resolverlo) ───
+import { resolverAliasConSsh, type ResolverAlias } from "../src/repo-local.ts";
+
+function gitConResolutor(t: Record<string, { codigo: number | null; stdout: string }>, resolver: ResolverAlias | undefined) {
+  const git = gitFalso(t) as Git & { resolverAlias?: ResolverAlias };
+  if (resolver) git.resolverAlias = resolver;
+  return git;
+}
+const llamadas: { host: string; usuario: string }[] = [];
+const resuelveA = (hostname: string | null): ResolverAlias => async (host, usuario) => { llamadas.push({ host, usuario }); return hostname; };
+
+describe("el origin con alias de SSH que resuelve a github.com", () => {
+  it("git@github-gf0:owner/repo.git con `ssh -G` → github.com: es ese repo de GitHub, con la raíz", async () => {
+    llamadas.length = 0;
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+    expect(llamadas).toEqual([{ host: "github-gf0", usuario: "git" }]);
+  });
+  it("también la forma ssh://git@alias/owner/repo, y ssh.github.com (el SSH por el puerto 443 de GitHub)", async () => {
+    const git = gitConResolutor({ ...TOP, "remote get-url origin": { codigo: 0, stdout: "ssh://git@github-gf0:2222/d/r\n" }, ...SIN_REMOTO }, resuelveA("ssh.github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "d/r", raiz: "/w/geo" });
+  });
+  it("el host real se compara exacto (sin mayúsculas ni punto final de más) y no cuenta lo que sólo lo contiene", async () => {
+    for (const real of ["GitHub.com", "github.com."]) {
+      const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(real));
+      expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+    }
+    for (const real of ["github.com.evil.com", "evil-github.com", "gitlab.com", "github-gf0", "notgithub.com"]) {
+      const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(real));
+      const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+      expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    }
+  });
+  it("si resuelve a otro servidor: 3 sin_repo, lo dice y sugiere --repo y el remoto supcoflow", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("gitlab.com"));
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    expect(e.message).toContain("Your origin uses the SSH alias `github-gf0`, which ssh resolves to `gitlab.com`, not github.com.");
+    expect(e.message).toContain("`git remote add supcoflow https://github.com/germanflores0/geolanding.git`");
+    expect(e.message).toMatch(/Pass --repo owner\/repo\.$/);
+  });
+  it("si no se pudo resolver (sin ssh, plazo, sin hostname): mismo error de antes, ahora dice que no se pudo y sugiere --repo", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(null));
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    expect(e.message).toContain("Your origin uses the SSH alias `github-gf0`, and I couldn't resolve it with ssh.");
+    expect(e.message).toContain("Pass --repo owner/repo.");
+  });
+  it("un resolutor que explota cuenta como «no se pudo», no tumba el comando", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, async () => { throw new Error("boom"); });
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+  });
+  it("con un origin de GitHub directo, o sin alias, nunca se corre ssh", async () => {
+    llamadas.length = 0;
+    for (const url of ["git@github.com:a/b.git", "https://gitlab.com/a/b.git", "git@alias:d/r;rm -rf"]) {
+      const git = gitConResolutor({ ...TOP, "remote get-url origin": { codigo: 0, stdout: url + "\n" }, ...SIN_REMOTO }, resuelveA("github.com"));
+      await leerRepoLocal(git, "/w/geo");
+    }
+    expect(llamadas).toEqual([]);
+  });
+  it("un alias que empieza con `-` (sería una opción de ssh) no se resuelve nunca", async () => {
+    llamadas.length = 0;
+    for (const url of ["git@-alias:d/r.git", "-o@alias:d/r.git"]) {
+      const git = gitConResolutor({ ...TOP, "remote get-url origin": { codigo: 0, stdout: url + "\n" }, ...SIN_REMOTO }, resuelveA("github.com"));
+      const local = await leerRepoLocal(git, "/w/geo");
+      expect(local.repo).toBeNull();
+    }
+    expect(llamadas).toEqual([]);
+  });
+  it("si el alias resuelve a GitHub gana sobre un remoto supcoflow distinto (como con origin directo)", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, "remote get-url supcoflow": { codigo: 0, stdout: "https://github.com/otro/repo.git\n" } }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+  });
+  it("--repo con el mismo repo y un alias que resuelve a GitHub: sirve la raíz de este clon", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: "germanflores0/geolanding", git, cwd: "/w/geo" })).toMatchObject({ raiz: "/w/geo" });
+  });
+  it("sin resolutor (los tests y todo lo demás) el comportamiento es el de siempre", async () => {
+    const git = gitFalso({ ...TOP, ...ALIAS, ...SIN_REMOTO });
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e.message).toContain("which I don't resolve.");
+  });
+});
+
+describe("resolverAliasConSsh: lee el `hostname` de `ssh -G`", () => {
+  const ejecutar = (stdout: string, codigo: number | null = 0) => {
+    const pedidos: string[][] = [];
+    return { pedidos, run: async (args: string[]) => { pedidos.push(args); return { codigo, stdout }; } };
+  };
+  it("corre `ssh -G -- usuario@host` y devuelve el hostname", async () => {
+    const e = ejecutar("user git\nhostname github.com\nport 22\nidentityfile ~/.ssh/id_gf0\n");
+    expect(await resolverAliasConSsh(e.run)("github-gf0", "git")).toBe("github.com");
+    expect(e.pedidos).toEqual([["-G", "--", "git@github-gf0"]]);
+  });
+  it("falla de ssh, sin línea hostname o un hostname raro: null", async () => {
+    expect(await resolverAliasConSsh(ejecutar("hostname github.com\n", 255).run)("a", "git")).toBeNull();
+    expect(await resolverAliasConSsh(ejecutar("", null).run)("a", "git")).toBeNull();
+    expect(await resolverAliasConSsh(ejecutar("port 22\n").run)("a", "git")).toBeNull();
+    expect(await resolverAliasConSsh(ejecutar("hostname github.com; rm -rf\n").run)("a", "git")).toBeNull();
+  });
+  it("host o usuario que empiezan con `-`: no corre nada", async () => {
+    const e = ejecutar("hostname github.com\n");
+    expect(await resolverAliasConSsh(e.run)("-oProxyCommand=x", "git")).toBeNull();
+    expect(await resolverAliasConSsh(e.run)("a", "-l")).toBeNull();
+    expect(e.pedidos).toEqual([]);
+  });
+});

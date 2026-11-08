@@ -47,10 +47,12 @@ take the repo from the folder's `origin`; `--repo owner/repo` picks it by hand.
 
 ### When the `origin` isn't a GitHub address
 
-The terminal only recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
-`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`) or
-another server, it never runs `ssh` or reads your SSH configuration (it could run programs of yours). You tell it
-once, in your own clone, which GitHub repo this is:
+The terminal recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
+`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`), it asks
+`ssh -G github-work` (which only prints your SSH configuration for that name and never connects) and accepts the
+alias only if its `hostname` is exactly `github.com` or `ssh.github.com`. If `ssh` isn't there, doesn't answer, or
+the alias points to another server, or if `origin` is simply another server, it doesn't guess: the error says so,
+suggests `--repo owner/repo` and tells you once, in your own clone, which GitHub repo this is:
 
 ```bash
 git remote add supcoflow https://github.com/owner/repo.git   # it's never fetched
