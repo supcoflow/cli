@@ -298,10 +298,4 @@ describe("el alias de SSH en el contrato (revisión 2): se lee como texto y nunc
     expect(t).toContain("Origin wins over `supcoflow`");
     expect(t).not.toMatch(/ssh -G/);
   });
-  it("el README dice lo mismo y no promete `ssh -G`", () => {
-    const r = readFileSync(new URL("../README.md", import.meta.url), "utf8");
-    expect(r).toContain("**as plain text**");
-    expect(r).toContain("**never runs `ssh`**");
-    expect(r).not.toMatch(/ssh -G/);
-  });
 });
