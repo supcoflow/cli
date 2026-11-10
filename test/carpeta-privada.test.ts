@@ -213,6 +213,15 @@ describe("almacenEnCarpetaPrivada", () => {
   const armar = (fs: FsDelLugar = fsDelLugarReal) => almacenEnCarpetaPrivada(almacenDeArchivo(ruta(), fsReal), { ruta: ruta(), fs });
   const REG = { valor: "v", escritoEn: 1 };
 
+  it("sin usuario (Windows: no hay getuid, y libuv da 0o777 a toda carpeta escribible) no se exige nada, como en 0.10.1", async () => {
+    chmodSync(compartida, 0o777);
+    await expect(armar().escribir("c", REG)).rejects.toBeInstanceOf(SinLugarSeguro);
+    const sinUid: FsDelLugar = { ...fsDelLugarReal, ficha: (p, s) => { const f = fsDelLugarReal.ficha(p, s); return f.existe ? { ...f, uid: null } : f; }, miUid: () => null };
+    expect(revisarCarpetaPrivada(dir, sinUid)).toBeNull();
+    await armar(sinUid).escribir("c", REG);
+    expect(await armar(sinUid).leer("c")).toEqual(REG);
+  });
+
   it("escribir crea la raíz y la carpeta 0700 y guarda; leer devuelve lo guardado", async () => {
     await armar().escribir("c", REG);
     expect(modo(raiz)).toBe(0o700);

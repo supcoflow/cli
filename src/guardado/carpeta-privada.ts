@@ -37,8 +37,8 @@ const impedimento = (detalle: string): Impedimento => ({ codigo: "carpeta_compar
 
 // «Compartida»: la puede escribir cualquiera, o la puede escribir el grupo de otra persona. El grupo propio (umask 002,
 // ~/.config en 0775) no cuenta: no es un lugar donde un tercero pueda ocupar un nombre.
-function esCompartida(f: Extract<Ficha, { existe: true }>, miUid: number | null): boolean {
-  return (f.modo & 0o002) !== 0 || (miUid !== null && f.uid !== miUid && (f.modo & 0o020) !== 0);
+function esCompartida(f: Extract<Ficha, { existe: true }>, miUid: number): boolean {
+  return (f.modo & 0o002) !== 0 || (f.uid !== miUid && (f.modo & 0o020) !== 0);
 }
 
 /**
@@ -46,8 +46,7 @@ function esCompartida(f: Extract<Ficha, { existe: true }>, miUid: number | null)
  * de confianza es la MÁS ALTA que otros pueden escribir (no la más cercana al destino): una raíz por usuario que se declara
  * 01777 no se vuelve «la compartida» para saltarse sus propias comprobaciones (revisión 2, P2-R2-1).
  */
-function recorrer(cadena: string[], fs: FsPrivada, o: { crear: boolean }): Impedimento | null {
-  const miUid = fs.miUid();
+function recorrer(cadena: string[], fs: FsPrivada, miUid: number, o: { crear: boolean }): Impedimento | null {
   let desde = -1;
   let compartida: Extract<Ficha, { existe: true }> | null = null;
   for (let i = 0; i < cadena.length - 1; i++) {
@@ -78,12 +77,12 @@ function recorrer(cadena: string[], fs: FsPrivada, o: { crear: boolean }): Imped
       if (!f.existe) return impedimento(`I couldn't create ${c}.`);
     }
     if (f.tipo === "enlace") {
-      if (miUid !== null && f.uid !== miUid) return impedimento(`${c} is a link that isn't yours (it is under the shared folder ${A}); I don't follow it.`);
+      if (f.uid !== miUid) return impedimento(`${c} is a link that isn't yours (it is under the shared folder ${A}); I don't follow it.`);
       f = fs.ficha(c, true);
       if (!f.existe) return impedimento(`${c} is a broken link.`);
     }
     if (f.tipo !== "carpeta") return impedimento(`${c} isn't a folder.`);
-    if (miUid !== null && f.uid !== miUid) return impedimento(`${c} isn't yours (it is under the shared folder ${A}); someone else made it. Use another XDG_CONFIG_HOME.`);
+    if (f.uid !== miUid) return impedimento(`${c} isn't yours (it is under the shared folder ${A}); someone else made it. Use another XDG_CONFIG_HOME.`);
     if ((f.modo & SIN_ESCRIBIR_OTROS) !== 0) return impedimento(`${c} can be written by other users; run \`chmod 700 ${c}\` or use another XDG_CONFIG_HOME.`);
     if (i === desde + 1 && (f.modo & SIN_ACCESO_OTROS) !== 0) {
       return impedimento(`${c} is under the shared folder ${A} and other users can read it; run \`chmod 700 ${c}\` or use another XDG_CONFIG_HOME.`);
@@ -109,8 +108,10 @@ const cadenaDe = (destino: string): string[] => {
  * REAL de su destino, con los mismos requisitos para sus ancestros (revisión 2, P2-R2-2). Ante la duda, se rechaza.
  */
 export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: boolean } = {}): Impedimento | null {
+  const miUid = fs.miUid();
+  if (miUid === null) return null;
   const destino = path.resolve(dir);
-  const escrita = recorrer(cadenaDe(destino), fs, { crear: o.crear === true });
+  const escrita = recorrer(cadenaDe(destino), fs, miUid, { crear: o.crear === true });
   if (escrita !== null) return escrita;
   let real: string;
   try {
@@ -118,7 +119,7 @@ export function revisarCarpetaPrivada(dir: string, fs: FsPrivada, o: { crear?: b
   } catch {
     return impedimento(`I can't tell where ${destino} really is (a broken link?).`);
   }
-  return real === destino ? null : recorrer(cadenaDe(real), fs, { crear: false });
+  return real === destino ? null : recorrer(cadenaDe(real), fs, miUid, { crear: false });
 }
 
 /**
