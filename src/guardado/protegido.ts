@@ -4,20 +4,22 @@
 // por su `.tmp`. Las credenciales no lo usan: dentro de un repo se siguen negando.
 import path from "node:path";
 import type { Almacen } from "./index.ts";
+import { SinLugarSeguro } from "./carpeta-privada.ts";
 import { asegurarProteccionDeGit, type FsDeProteccion, type GitDeRuta, type Impedimento } from "./repo.ts";
 
 /** Git no garantiza que este archivo quede fuera del repo: no se escribió (ni se borró) nada. */
-export class SinProteccionDeGit extends Error {
-  constructor(readonly impedimento: Impedimento) {
-    super(impedimento.detalle);
+export class SinProteccionDeGit extends SinLugarSeguro {
+  constructor(impedimento: Impedimento) {
+    super(impedimento);
   }
 }
 
-export function almacenProtegido(base: Almacen, d: { ruta: string; fs: FsDeProteccion; git: GitDeRuta }): Almacen {
+/** `fuera`: una carpeta fuera de todo repo para sugerir si git no deja guardar acá (opcional; sin ella el aviso es el de siempre). */
+export function almacenProtegido(base: Almacen, d: { ruta: string; fs: FsDeProteccion; git: GitDeRuta; fuera?: () => string | null }): Almacen {
   const dir = path.dirname(d.ruta);
   const archivos = [path.basename(d.ruta), path.basename(d.ruta) + ".tmp"];
   async function proteger(): Promise<void> {
-    const p = await asegurarProteccionDeGit({ dir, archivos, fs: d.fs, git: d.git });
+    const p = await asegurarProteccionDeGit({ dir, archivos, fs: d.fs, git: d.git, fuera: d.fuera });
     if (!p.protegido) throw new SinProteccionDeGit(p.impedimento);
   }
   return {

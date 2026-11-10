@@ -4,6 +4,15 @@ import { chatMarca } from "../src/comandos/configurar.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "../src/comandos/describir.ts";
 import { leerArgumentos } from "../src/argumentos.ts";
 
+describe("describe --json: la carpeta de afuera es condicional", () => {
+  it("`diagnose` y `test` no prometen una alternativa: sólo «a suitable folder is available»", () => {
+    for (const nombre of ["diagnose", "test"]) {
+      const c = DESCRIPCION.comandos.find((x) => x.nombre === nombre)!;
+      expect(c.resumen, nombre).toMatch(/a suitable folder is available/);
+    }
+  });
+});
+
 describe("describe --json", () => {
   it("lista los comandos, los siete códigos y las facultades que la clave no tiene", () => {
     const r = comandoDescribir();
@@ -155,10 +164,10 @@ describe("describe --json", () => {
     expect(c.flags.find((f) => f.startsWith("--install"))).toBeDefined();
     expect(c.ejemplos.join(" ")).not.toContain("--test");
   });
-  it("la versión es la del package.json, y es la 0.10.1", () => {
+  it("la versión es la del package.json, y es la 0.10.2", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.10.1");
+    expect(pkg.version).toBe("0.10.2");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -231,8 +240,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.10.1", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.10.1" });
+  it("describe --json se escribe en una sola línea con la versión 0.10.2", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.10.2" });
   });
 });
 
@@ -277,5 +286,22 @@ describe("los ejemplos publicados sirven", () => {
       expect(DESCRIPCION.comandos.find((c) => c.nombre === n)!.codigos, n).toContain(4);
     }
     expect(DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen).toMatch(/BEFORE `repo connect`/);
+  });
+});
+
+describe("el alias de SSH en el contrato (revisión 2): se lee como texto y nunca se ejecuta", () => {
+  it("project show dice que ~/.ssh/config se lee como texto, que nada se corre, que Match se ignora y la prioridad", () => {
+    const t = DESCRIPCION.comandos.find((c) => c.nombre === "project show")!.resumen;
+    expect(t).toContain("read as plain text");
+    expect(t).toContain("`ssh` and anything else is never run");
+    expect(t).toContain("`Match` blocks are ignored");
+    expect(t).toContain("Origin wins over `supcoflow`");
+    expect(t).not.toMatch(/ssh -G/);
+  });
+  it("el README dice lo mismo y no promete `ssh -G`", () => {
+    const r = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+    expect(r).toContain("**as plain text**");
+    expect(r).toContain("**never runs `ssh`**");
+    expect(r).not.toMatch(/ssh -G/);
   });
 });

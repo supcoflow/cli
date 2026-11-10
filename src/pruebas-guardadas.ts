@@ -16,7 +16,7 @@
 // del lado de la terminal, así que mandar sin el intento guardado arriesga una segunda prueba (que gasta).
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 import type { Almacen } from "./guardado/index.ts";
-import { SinProteccionDeGit } from "./guardado/protegido.ts";
+import { SinLugarSeguro } from "./guardado/carpeta-privada.ts";
 import type { Impedimento } from "./guardado/repo.ts";
 
 // `politicaEsperada` es la que la persona vio al autorizar (valor de la API); null si no se pasó (alias viejo) o si el
@@ -74,7 +74,12 @@ export function crearRegistroDePruebas(d: {
     let crudo: string | null;
     try {
       crudo = (await d.almacen.leer(cuenta(proyectoId)))?.valor ?? null;
-    } catch {
+    } catch (e) {
+      // Una carpeta compartida que dejó de ser sólo de la persona: no se lee, y se dice por qué.
+      if (e instanceof SinLugarSeguro) {
+        throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
+          `I'm not reading the saved test request in ${d.rutaDelArchivo}; it isn't safe to trust. ${e.message}`);
+      }
       throw noGuardada("read");
     }
     if (crudo === null) return { intento: null, ultima: null };
@@ -107,7 +112,7 @@ export function crearRegistroDePruebas(d: {
     } catch (e) {
       // El almacén protegido no escribe dentro de un repo si git no garantiza que lo deja afuera (fricción 2c):
       // el mensaje dice qué archivo, qué repo y qué hacer.
-      if (e instanceof SinProteccionDeGit) {
+      if (e instanceof SinLugarSeguro) {
         throw new FalloDeLaTerminal(SALIDA.inesperado, "prueba_no_guardada",
           `I'm not saving the test request in ${d.rutaDelArchivo}; without saving it I won't send it. ${e.message}`);
       }

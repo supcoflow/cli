@@ -145,3 +145,97 @@ describe("revisión 1, hallazgo 1: las credenciales se quitan ANTES de recortar"
     expect(r.sinClon).toContain("`https://gitlab.com/o/r.git`");
   });
 });
+
+// ─── el alias de SSH se resuelve leyendo `~/.ssh/config` como texto (el resolutor real vive en ssh-config.ts) ───
+import type { ResolverAlias } from "../src/repo-local.ts";
+
+function gitConResolutor(t: Record<string, { codigo: number | null; stdout: string }>, resolver: ResolverAlias | undefined) {
+  const git = gitFalso(t) as Git;
+  if (resolver) git.resolverAlias = resolver;
+  return git;
+}
+const llamadas: string[] = [];
+const resuelveA = (hostname: string | null): ResolverAlias => async (host) => { llamadas.push(host); return hostname; };
+const ORIGIN = (url: string) => ({ "remote get-url origin": { codigo: 0, stdout: url + "\n" } });
+
+describe("el origin con alias de SSH que resuelve a github.com", () => {
+  it("git@github-gf0:owner/repo.git con HostName github.com: es ese repo de GitHub, con la raíz", async () => {
+    llamadas.length = 0;
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+    expect(llamadas).toEqual(["github-gf0"]);
+  });
+  it("también la forma ssh://git@alias/owner/repo, y ssh.github.com", async () => {
+    const git = gitConResolutor({ ...TOP, ...ORIGIN("ssh://git@github-gf0/d/r"), ...SIN_REMOTO }, resuelveA("ssh.github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "d/r", raiz: "/w/geo" });
+  });
+  it("el host real se compara exacto (sin mayúsculas ni punto final de más) y no cuenta lo que sólo lo contiene", async () => {
+    for (const real of ["GitHub.com", "github.com."]) {
+      const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(real));
+      expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+    }
+    for (const real of ["github.com.evil.com", "evil-github.com", "gitlab.com", "github-gf0", "notgithub.com"]) {
+      const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(real));
+      const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+      expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    }
+  });
+  it("si apunta a otro servidor: 3 sin_repo, lo dice y sugiere --repo y el remoto supcoflow", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("gitlab.com"));
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    expect(e.message).toContain("Your origin uses the SSH alias `github-gf0`, which your SSH configuration points to `gitlab.com`, not github.com.");
+    expect(e.message).toContain("`git remote add supcoflow https://github.com/germanflores0/geolanding.git`");
+    expect(e.message).toMatch(/Pass --repo owner\/repo\.$/);
+  });
+  it("si no se pudo saber (sin config, sólo Match, duda): mismo error de antes, dice que no se pudo y sugiere --repo", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA(null));
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+    expect(e.message).toContain("Your origin uses the SSH alias `github-gf0`, and I couldn't tell from your SSH configuration (read as text, nothing is run) that it is github.com.");
+    expect(e.message).toContain("Pass --repo owner/repo.");
+  });
+  it("un resolutor que explota cuenta como «no se pudo», no tumba el comando", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, async () => { throw new Error("boom"); });
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+  });
+  it("con un origin de GitHub directo, o sin forma de alias, no se mira la configuración", async () => {
+    llamadas.length = 0;
+    for (const url of ["git@github.com:a/b.git", "https://gitlab.com/a/b.git", "git@alias:d/r;rm -rf"]) {
+      const git = gitConResolutor({ ...TOP, ...ORIGIN(url), ...SIN_REMOTO }, resuelveA("github.com"));
+      await leerRepoLocal(git, "/w/geo");
+    }
+    expect(llamadas).toEqual([]);
+  });
+  it("si el alias resuelve a GitHub gana sobre un remoto supcoflow distinto (como con origin directo)", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, "remote get-url supcoflow": { codigo: 0, stdout: "https://github.com/otro/repo.git\n" } }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: null, git, cwd: "/w/geo" })).toEqual({ repo: "germanflores0/geolanding", raiz: "/w/geo" });
+  });
+  it("--repo con el mismo repo y un alias que resuelve a GitHub: sirve la raíz de este clon", async () => {
+    const git = gitConResolutor({ ...TOP, ...ALIAS, ...SIN_REMOTO }, resuelveA("github.com"));
+    expect(await repoPedido({ flagRepo: "germanflores0/geolanding", git, cwd: "/w/geo" })).toMatchObject({ raiz: "/w/geo" });
+  });
+  it("sin resolutor (los tests y todo lo demás) el comportamiento es el de siempre", async () => {
+    const git = gitFalso({ ...TOP, ...ALIAS, ...SIN_REMOTO });
+    const e = await repoPedido({ flagRepo: null, git, cwd: "/w/geo" }).catch((x) => x);
+    expect(e.message).toContain("which I don't resolve.");
+  });
+});
+
+describe("el puerto de la URL no se pierde (H2 de la revisión 1)", () => {
+  const con = (url: string, real: string) => gitConResolutor({ ...TOP, ...ORIGIN(url), ...SIN_REMOTO }, resuelveA(real));
+  it("ssh://git@alias:22/… con github.com, y :443 con ssh.github.com, sirven", async () => {
+    expect(await repoPedido({ flagRepo: null, git: con("ssh://git@gh:22/d/r.git", "github.com"), cwd: "/w" })).toMatchObject({ repo: "d/r" });
+    expect(await repoPedido({ flagRepo: null, git: con("ssh://git@gh:22/d/r.git", "ssh.github.com"), cwd: "/w" })).toMatchObject({ repo: "d/r" });
+    expect(await repoPedido({ flagRepo: null, git: con("ssh://git@gh:443/d/r.git", "ssh.github.com"), cwd: "/w" })).toMatchObject({ repo: "d/r" });
+  });
+  it("otro puerto, o 443 en github.com: no se acepta aunque el HostName sea GitHub, y el mensaje dice por qué", async () => {
+    for (const [url, real] of [["ssh://git@gh:2222/d/r.git", "github.com"], ["ssh://git@gh:443/d/r.git", "github.com"], ["ssh://git@gh:2222/d/r.git", "ssh.github.com"]]) {
+      const e = await repoPedido({ flagRepo: null, git: con(url!, real!), cwd: "/w" }).catch((x) => x);
+      expect(e).toMatchObject({ codigo: 3, error: "sin_repo" });
+      expect(e.message).toMatch(/but port (2222|443) isn't one GitHub serves over SSH \(22, or 443 on ssh.github.com\)\./);
+      expect(e.message).toContain("Pass --repo owner/repo.");
+    }
+  });
+});

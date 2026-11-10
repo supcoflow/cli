@@ -5,17 +5,18 @@
 // Qué promete y qué no: «no se detectaron impedimentos» no es «se va a poder escribir». Un disco que se llena después, o
 // un cambio al mismo tiempo, no se pueden garantizar sin escribir. El guardado estricto, justo antes del POST, se queda.
 import path from "node:path";
+import { revisarCarpetaPrivada, type FsPrivada } from "./carpeta-privada.ts";
 import { mirarProteccionDeGit, rutaReal, type FsDeProteccion, type GitDeRuta, type Impedimento } from "./repo.ts";
 
 /** Lo que el prechequeo necesita saber del disco. Todo se ve SIN escribir; `estado` sigue los enlaces. */
 export type EstadoEnDisco = { existe: false } | { existe: true; tipo: "archivo" | "carpeta" | "otro"; propio: boolean };
-export type FsDelLugar = FsDeProteccion & {
+export type FsDelLugar = FsDeProteccion & FsPrivada & {
   estado(p: string): EstadoEnDisco;
   /** ¿Se puede leer (`leer`) o escribir y entrar (`escribir`: crear, renombrar y borrar adentro)? */
   puede(p: string, que: "leer" | "escribir"): boolean;
 };
 
-export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: GitDeRuta }): Promise<Impedimento[]> {
+export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: GitDeRuta; fuera?: () => string | null }): Promise<Impedimento[]> {
   const impedimentos: Impedimento[] = [];
   const dir = path.dirname(d.ruta);
   const nombre = path.basename(d.ruta);
@@ -46,6 +47,10 @@ export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: Git
     }
   }
 
+  // Bajo una carpeta compartida: que siga siendo de la persona, antes de leer nada de ahí.
+  const privada = revisarCarpetaPrivada(dir, d.fs);
+  if (privada !== null) impedimentos.push(privada);
+
   const archivo = d.fs.estado(path.join(real, nombre));
   if (archivo.existe) {
     if (archivo.tipo !== "archivo") impedimentos.push({ codigo: "archivo_no_comun", detalle: `${d.ruta} isn't a regular file.` });
@@ -59,7 +64,7 @@ export async function revisarElLugar(d: { ruta: string; fs: FsDelLugar; git: Git
     impedimentos.push({ codigo: "tmp_es_carpeta", detalle: `${tmp} is a folder: I remove that name before saving, and I can't remove a folder.` });
   }
 
-  const git = await mirarProteccionDeGit({ dir, archivos: [nombre, nombre + ".tmp"], fs: d.fs, git: d.git });
+  const git = await mirarProteccionDeGit({ dir, archivos: [nombre, nombre + ".tmp"], fs: d.fs, git: d.git, fuera: d.fuera });
   if (!git.protegido) impedimentos.push(git.impedimento);
   return impedimentos;
 }

@@ -47,17 +47,23 @@ take the repo from the folder's `origin`; `--repo owner/repo` picks it by hand.
 
 ### When the `origin` isn't a GitHub address
 
-The terminal only recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
-`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`) or
-another server, it never runs `ssh` or reads your SSH configuration (it could run programs of yours). You tell it
-once, in your own clone, which GitHub repo this is:
+The terminal recognizes `origin` when its host is exactly `github.com` (`https://github.com/o/r`,
+`git@github.com:o/r.git`, `ssh://git@github.com/o/r`). If yours is an SSH alias (`git@github-work:o/r.git`), it reads
+your `~/.ssh/config` (and the files it includes with a simple `Include`) **as plain text**: it looks for the
+`Host github-work` block and its `HostName`, and accepts the alias only if that is exactly `github.com` or
+`ssh.github.com`. It **never runs `ssh`** or anything else, and it ignores `Match` blocks entirely (a `Match ... exec`
+would run a program of yours): if the alias is only resolved by a `Match`, or the file can't be read with certainty
+(an `Include` with variables, `~user` or `[ ]`, a `%h` in the name, a file it can't read, quotes it can't close), it doesn't guess. A `*` in an `Include` skips hidden files, like `ssh` does, and an `Include` under a `Host` or `Match` that doesn't apply adds nothing. With a port in the URL
+(`ssh://git@alias:2222/o/r`) the port must be one GitHub serves over SSH (22, or 443 on `ssh.github.com`). When it can't
+tell, or `origin` is simply another server, the error says so, suggests `--repo owner/repo` and tells you once, in your
+own clone, which GitHub repo this is:
 
 ```bash
 git remote add supcoflow https://github.com/owner/repo.git   # it's never fetched
 ```
 
 A remote called `supcoflow` with those same strict forms ties the clone to that repo for every command. If `origin`
-is a GitHub address, `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
+is a GitHub address (including an alias your configuration says is GitHub), `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
 that read or write a file of the clone (`guide check`, `guide publish`, `install record`) only use this clone if it is
 that repo; otherwise they exit 3 saying what the clone is, without asking the engine. (`project create --repo` keeps
 creating or reusing the project; when this clone is not that repo it does so without reading or writing this clone's
@@ -324,7 +330,20 @@ it ignores the file and doesn't track it: the first time, the terminal creates a
 folder (only if there isn't one; it never edits yours), and then asks git (`git check-ignore`) about the file and its
 `.tmp`, for every repo that contains the written or the real path. A file that is already tracked or added to the index
 is refused with the exact `git rm --cached …` to run (the terminal never runs it or deletes anything of yours), and so
-is a missing or failing git. The same goes for every write or delete of `idempotencia.json`. `diagnose` and `test`
+is a missing or failing git. When git is what refuses (not for permissions or broken links), the message also names a folder outside any git repo to
+use instead, as a command you can paste: `XDG_CONFIG_HOME=/Users/Shared/supcoflow-501 supcoflow diagnose`. It is always a
+folder that **persists** and is **private** to you, never a temporary one (the saved request is what lets a repeat resume
+the same test instead of asking for another, and a cleaned temp folder would lose it). On macOS that is
+`/Users/Shared/supcoflow-<uid>` (the terminal creates it with `0700` when it saves); on Linux there is no such place
+outside your home that you can write without being root, so nothing is suggested and you keep the `git rm --cached …`
+advice or point `XDG_CONFIG_HOME` at a folder you choose. The suggested path is the real destination
+(`<folder>/supcoflow`, where the files go), is checked by its real path too, and is never under the same repo. Because a
+shared folder lets other users create names in it, before **every** read or write there (credentials, `pruebas.json`,
+`idempotencia.json`) the terminal checks that the folder under it is yours, with `0700`, not a link someone else made and
+not writable by others (also along the real path of a link of yours), the top-most shared folder above it is sticky, and the per-user folder under it is yours alone; if not, it reads and writes nothing (`diagnose` shows
+`carpeta_compartida_insegura` before you authorize; `test` exits 1 `prueba_no_guardada`). Keep the same `XDG_CONFIG_HOME` on the
+commands that follow (`test --wait` too); it also moves the credentials file, so your sign-in must come from the
+keychain or `SUPCOFLOW_TOKEN`. The git rules apply equally to every write or delete of `idempotencia.json`. `diagnose` and `test`
 check all this (and permissions, broken links and unreadable files) **before** you authorize, without writing
 anything: «no obstacle found» is a check, not a promise that the disk won't fill up later. The credentials don't use
 this exception: inside a repo they are still refused.

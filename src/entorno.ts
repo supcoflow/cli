@@ -29,12 +29,15 @@ import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
 import { almacenProtegido } from "./guardado/protegido.ts";
+import { almacenEnCarpetaPrivada } from "./guardado/carpeta-privada.ts";
+import { candidatasFueraDelRepo, carpetaFueraDeUnRepo, usuarioParaLaCarpeta } from "./guardado/fuera-del-repo.ts";
 import { revisarElLugar, type FsDelLugar } from "./guardado/lugar.ts";
 import { almacenDeLlavero, type Correr } from "./guardado/llavero.ts";
 import { crearGuardaDeSecretos } from "./secreto-a-archivo.ts";
 import { crearRegistroDeIdempotencia, type RegistroDeIdempotencia } from "./idempotencia.ts";
 import { crearRegistroDePruebas } from "./pruebas-guardadas.ts";
 import type { Git } from "./repo-local.ts";
+import { hostnameDeAlias, lectorReal } from "./ssh-config.ts";
 import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
 
@@ -89,6 +92,20 @@ export const fsReal: FsMinimo = {
 // enlace roto es «no existe» para él, y `existe` (que es `lstat`) lo distingue.
 export const fsDelLugarReal: FsDelLugar = {
   ...fsReal,
+  ficha(p, seguirEnlaces) {
+    try {
+      const st = seguirEnlaces ? statSync(p) : lstatSync(p);
+      return {
+        existe: true,
+        tipo: st.isSymbolicLink() ? "enlace" : st.isDirectory() ? "carpeta" : st.isFile() ? "archivo" : "otro",
+        uid: typeof process.getuid === "function" ? st.uid : null,
+        modo: st.mode & 0o7777,
+      };
+    } catch {
+      return { existe: false };
+    }
+  },
+  miUid: () => (typeof process.getuid === "function" ? process.getuid() : null),
   estado(p) {
     try {
       const st = statSync(p);
@@ -269,7 +286,11 @@ const gitConPlazo = (plazoMs: number): Git => (args, cwd) =>
     });
   });
 
-export const gitReal: Git = gitConPlazo(5_000);
+// El git real sabe resolver un `origin` con alias de SSH (`git@github-gf0:o/r`) leyendo `~/.ssh/config` como TEXTO (nunca
+// corre `ssh` ni nada); el resto de los `Git` (el de la guía, los de los tests) no.
+export const gitReal: Git = Object.assign(gitConPlazo(5_000), {
+  resolverAlias: async (alias: string) => hostnameDeAlias(alias, lectorReal, homedir()),
+});
 
 // El commit y la rama que la terminal DECLARA al subir la guía: 3 segundos (no 5) porque esto es un extra que nunca
 // debe hacer esperar a nadie.
@@ -478,9 +499,12 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   // `||` y no `??`: un XDG_CONFIG_HOME vacío daría una ruta RELATIVA, que cae donde esté parado el
   // comando; la especificación de XDG lo trata como no definido.
   const rutaDelArchivo = join(env.XDG_CONFIG_HOME || join(homedir(), ".config"), "supcoflow", "credenciales.json");
+  // Si la carpeta cuelga de una compartida (XDG_CONFIG_HOME=/Users/Shared/supcoflow-501), antes de CADA lectura y escritura
+  // se comprueba que siga siendo sólo de la persona: sin enlaces ni nombres ocupados por otro. Fuera de eso no cambia nada.
+  const enCarpetaPrivada = (base: Almacen, ruta: string) => almacenEnCarpetaPrivada(base, { ruta, fs: fsDelLugarReal });
   const llavero = sinLlavero ? null : almacenDeLlavero(process.platform, correrReal);
   const guardado = crearGuardado({
-    env, llavero, archivo: almacenDeArchivo(rutaDelArchivo, fsReal), rutaDelArchivo, fs: fsReal, ahora: Date.now, avisar,
+    env, llavero, archivo: enCarpetaPrivada(almacenDeArchivo(rutaDelArchivo, fsReal), rutaDelArchivo), rutaDelArchivo, fs: fsReal, ahora: Date.now, avisar,
   });
 
   // Al lado de las credenciales y con el mismo almacén (carpeta 0700, archivo 0600, `.tmp` en
@@ -488,7 +512,10 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   const rutaDeIdempotencia = join(dirname(rutaDelArchivo), "idempotencia.json");
   // Estos dos registros (y sólo estos) pueden vivir bajo una carpeta personal que es un repo de git: el almacén
   // protegido comprueba con git, antes de cada escritura y cada borrado, que los deja afuera del repo.
-  const protegido = (ruta: string) => almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal });
+  // `fuera`: si git no deja guardar ahí, el aviso propone una carpeta que no esté en ningún repo (XDG_CONFIG_HOME bajo la
+  // carpeta personal no sirve: cae en el mismo repo).
+  const fuera = () => carpetaFueraDeUnRepo({ fs: fsDelLugarReal, candidatos: candidatasFueraDelRepo(), usuario: usuarioParaLaCarpeta() });
+  const protegido = (ruta: string) => enCarpetaPrivada(almacenProtegido(almacenDeArchivo(ruta, fsReal), { ruta, fs: fsReal, git: gitReal, fuera }), ruta);
   const idempotencia = crearRegistroDeIdempotencia({
     origen: api.origin,
     almacen: protegido(rutaDeIdempotencia),
@@ -501,7 +528,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
   const rutaDePruebas = join(dirname(rutaDelArchivo), "pruebas.json");
   const pruebas = crearRegistroDePruebas({
     origen: api.origin, almacen: protegido(rutaDePruebas), rutaDelArchivo: rutaDePruebas, ahora: Date.now, avisar,
-    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal }),
+    revisarElLugar: () => revisarElLugar({ ruta: rutaDePruebas, fs: fsDelLugarReal, git: gitReal, fuera }),
   });
   const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
   const cwd = process.cwd();
