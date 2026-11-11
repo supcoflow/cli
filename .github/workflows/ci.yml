@@ -14,7 +14,8 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # The suite exercises macOS-only behavior (keychain, per-user temp roots), so it runs on macOS.
+    runs-on: macos-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
