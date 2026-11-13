@@ -320,7 +320,7 @@ export const DESCRIPCION: {
         "--wait: follows the last test up to 90 s; exits 5 while it runs, 0 with the issue (or saved), 4 if it needs a look (with the link to the inbox); the charge comes out as it is (pending is never 0)",
         "--test-id prb_…: with --wait, follows that test instead of the last saved one",
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
-        "--dry-run: says what it would do (project, ceiling, balance, policy) without requesting anything that writes",
+        "--dry-run: says what it would do (project, ceiling, policy) without requesting anything that writes",
         "--json",
       ],
       ejemplos: ["supcoflow test --json", "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --wait --json", "supcoflow test --dry-run --authorize-spend --ceiling 2 --expect-policy investigate --json"],
