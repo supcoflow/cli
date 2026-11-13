@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.3
+
+- `supcoflow test` and `diagnose` no longer print a «monthly balance» in their text: AI accounts are per project, so a team-wide monthly figure no longer applies. The JSON fields are unchanged.
+
 ## 0.10.2
 
 - An `origin` that uses an SSH alias (for example `git@github-gf0:owner/repo`) is now recognized as GitHub. The alias is resolved by reading `~/.ssh/config` as plain text; `ssh` is never run.
