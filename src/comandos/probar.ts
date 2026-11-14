@@ -70,7 +70,6 @@ const PIDEN_UNA_PERSONA = new Set([
 ]);
 
 const usd = (n: number) => `US$ ${n.toFixed(2)}`;
-const usdONull = (n: number | null) => (n === null ? "unmeasured" : usd(n));
 
 // La política como se dice en inglés; a la API siempre viaja la suya (`relevar` / `guardar`).
 const POLITICA_EN_INGLES: Record<string, string> = { relevar: "investigate", guardar: "save" };
@@ -191,7 +190,7 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
     ...datosDeLaMaquina(revision),
     ...datosDelIntentoPendiente(revision),
   };
-  const resumen = `Monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}; a test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
+  const resumen = `A test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
   const motivos = [
     ...prueba.filter((x) => !x.ok).map((x) => x.mensaje),
     ...(buenos < total ? [`the installation isn't complete (${buenos} of ${total})`] : []),
@@ -275,7 +274,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const datos = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const gasto = g.politica === "guardar"
       ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
-      : `A test runs an investigation that spends up to ${usd(g.techoUsd)} (monthly balance ${usdONull(g.saldoUsd)} of ${usdONull(g.topeUsd)}).`;
+      : `A test runs an investigation that spends up to ${usd(g.techoUsd)}.`;
     if (flags.dryRun) {
       // Lo guardado se mira sólo para decir qué haría; si no se puede leer, el dry-run igual contesta.
       let pendiente: boolean | null = null;

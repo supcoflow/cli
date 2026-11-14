@@ -459,7 +459,7 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     expect(r.json).toMatchObject({ ok: false, error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar" });
     expect(r.texto).toContain("`supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`");
     expect(r.texto).toContain("US$ 2.00");
-    expect(r.texto).toContain("monthly balance US$ 7.50 of US$ 10.00");
+    expect(r.texto).not.toMatch(/monthly balance/i);
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
   });
