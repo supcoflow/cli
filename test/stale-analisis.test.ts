@@ -189,6 +189,12 @@ describe("avisosDelCambio: la cobertura que el cambio quitó (el mapa de la base
     const r = avisosDelCambio(ahora, [{ ruta: `${CARPETA}/billing.md`, estado: "D" }], base);
     expect(r.avisos).toMatchObject([{ tipo: "cobertura_quitada", severidad: "nota" }]);
   });
+  it("una cabecera rota ahora no es «cobertura quitada» (ya lo dice mapa_roto)", () => {
+    const ahora = leerElMapa(CARPETA, [{ nombre: "billing.md", texto: "---\ntitle: billing\nsources: [app/billing/**\n---\n## A\n" }, doc("payments.md", ["app/payments/**"])]);
+    expect(ahora[0]!.errores.length).toBeGreaterThan(0);
+    const r = avisosDelCambio(ahora, M(["app/billing/invoice.ts", `${CARPETA}/billing.md`]), base);
+    expect(r.avisos.map((a) => a.tipo)).not.toContain("cobertura_quitada");
+  });
   it("un patrón movido a otro documento (o un documento renombrado) no quita cobertura", () => {
     const ahora = leerElMapa(CARPETA, [doc("cobros.md", ["app/billing/**"]), doc("payments.md", ["app/payments/**"])]);
     const r = avisosDelCambio(ahora, [{ ruta: "app/billing/invoice.ts", estado: "M" }, { ruta: `${CARPETA}/billing.md`, estado: "D" }, { ruta: `${CARPETA}/cobros.md`, estado: "A" }], base);

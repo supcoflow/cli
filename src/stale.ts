@@ -201,7 +201,8 @@ export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: read
 
   const cubierto = (ruta: string) => delMapa.some((d) => d.sources.some((p) => coincide(p, ruta)));
   const fuentesDeAhora = new Set(delMapa.flatMap((d) => d.sources));
-  for (const d of mapaBase.filter((b) => b.errores.length === 0)) {
+  const rotosAhora = new Set(mapa.filter((m) => m.errores.length > 0).map((m) => m.ruta));
+  for (const d of mapaBase.filter((b) => b.errores.length === 0 && !rotosAhora.has(b.ruta))) {
     const quitados = d.sources.filter((p) => !fuentesDeAhora.has(p));
     if (quitados.length === 0) continue;
     const borrado = !mapa.some((m) => m.ruta === d.ruta);
