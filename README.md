@@ -180,7 +180,8 @@ required: before that, `diagnose` says «N of 7» as always. `chat on` and `test
 ## The guide
 
 The guide tells the chat what each screen of your product does. It lives in the repo, in
-`.supcoflow/guide.md` (at the root). The flow, in this order:
+`.supcoflow/guide.md` (at the root), or in the folder `.supcoflow/knowledge/` (see «The guide as a folder», which
+governs when it has `.md` documents). The flow, in this order:
 
 1. `supcoflow guide check`: checks it against the engine without publishing anything (if it is badly formed it exits 3 with the line of each error).
 2. `supcoflow guide publish`: uploads the file directly and it becomes the active guide. It also sends your clone's
