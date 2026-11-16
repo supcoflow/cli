@@ -30,11 +30,12 @@ the English ones.
 | `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it gives you a link and you confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
-| `supcoflow guide check` | Checks `.supcoflow/guide.md` against the engine without publishing anything. |
-| `supcoflow guide publish` | Uploads `.supcoflow/guide.md` directly (with the commit and branch your clone declares, not verified in GitHub). `--from-github` verifies against the main branch instead of uploading the file. |
+| `supcoflow guide check` | Checks the guide against the engine without publishing anything: the folder `.supcoflow/knowledge/` if it has `.md` documents, otherwise `.supcoflow/guide.md`. |
+| `supcoflow guide publish` | Uploads the guide directly (the folder as one version, or `.supcoflow/guide.md`), with the commit and branch your clone declares, not verified in GitHub. `--from-github` verifies against the main branch instead of uploading. |
 | `supcoflow guide show` | Shows the active guide, where it comes from, which file it was read from and whether the branch is still up to date. |
 | `supcoflow guide use --source repo\|agent` | Chooses which guide is active. |
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
+| `supcoflow guide stale --base origin/main` | Warns when a change touches code a document explains and doesn't touch the document. No AI, no engine, no sign-in (see «Keep the folder up to date»). |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
 | `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
 | `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
@@ -64,7 +65,7 @@ git remote add supcoflow https://github.com/owner/repo.git   # it's never fetche
 
 A remote called `supcoflow` with those same strict forms ties the clone to that repo for every command. If `origin`
 is a GitHub address (including an alias your configuration says is GitHub), `origin` wins. The error says the exact command to run. With `--repo owner/repo`, the commands
-that read or write a file of the clone (`guide check`, `guide publish`, `install record`) only use this clone if it is
+that read or write a file of the clone (`guide check`, `guide publish`, `install record`; `guide stale` takes no `--repo`: it reads the clone you stand in) only use this clone if it is
 that repo; otherwise they exit 3 saying what the clone is, without asking the engine. (`project create --repo` keeps
 creating or reusing the project; when this clone is not that repo it does so without reading or writing this clone's
 `.supcoflow/proyecto.json`, and when it is that repo it reads and records the file as usual.)
@@ -202,6 +203,44 @@ our agent. All of them take the repo from the `origin` (or a `supcoflow` remote,
 (with `check` and `publish`, if this clone isn't that repo it exits 3 `falta_guia` saying what the clone is: the guide
 is read from the file); `check`, `publish` and `use` accept `--dry-run`; `--from-github` is only for `publish`.
 
+### The guide as a folder: `.supcoflow/knowledge/`
+
+Instead of one file, the guide can be a folder with one `.md` document per area of the product. Every `.md` directly
+inside `.supcoflow/knowledge/` is a document, and the whole folder at one commit is **one version** of the guide: the
+engine joins their sections, in file-name order, into the same shape a single file gives, so the chat reads the same
+thing. Each document uses the labels of the format below and may open with a header:
+
+```markdown
+---
+title: Billing
+summary: Invoices, payments and refunds.
+sources:                      ← globs of the code this document explains (what `guide stale` crosses with a change)
+  - app/billing/**
+  - src/billing/**
+---
+## Invoices
+What it's for: See and pay the month's invoices.
+What users can do: Download the PDF and pay by card.
+```
+
+The header allows only `title` (≤ 120 characters), `summary` (≤ 600) and `sources` (≤ 50 entries of ≤ 200; in a block
+list, in one line `sources: [a/**, "b/**"]` or as a single value). A misspelled key (`source:`) is an error with its
+line, never ignored.
+
+- **Precedence.** If the folder has at least one `.md`, it governs: `guide.md` and `guia.md` are ignored (the terminal
+  says so). Without the folder, or with a folder with no `.md`, everything works as before with `guide.md`.
+- **Which files.** Only `.md` files directly inside the folder (not `.MD`, `.txt` or subfolders). A `.md` whose name
+  isn't valid (more than 200 characters, a `/`, `\` or a control character) is **rejected by name**: it is never
+  skipped and it never makes the terminal fall back to `guide.md`. A `.md` that is a symlink is refused too.
+- **The limits count for the whole folder:** 64 KB and 60 sections in total (and at most 60 documents), not per document.
+- `guide check` prints a problem per document (`documento` in each `errores` item, and «billing.md, line 4: …» in the
+  text). It also **warns, without failing** (exit 0, `nombres_repetidos` in the JSON), when a section name is repeated
+  across documents, comparing without case or accents like the chat's search does: that search takes only the first
+  three matches of a name, so give each section its own name.
+- `guide publish` uploads the documents as one version. With `--from-github` it sends the fingerprint of the whole set
+  (names and contents); the terminal and the engine compute it the same way, byte for byte, so it matches the commit on
+  the main branch when the folder is pushed.
+
 The format of `.supcoflow/guide.md`:
 
 ```markdown
@@ -222,6 +261,85 @@ Where: /invoices                                                ← optional; th
   previous field (joined with a space).
 - Text before the first `## ` that isn't the `# ` title → error. A repeated label in a section → error. A line with
   `<` or `>` → error. More than 64 KB → `guia_muy_grande`.
+
+### Keep the folder up to date: `guide stale`
+
+```bash
+supcoflow guide stale --base origin/main
+```
+
+It answers one question: «did this change touch code that a document explains, without touching that document?». It
+uses no AI, makes no engine call and needs no sign-in: it only reads git and the clone. It diffs the merge base with
+`--base` against what is on disk now (committed, staged and untracked files, so an assistant can run it before the
+commit too) and crosses the changed files with the `sources` of each document's header. A pattern with no wildcard
+(`app/billing`) covers that file or everything inside that folder; `*` and `?` don't cross a `/`, `**` does, and
+`{a,b}` and `[abc]` work.
+
+Each warning says what to do, and the JSON gives them apart with a `tipo`:
+
+| `tipo` | It means |
+|---|---|
+| `documento_sin_tocar` | You changed code a document's `sources` cover and didn't change that document (it also says which documents you did change). A deleted or moved file counts as a change. |
+| `cambio_cosmetico` | The document changed only in whitespace, which doesn't update what it says. |
+| `fuente_sin_archivos` | A `sources` pattern matches no file in the repo: the code was moved or deleted. Point it where it lives now. |
+| `mapa_vacio` | There are no documents, or none declares `sources`: nothing to compare against. |
+| `mapa_roto` | A header (or the folder) can't be read: the line and the reason come with it. |
+| `no_se_pudo_comparar` | The base isn't in this clone, or the clone is shallow. It says it **could not compare** and suggests `fetch-depth: 0`. It never says «Nothing to warn» when it couldn't look. |
+
+New files that no `sources` covers come apart as `notas` (`fuera_del_mapa`): they are information (a test file doesn't
+need a document), they are in `notas` and not in `avisos`, and they never fail `--strict`. If users can see them, add
+their path to the `sources` of the document that explains them.
+
+**It exits 0 even with warnings** (it only warns). With `--strict` it exits 4 `guia_desactualizada` if there is any
+warning, including `no_se_pudo_comparar`. `--json` prints `{ ok, comparado, base, base_commit, documentos, cambiados,
+cubiertos, sin_cubrir, avisos, notas }`.
+
+What it can't do: it checks what was touched, not whether the text is true or enough. A document edited with a wrong
+sentence stays green. It reports what the map covers; reading the change is still somebody's job.
+
+#### In CI (GitHub Actions)
+
+The checkout must bring the whole history: with the default shallow copy the base isn't there and the detector can't
+compare (it says so instead of staying quiet).
+
+```yaml
+# .github/workflows/guide.yml
+name: guide
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths: [".supcoflow/knowledge/**"]
+
+jobs:
+  stale:                                   # warns on the PR; add --strict to make it fail
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                   # without this the base isn't in the clone
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npx supcoflow@0.11.0 guide stale --base origin/${{ github.base_ref }}
+
+  publish:                                 # only for a project of your own (it uses a personal key)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npx supcoflow@0.11.0 guide publish --from-github --json
+        env:
+          SUPCOFLOW_TOKEN: ${{ secrets.SUPCOFLOW_TOKEN }}
+```
+
+`publish --from-github` sends the fingerprint of the folder at the merge commit and the engine compares it with the
+main branch's. If another merge landed in between, the older run exits 5 `guia_distinta`: re-run it. The key is a
+personal key: use it in CI only in a project of your own.
 
 ## Put the chat in the app
 
@@ -370,7 +488,7 @@ Made to be read by a program, not only by a person:
 - **No questions without an interactive terminal** (or with `--json`): if something is missing, it exits 3 saying which
   flag to use. `supcoflow login` without a terminal exits 3 and points you to the two-step path.
 - **`--dry-run`** wherever it can be simulated (`login`, `login --start`, `logout`, `repo connect --start`,
-  `project create`, `guide check`, `guide publish`, `guide use`, `install record`, `test`). `login --wait --dry-run`
+  `project create`, `guide check`, `guide publish`, `guide use`, `install record`, `test`; `guide stale` only reads, so it has none). `login --wait --dry-run`
   exits 3: polling consumes the code and there is no way to simulate it.
 
 | Code | It means |

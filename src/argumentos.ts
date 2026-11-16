@@ -11,6 +11,8 @@ export type Flags = {
   theme: string[];
   source: string | null;
   fromGithub: boolean;
+  // `guide stale`: la rama contra la que se compara (`--base`) y si un aviso hace salir con 4 (`--strict`).
+  base: string | null; strict: boolean;
   skill: string | null; app: string | null;
   // T8: `--file` se puede repetir sólo en `install record` (una interfaz propia vive en varios archivos); `file` es el primero.
   files: string[]; shape: string | null;
@@ -24,7 +26,7 @@ export const COMANDOS_COMPUESTOS = [
   "repo connect", "project create", "project show",
   "chat on", "chat off", "chat brand", "chat logo", "sites add", "sites remove",
   "data set", "policy set", "keys create", "keys list", "keys revoke",
-  "guide check", "guide publish", "guide show", "guide use", "guide versions",
+  "guide check", "guide publish", "guide show", "guide use", "guide versions", "guide stale",
   "install record",
   "agents show", "agents set-key", "agents check", "agents remove", "agents configure",
 ] as const;
@@ -33,12 +35,12 @@ export const COMANDOS_COMPUESTOS = [
 const PRIMERAS_PALABRAS = new Set([...COMANDOS_COMPUESTOS, ...Object.keys(COMANDOS_VIEJOS)].filter((c) => c.includes(" ")).map((c) => c.split(" ")[0]));
 const FLAGS_CON_VALOR = [
   "repo", "install", "test", "site", "title", "greeting", "file", "allow", "mode", "name", "save-to", "id", "source", "skill", "app",
-  "message", "test-id", "ceiling", "expect-policy", "shape",
+  "message", "test-id", "ceiling", "expect-policy", "shape", "base",
   "agent", "from-env", "provider", "option", "data-retention",
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
-const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend"] as const;
+const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend", "strict"] as const;
 
 // El flag que el token nombró, ya llevado a su nombre canónico (el viejo y el nuevo cuentan como el mismo).
 const canonico = (nombre: string) => FLAGS_VIEJOS[nombre] ?? nombre;
@@ -130,6 +132,8 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       id: un("id"),
       source: un("source"),
       fromGithub: hay("from-github"),
+      base: un("base"),
+      strict: hay("strict"),
       skill: un("skill"),
       app: un("app"),
       files: archivos,

@@ -1,0 +1,94 @@
+{
+  "casos": [
+    {
+      "nombre": "un documento",
+      "documentos": [
+        {
+          "nombre": "a.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "042582e924415bfe748813f73ee399f30f360463ba5e58fe99753fe91d12df5b"
+    },
+    {
+      "nombre": "dos documentos, ya en orden",
+      "documentos": [
+        {
+          "nombre": "a.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        },
+        {
+          "nombre": "b.md",
+          "texto": "---\ntitle: B\nsources:\n  - app/b/**\n---\n## B\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "ab56bebc7e8dec5ce5646dbbdd34836c4996314dcada2466fbc24db9e291a06b"
+    },
+    {
+      "nombre": "dos documentos, en otro orden de entrada: la misma huella",
+      "documentos": [
+        {
+          "nombre": "b.md",
+          "texto": "---\ntitle: B\nsources:\n  - app/b/**\n---\n## B\nWhat it's for: x\nWhat users can do: y\n"
+        },
+        {
+          "nombre": "a.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "ab56bebc7e8dec5ce5646dbbdd34836c4996314dcada2466fbc24db9e291a06b"
+    },
+    {
+      "nombre": "con \\r\\n y BOM: la misma huella que el de arriba",
+      "documentos": [
+        {
+          "nombre": "a.md",
+          "texto": "﻿## A\r\nWhat it's for: x\r\nWhat users can do: y\r\n"
+        },
+        {
+          "nombre": "b.md",
+          "texto": "---\r\ntitle: B\r\nsources:\r\n  - app/b/**\r\n---\r\n## B\r\nWhat it's for: x\r\nWhat users can do: y\r\n"
+        }
+      ],
+      "huella": "ab56bebc7e8dec5ce5646dbbdd34836c4996314dcada2466fbc24db9e291a06b"
+    },
+    {
+      "nombre": "mismo texto, otro nombre: otra huella",
+      "documentos": [
+        {
+          "nombre": "z.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        },
+        {
+          "nombre": "b.md",
+          "texto": "---\ntitle: B\nsources:\n  - app/b/**\n---\n## B\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "e1167d732b8afa0fcf8016f777d5428af9c55a40b8b6563c635f754271b57fee"
+    },
+    {
+      "nombre": "mayúscula antes que minúscula (unidades de código, no el idioma)",
+      "documentos": [
+        {
+          "nombre": "b.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        },
+        {
+          "nombre": "B.md",
+          "texto": "---\ntitle: B\nsources:\n  - app/b/**\n---\n## B\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "8ceec0443f58e8c8036128cb574a589dbd55b24955051b21704cdb2fc0d75628"
+    },
+    {
+      "nombre": "con acentos en el nombre",
+      "documentos": [
+        {
+          "nombre": "facturación.md",
+          "texto": "## A\nWhat it's for: x\nWhat users can do: y\n"
+        }
+      ],
+      "huella": "41d77e1f649e9513a330e83e7d107b4d2375cdf856455ebd4783fbb27ec794b9"
+    }
+  ]
+}

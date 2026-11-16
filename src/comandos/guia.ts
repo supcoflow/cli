@@ -1,20 +1,22 @@
 // src/comandos/guia.ts
 // `guide check|publish|show|use|versions` (bloque 5 y 0.8.0): la guía del producto que vive en el repo del cliente
-// (`.supcoflow/guide.md`; el nombre viejo `guia.md` se lee sólo si `guide.md` no existe). La terminal NO decide qué
-// es una guía buena —eso lo decide el parser del motor—; lee el archivo, manda UN pedido y traduce la respuesta a
-// los códigos de salida del contrato.
+// (`.supcoflow/guide.md`; el nombre viejo `guia.md` se lee sólo si `guide.md` no existe) o, desde la guía MVP 2/3, la
+// carpeta `.supcoflow/knowledge/` (un `.md` por área, que RIGE sobre el archivo si tiene al menos uno). La terminal NO
+// decide qué es una guía buena —eso lo decide el parser del motor—; lee el archivo o la carpeta, manda UN pedido y
+// traduce la respuesta a los códigos de salida del contrato.
 import path from "node:path";
 import type { CuerpoDePublicar, elegirOrigen, leerGuia, leerVersionesDeLaGuia, publicarGuia, Respuesta, revisarGuia, Fetch } from "../api.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
-import { huellaDeGuia, MAX_BYTES_DE_LA_GUIA, RUTA_DE_LA_GUIA, RUTA_VIEJA_DE_LA_GUIA } from "../guia.ts";
+import { huellaDeConjunto, huellaDeGuia, MAX_BYTES_DE_LA_GUIA, RUTA_DE_LA_CARPETA, RUTA_DE_LA_GUIA, RUTA_VIEJA_DE_LA_GUIA, type DocumentoDeLaGuia } from "../guia.ts";
 import { NO_LEIDO } from "../lectura.ts";
+import { cadena, limpio } from "../limpio.ts";
 import { repoPedido, type Git } from "../repo-local.ts";
+import { leerLaCarpeta, nombresRepetidos, type DepsDeCarpeta, type NombreRepetido } from "./carpeta-de-la-guia.ts";
 import { desenlace, fallo, rutaDe } from "./configurar.ts";
 import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-repo.ts";
 
-export type DepsDeGuia = DepsDelProyectoDelRepo & {
-  leerArchivoChico(p: string, tope: number): { bytes: Uint8Array } | { error: string };
+export type DepsDeGuia = DepsDelProyectoDelRepo & DepsDeCarpeta & {
   // Las funciones de `api.ts` piden el `fetch`; se inyecta acá para que el test no toque la red.
   fetch: Fetch;
   // El git de lo que la terminal DECLARA (commit y rama): aparte de `git` para poder darle un plazo corto y para que
@@ -24,12 +26,8 @@ export type DepsDeGuia = DepsDelProyectoDelRepo & {
   versiones: typeof leerVersionesDeLaGuia;
 };
 
-// Texto que viene del motor (o del repo, vía el motor) y sale a la terminal de una persona: sin secretos y sin
-// caracteres de control (C0, DEL, C1), que un ESC movería el cursor. Texto y JSON salen del mismo texto ya limpio.
-// Primero se quita el control y recién después se tapan los secretos: al revés, una clave partida por un
-// control (U+0085, por ejemplo) quedaba entera al quitarlo y se imprimía sin tapar.
-const limpio = (t: string) => taparSecretos(t.replace(/[\u0000-\u001f\u007f-\u009f]/g, ""));
-const cadena = (v: unknown): string => (typeof v === "string" ? limpio(v) : "");
+// Texto que viene del motor (o del repo, vía el motor) y sale a la terminal de una persona: `limpio` (sin secretos ni
+// caracteres de control). Texto y JSON salen del mismo texto ya limpio.
 const corto = (commit: unknown) => cadena(commit).slice(0, 7);
 const secciones = (n: unknown) => (typeof n === "number" ? `${n} ${n === 1 ? "section" : "sections"}` : "sections not counted");
 const NOMBRE_DEL_ORIGEN = { repo: "the repo's", agente: "our agent's" } as const;
@@ -39,13 +37,20 @@ const COMO_SE_PIDE = { repo: "repo", agente: "agent" } as const;
 const AVISOS_DEL_NOMBRE = {
   nombre_viejo: `\`${RUTA_VIEJA_DE_LA_GUIA}\` is the old name: rename it to \`guide.md\`.`,
   nombre_viejo_ignorado: `Both \`${RUTA_DE_LA_GUIA}\` and \`${RUTA_VIEJA_DE_LA_GUIA}\` exist: I use guide.md and ignore guia.md.`,
+  archivo_ignorado_por_la_carpeta: `\`${RUTA_DE_LA_CARPETA}/\` governs the guide: ${RUTA_DE_LA_GUIA} (or the old guia.md) exists and is ignored.`,
 } as const;
 type AvisoDelNombre = keyof typeof AVISOS_DEL_NOMBRE;
 
-type Leida = { ok: true; texto: string; raiz: string; ruta: string; aviso: AvisoDelNombre | null };
+// Un archivo (`texto`) o la carpeta (`documentos`): la carpeta, si tiene al menos un `.md`, rige sobre el archivo.
+type Leida = { ok: true; raiz: string; ruta: string; aviso: AvisoDelNombre | null } & (
+  | { carpeta: false; texto: string }
+  | { carpeta: true; documentos: DocumentoDeLaGuia[]; repetidos: NombreRepetido[] }
+);
 
-// ─── El archivo local ───
+// ─── El archivo o la carpeta local ───
 // Se busca en la raíz de ESTE clon, nunca en el cwd: parado en una subcarpeta sigue siendo la guía del repo.
+// Primero la carpeta `.supcoflow/knowledge/` (como el motor al leer de GitHub): con al menos un `.md` directo es la guía
+// y `guide.md`/`guia.md` sólo se miran para avisar que se ignoran. Sin carpeta, todo sigue como antes:
 // Con `--repo` y sin clon de ese repo no hay dónde leerla (publicar lee la rama, pero la huella sale del archivo).
 // Se lee `guide.md`; SÓLO si no existe se lee `guia.md` (si `guide.md` existe y no se puede leer, o no valida, es un
 // error: nunca motivo para leer el viejo). Si están los dos manda `guide.md` y se avisa que el otro se ignora.
@@ -58,7 +63,15 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
     return { ok: false, resultado: resultadoDeFallo(e) };
   }
   if (raiz === null) {
-    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${sinClon ?? "I don't have that repo's clone here."} The guide is read from ${RUTA_DE_LA_GUIA} in the repo's clone: stand in it.`) };
+    return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${sinClon ?? "I don't have that repo's clone here."} The guide is read from ${RUTA_DE_LA_CARPETA}/ or ${RUTA_DE_LA_GUIA} in the repo's clone: stand in it.`) };
+  }
+  const carpeta = leerLaCarpeta(d, raiz);
+  if (carpeta.tipo === "error") return { ok: false, resultado: carpeta.resultado };
+  if (carpeta.tipo === "carpeta") {
+    return {
+      ok: true, carpeta: true, raiz, ruta: RUTA_DE_LA_CARPETA, documentos: carpeta.documentos, repetidos: nombresRepetidos(carpeta.documentos),
+      aviso: carpeta.archivoIgnorado ? "archivo_ignorado_por_la_carpeta" : null,
+    };
   }
   let ruta = RUTA_DE_LA_GUIA;
   let aviso: AvisoDelNombre | null = null;
@@ -66,7 +79,7 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
   if ("error" in leido && leido.error === NO_LEIDO.noExiste) {
     const vieja = d.leerArchivoChico(path.join(raiz, RUTA_VIEJA_DE_LA_GUIA), MAX_BYTES_DE_LA_GUIA);
     if ("error" in vieja && vieja.error === NO_LEIDO.noExiste) {
-      return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${RUTA_DE_LA_GUIA} is missing in the repo: write it (one section per screen) and run again.`) };
+      return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "falta_guia", `${RUTA_DE_LA_GUIA} is missing in the repo (and ${RUTA_DE_LA_CARPETA}/ has no .md documents): write it (one section per screen) and run again.`) };
     }
     ruta = RUTA_VIEJA_DE_LA_GUIA;
     aviso = "nombre_viejo";
@@ -83,17 +96,31 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
   try {
     // ignoreBOM: el BOM se CONSERVA en el texto; quitarlo es regla de la huella (`huellaDeGuia`), no de la lectura.
     // fatal: un byte inválido no se reemplaza en silencio, porque la huella de GitHub no coincidiría nunca.
-    return { ok: true, raiz, ruta, aviso, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
+    return { ok: true, carpeta: false, raiz, ruta, aviso, texto: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(leido.bytes) };
   } catch {
     return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "guia_ilegible", `${ruta} isn't valid UTF-8.`) };
   }
 }
 
-// El aviso del nombre viaja en el JSON (`aviso`) y como última línea del texto, en lo que salió bien.
-function conAviso(r: Resultado, aviso: AvisoDelNombre | null): Resultado {
+// El aviso del nombre viaja en el JSON (`aviso`) y como última línea del texto, en lo que salió bien. Los nombres de
+// sección repetidos entre documentos también (`nombres_repetidos`): son un aviso, nunca un fallo.
+function conAviso(r: Resultado, g: Pick<Leida, "aviso"> & { repetidos?: NombreRepetido[] }): Resultado {
+  if (r.codigo !== SALIDA.ok) return r;
+  let salida = r;
   // Si el motor ya dijo el suyo (por GitHub lee el repo él mismo, en un SHA), manda ése.
-  if (aviso === null || r.codigo !== SALIDA.ok || "aviso" in r.json) return r;
-  return { ...r, json: { ...r.json, aviso }, texto: `${r.texto}\n${AVISOS_DEL_NOMBRE[aviso]}` };
+  if (g.aviso !== null && !("aviso" in r.json)) {
+    salida = { ...salida, json: { ...salida.json, aviso: g.aviso }, texto: `${salida.texto}\n${AVISOS_DEL_NOMBRE[g.aviso]}` };
+  }
+  const repetidos = g.repetidos ?? [];
+  if (repetidos.length > 0) {
+    const lineas = repetidos.map((x) => `Warning: the section name «${limpio(x.nombre)}» is in ${x.documentos.map(limpio).join(" and ")}: the chat's search takes only the first three matches of a name, so give each section its own name.`);
+    salida = {
+      ...salida,
+      json: { ...salida.json, nombres_repetidos: repetidos.map((x) => ({ nombre: limpio(x.nombre), documentos: x.documentos.map(limpio) })) },
+      texto: [salida.texto, ...lineas].join("\n"),
+    };
+  }
+  return salida;
 }
 
 // ─── El desenlace propio de la guía, encima del de configurar ───
@@ -119,32 +146,42 @@ function desenlaceDeGuia(r: Respuesta, ok: (cuerpo: Record<string, unknown>) => 
     case "sin_guia_del_agente":
       return con(SALIDA.haceFaltaUnaPersona);
     case "guia_mal_armada": {
-      const errores = Array.isArray(c.errores) ? c.errores : [];
-      const lineas = errores.map((e) => {
-        const x = (e ?? {}) as { linea?: unknown; motivo?: unknown };
-        return `line ${typeof x.linea === "number" ? x.linea : "?"}: ${cadena(x.motivo)}`;
-      });
-      return con(SALIDA.entradaInvalida, { errores: errores.map((e) => { const x = (e ?? {}) as { linea?: unknown; motivo?: unknown }; return { linea: x.linea ?? null, motivo: taparSecretos(typeof x.motivo === "string" ? x.motivo : "") }; }) },
-        [`${ruta} is badly formed:`, ...lineas].join("\n"));
+      const errores = (Array.isArray(c.errores) ? c.errores : []).map((e) => (e ?? {}) as { linea?: unknown; motivo?: unknown; documento?: unknown });
+      const lineas = errores.map((x) => `${typeof x.documento === "string" ? `${cadena(x.documento)}, ` : ""}line ${typeof x.linea === "number" ? x.linea : "?"}: ${cadena(x.motivo)}`);
+      return con(SALIDA.entradaInvalida, {
+        errores: errores.map((x) => ({ linea: x.linea ?? null, motivo: taparSecretos(typeof x.motivo === "string" ? x.motivo : ""), ...(typeof x.documento === "string" ? { documento: cadena(x.documento) } : {}) })),
+      }, [`${ruta} is badly formed:`, ...lineas].join("\n"));
     }
     default:
       return desenlace(r, ok);
   }
 }
 
+// Lo que se manda y se dice del contenido leído, sea un archivo o la carpeta (los bytes son los de los textos tal cual).
+const bytesDe = (g: Extract<Leida, { ok: true }>) =>
+  new TextEncoder().encode(g.carpeta ? g.documentos.map((x) => x.texto).join("") : g.texto).length;
+const ENCABEZADO = (g: Extract<Leida, { ok: true }>) => (g.carpeta ? `${g.documentos.length} ${g.documentos.length === 1 ? "document" : "documents"}, ` : "");
+
 export async function guiaRevisar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "dryRun">): Promise<Resultado> {
   const g = await leerLaGuia(d, flags);
   if (!g.ok) return g.resultado;
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
+  const repetidos = g.carpeta ? g.repetidos : [];
   if (flags.dryRun) {
-    const haria = `POST ${rutaDe(p.proyecto, "/guia/revisar")} (${new TextEncoder().encode(g.texto).length} bytes, from ${g.ruta})`;
-    return conAviso({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria, ruta: g.ruta }, texto: `With --dry-run I do nothing; without it: ${haria}.` }, g.aviso);
+    const haria = `POST ${rutaDe(p.proyecto, "/guia/revisar")} (${ENCABEZADO(g)}${bytesDe(g)} bytes, from ${g.ruta})`;
+    return conAviso({ codigo: SALIDA.ok, json: { ok: true, dry_run: true, haria, ruta: g.ruta }, texto: `With --dry-run I do nothing; without it: ${haria}.` }, { aviso: g.aviso, repetidos });
   }
   try {
-    return conAviso(desenlaceDeGuia(await d.revisar(d.api, p.clave, p.proyecto.id, g.texto, d.fetch), (c) => ({
-      codigo: SALIDA.ok, json: { ok: true, secciones: c.secciones ?? null, ruta: g.ruta }, texto: `The guide is well formed: ${secciones(c.secciones)}.`,
-    }), g.ruta), g.aviso);
+    const respuesta = await d.revisar(d.api, p.clave, p.proyecto.id, g.carpeta ? g.documentos : g.texto, d.fetch);
+    return conAviso(desenlaceDeGuia(respuesta, (c) => {
+      if (!g.carpeta) return { codigo: SALIDA.ok, json: { ok: true, secciones: c.secciones ?? null, ruta: g.ruta }, texto: `The guide is well formed: ${secciones(c.secciones)}.` };
+      const n = typeof c.documentos === "number" ? c.documentos : g.documentos.length;
+      return {
+        codigo: SALIDA.ok, json: { ok: true, secciones: c.secciones ?? null, documentos: n, ruta: g.ruta },
+        texto: `The guide is well formed: ${secciones(c.secciones)} in ${n} ${n === 1 ? "document" : "documents"}.`,
+      };
+    }, g.ruta), { aviso: g.aviso, repetidos });
   } catch (e) {
     return resultadoDeFallo(e);
   }
@@ -176,24 +213,26 @@ export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "d
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   const github = flags.fromGithub === true;
+  const repetidos = g.carpeta ? g.repetidos : [];
   // La vía de GitHub manda la huella del archivo local TAL CUAL (con BOM y \r\n: normalizarla es regla de
   // `huellaDeGuia`). La directa manda el contenido crudo y el motor calcula la huella: la terminal no la necesita.
-  const huella = github ? huellaDeGuia(g.texto) : null;
+  // La de la carpeta es la del CONJUNTO (nombres y contenidos, `huellaDeConjunto`): igual, byte a byte, a la del motor.
+  const huella = github ? (g.carpeta ? huellaDeConjunto(g.documentos) : huellaDeGuia(g.texto)) : null;
   const decl = github ? {} : await declarado(d, g.raiz);
   // La directa manda además la ruta que se leyó de verdad (dato declarado, como el commit y la rama). Por GitHub el
-  // motor resuelve los nombres él mismo, sobre un solo SHA de la rama principal.
-  const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : { contenido: g.texto, ruta: g.ruta, ...decl };
+  // motor resuelve los nombres él mismo, sobre un solo SHA de la rama principal. La carpeta no manda `ruta`: es la carpeta.
+  const cuerpo: CuerpoDePublicar = huella !== null ? { huella } : g.carpeta ? { documentos: g.documentos, ...decl } : { contenido: g.texto, ruta: g.ruta, ...decl };
   const cuando = decl.commit ? `commit ${decl.commit.slice(0, 7)}${decl.rama ? ` of ${cadena(decl.rama)}` : ""} declared` : "no commit";
   // El JSON del dry-run pasa por la misma limpieza que el texto (control primero, secretos después): la rama la
   // decide quien escribió el clon, y un ESC en ella no debe llegar a la terminal por ninguna de las dos salidas.
   if (flags.dryRun) {
     const haria = huella !== null
       ? `POST ${rutaDe(p.proyecto, "/guia/publicar")} with the fingerprint ${huella.slice(0, 12)}…`
-      : `POST ${rutaDe(p.proyecto, "/guia/publicar")} with the content (${new TextEncoder().encode(g.texto).length} bytes, from ${g.ruta}), ${cuando}`;
+      : `POST ${rutaDe(p.proyecto, "/guia/publicar")} with the content (${ENCABEZADO(g)}${bytesDe(g)} bytes, from ${g.ruta}), ${cuando}`;
     const json = huella !== null
       ? { ok: true, dry_run: true, huella, ruta: g.ruta, haria }
       : { ok: true, dry_run: true, ruta: g.ruta, commit: decl.commit ? cadena(decl.commit) : null, rama: decl.rama ? cadena(decl.rama) : null, haria };
-    return conAviso({ codigo: SALIDA.ok, json, texto: `With --dry-run I do nothing; without it: ${haria}.` }, g.aviso);
+    return conAviso({ codigo: SALIDA.ok, json, texto: `With --dry-run I do nothing; without it: ${haria}.` }, { aviso: g.aviso, repetidos });
   }
   try {
     return conAviso(desenlaceDeGuia(await d.publicar(d.api, p.clave, p.proyecto.id, cuerpo, d.fetch), (c) => {
@@ -221,7 +260,7 @@ export async function guiaPublicar(d: DepsDeGuia, flags: Pick<Flags, "repo" | "d
         ? `It was already uploaded: ${secciones(guia.secciones)}. It stayed as the active guide; ${origen}.${nota}`
         : `Guide uploaded: ${secciones(guia.secciones)}. It's the active guide${reemplaza}; ${origen}.${nota}`;
       return { codigo: SALIDA.ok, json: { ...json, commit_declarado: decl.commit ?? null }, texto };
-    }, g.ruta), g.aviso);
+    }, g.ruta), { aviso: g.aviso, repetidos });
   } catch (e) {
     return resultadoDeFallo(e);
   }

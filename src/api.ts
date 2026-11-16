@@ -1,5 +1,6 @@
 // Los pedidos de la terminal al motor. Sin dependencias: `fetch` viene de Node y se inyecta.
 import { FalloDeLaTerminal, SALIDA, taparSecretos } from "./contrato.ts";
+import type { DocumentoDeLaGuia } from "./guia.ts";
 import { esSemver } from "./instalacion.ts";
 
 // La URL viene FIJA (§5.2): si un archivo del repo pudiera cambiarla, clonar un repo ajeno y correr
@@ -27,7 +28,7 @@ export type Fetch = typeof fetch;
 
 // A mano a propósito: tiene que coincidir con package.json (lo pinza test/describir.test.ts); sólo
 // identifica a la terminal en los logs del motor, no decide nada.
-const VERSION = "0.10.3";
+const VERSION = "0.11.0";
 const PLAZO_POR_DEFECTO_MS = 15_000;
 // Los dos POST que crean algo: detrás, el motor acuña con Vercel Connect y le pregunta a GitHub varias
 // veces (instalación, repos, comandos, rama). Con 15 s una respuesta lenta pero buena se cortaba y
@@ -359,20 +360,31 @@ export async function esClaveDeConsultaDelProyecto(api: URL, clave: string, proy
 // un código de salida propio; `guia_mal_armada` lleva la lista de errores por línea).
 const rutaDeLaGuia = (proyectoId: string) => `/api/proyectos/${encodeURIComponent(proyectoId)}/guia`;
 
-export function revisarGuia(api: URL, clave: string, proyectoId: string, contenido: string, f: Fetch): Promise<Respuesta> {
-  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/revisar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify({ contenido }) }, f);
+// Un texto es UN archivo (`{contenido}`); una lista de documentos es la carpeta `.supcoflow/knowledge/`
+// (`{documentos: [{nombre, contenido}]}`): dos cuerpos que el motor no mezcla (guía MVP 1/3, PR 197).
+const documentosEnLaRed = (docs: readonly DocumentoDeLaGuia[]) => docs.map((d) => ({ nombre: d.nombre, contenido: d.texto }));
+
+export function revisarGuia(api: URL, clave: string, proyectoId: string, contenido: string | readonly DocumentoDeLaGuia[], f: Fetch): Promise<Respuesta> {
+  const cuerpo = typeof contenido === "string" ? { contenido } : { documentos: documentosEnLaRed(contenido) };
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/revisar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f);
 }
 
 // Dos cuerpos para una sola ruta: `{contenido, commit?, rama?}` sube el archivo directo (commit y rama son lo que la
 // terminal DECLARA; el motor no los verifica) y `{huella}` es la vía de GitHub (`--desde-github`).
 // `ruta` es el archivo que la terminal leyó de verdad (`.supcoflow/guide.md` o el nombre viejo `guia.md`): también es
 // dato declarado, como el commit y la rama. Una terminal ≤ 0.7.0 no la mandaba y el motor lo toma como `guia.md`.
-export type CuerpoDePublicar = { huella: string } | { contenido: string; ruta?: string; commit?: string; rama?: string };
+// `{documentos, commit?, rama?}` sube los `.md` de `.supcoflow/knowledge/` como UNA versión (sin `ruta`: es la carpeta); con
+// la vía de GitHub la carpeta no necesita cuerpo nuevo: la `huella` que se manda es la del conjunto.
+export type CuerpoDePublicar =
+  | { huella: string }
+  | { contenido: string; ruta?: string; commit?: string; rama?: string }
+  | { documentos: readonly DocumentoDeLaGuia[]; commit?: string; rama?: string };
 
 export function publicarGuia(api: URL, clave: string, proyectoId: string, cuerpo: CuerpoDePublicar, f: Fetch): Promise<Respuesta> {
   // La vía de GitHub acuña con Connect y le pregunta a GitHub por la rama: el mismo plazo que las altas (la directa no
   // llama a GitHub, pero comparte el plazo para no tener dos reglas).
-  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f, PLAZO_DE_ALTA_MS);
+  const enLaRed = "documentos" in cuerpo ? { ...cuerpo, documentos: documentosEnLaRed(cuerpo.documentos) } : cuerpo;
+  return conClave(api, clave, `${rutaDeLaGuia(proyectoId)}/publicar`, { method: "POST", headers: JSON_BODY, body: JSON.stringify(enLaRed) }, f, PLAZO_DE_ALTA_MS);
 }
 
 // Siempre con `comprobar=1`: `guia ver` quiere el `al_dia` de la rama; el motor lo ignora si el origen no es el repo.
