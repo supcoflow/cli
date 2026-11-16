@@ -172,7 +172,7 @@ export type Cambio = { ruta: string; estado: "A" | "M" | "D"; soloEspacios?: boo
 /**
  * Lo que dice el cambio frente al mapa. Sólo documentos con cabecera sana y fuentes entran a la comparación.
  * `mapaBase` es el mapa en el ancestro común: una fuente que estaba ahí y ya no está en ningún documento (documento
- * borrado o patrón quitado) es `cobertura_quitada`, un aviso si el cambio tocó código que esa fuente cubría.
+ * borrado o patrón quitado) es `cobertura_quitada` si el cambio tocó código que esa fuente cubría y que hoy ningún documento cubre.
  */
 export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: readonly Cambio[], mapaBase: readonly DocumentoDelMapa[] = []): { avisos: Aviso[]; cambiados: number; cubiertos: number; sin_cubrir: number } {
   const codigo = cambios.filter((c) => !esDeSupcoflow(c.ruta));
@@ -205,15 +205,12 @@ export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: read
   for (const d of mapaBase.filter((b) => b.errores.length === 0 && !rotosAhora.has(b.ruta))) {
     const quitados = d.sources.filter((p) => !fuentesDeAhora.has(p));
     if (quitados.length === 0) continue;
-    const borrado = !mapa.some((m) => m.ruta === d.ruta);
     const archivos = codigo.filter((c) => !cubierto(c.ruta) && quitados.some((p) => coincide(p, c.ruta))).map((c) => c.ruta).sort();
-    const que = borrado ? `You deleted ${d.ruta}, and no document now covers its \`sources\` \`${lista(quitados)}\`` : `You removed \`${lista(quitados)}\` from the \`sources\` of ${d.ruta}, and no document covers it now`;
+    if (archivos.length === 0) continue;
+    const que = mapa.some((m) => m.ruta === d.ruta) ? `You removed \`${lista(quitados)}\` from the \`sources\` of ${d.ruta}` : `You deleted ${d.ruta} (its \`sources\` had \`${lista(quitados)}\`)`;
     avisos.push({
-      tipo: "cobertura_quitada", severidad: archivos.length > 0 ? "aviso" : "nota", documento: d.ruta, patrones: quitados,
-      ...(archivos.length > 0 ? { archivos } : {}),
-      mensaje: archivos.length > 0
-        ? `${que}, but this change touches ${lista(archivos)}, which it covered. Update the document that explains that code (and put the path in its \`sources\`).`
-        : `${que}. If users still see that code, add its path to the \`sources\` of the document that explains it.`,
+      tipo: "cobertura_quitada", severidad: "aviso", documento: d.ruta, patrones: quitados, archivos,
+      mensaje: `${que}, and this change touches ${lista(archivos)}, which no document covers now. Update the document that explains that code (and put the path in its \`sources\`).`,
     });
   }
 

@@ -283,7 +283,7 @@ Each warning says what to do, and the JSON gives them apart with a `tipo`:
 |---|---|
 | `documento_sin_tocar` | You changed code a document's `sources` cover and didn't change that document (it also says which documents you did change). A deleted or moved file counts as a change. |
 | `cambio_cosmetico` | The document changed only in whitespace, which doesn't update what it says. |
-| `cobertura_quitada` | A `sources` pattern that the map had at the base is in no document now (you deleted the document or removed the pattern), and this change touches code it covered. Without changed code under it, it is a note. |
+| `cobertura_quitada` | You deleted a document or removed a pattern from its `sources` (the map at the base had it), and this change touches code it covered that no document covers now. |
 | `fuente_sin_archivos` | A `sources` pattern matches no file in the repo: the code was moved or deleted. Point it where it lives now. |
 | `mapa_vacio` | There are no documents, or none declares `sources`: nothing to compare against. |
 | `mapa_roto` | A header (or the folder) can't be read: the line and the reason come with it. |
