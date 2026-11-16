@@ -36,6 +36,9 @@ describe("coincide: los globs de `sources`", () => {
     ["app/{a/**", "app/{a/x.ts", true], // una llave sin cerrar es literal
     ["**", "cualquier/cosa.ts", true],
     ["app/facturación/**", "app/facturación/a.ts", true],
+    ["app/*/", "app/billing/invoice.ts", true], // con comodines y `/` al final también es una carpeta
+    ["app/billing/**/", "app/billing/a/b.ts", true],
+    ["app/*/", "app/a.ts", false],
   ];
   for (const [patron, ruta, esperado] of casos) it(`${patron} ${esperado ? "coincide con" : "no coincide con"} ${ruta}`, () => expect(coincide(patron, ruta)).toBe(esperado));
 });
@@ -163,5 +166,37 @@ describe("avisosDelCambio: los casos negativos preparados (criterios C2)", () =>
   it("el orden de los avisos es estable: por documento y después los de fuera del mapa", () => {
     const { avisos } = avisosDelCambio(mapa, [{ ruta: "app/payments/p.ts", estado: "M" }, { ruta: "app/billing/b.ts", estado: "M" }, { ruta: "x/nuevo.ts", estado: "A" }]);
     expect(avisos.map((a) => a.documento ?? a.tipo)).toEqual([`${CARPETA}/billing.md`, `${CARPETA}/payments.md`, "fuera_del_mapa"]);
+  });
+});
+
+describe("avisosDelCambio: la cobertura que el cambio quitó (el mapa de la base)", () => {
+  const base = leerElMapa(CARPETA, [doc("billing.md", ["app/billing/**"]), doc("payments.md", ["app/payments/**"])]);
+
+  it("borró el documento y tocó su código → cobertura_quitada (aviso), aunque el mapa de ahora no lo cubra", () => {
+    const ahora = leerElMapa(CARPETA, [doc("payments.md", ["app/payments/**"])]);
+    const r = avisosDelCambio(ahora, [{ ruta: "app/billing/invoice.ts", estado: "M" }, { ruta: `${CARPETA}/billing.md`, estado: "D" }], base);
+    expect(r.avisos).toMatchObject([{ tipo: "cobertura_quitada", severidad: "aviso", documento: `${CARPETA}/billing.md`, patrones: ["app/billing/**"], archivos: ["app/billing/invoice.ts"] }]);
+    expect(r.avisos[0]!.mensaje).toContain("You deleted");
+  });
+  it("quitó el patrón de `sources` y tocó su código → cobertura_quitada (aviso)", () => {
+    const ahora = leerElMapa(CARPETA, [doc("billing.md", ["app/other/**"]), doc("payments.md", ["app/payments/**"])]);
+    const r = avisosDelCambio(ahora, M(["app/billing/invoice.ts", `${CARPETA}/billing.md`]), base);
+    expect(r.avisos).toMatchObject([{ tipo: "cobertura_quitada", severidad: "aviso", documento: `${CARPETA}/billing.md`, patrones: ["app/billing/**"], archivos: ["app/billing/invoice.ts"] }]);
+    expect(r.avisos[0]!.mensaje).toContain("You removed");
+  });
+  it("quitó cobertura sin tocar ese código → una nota, no un aviso", () => {
+    const ahora = leerElMapa(CARPETA, [doc("payments.md", ["app/payments/**"])]);
+    const r = avisosDelCambio(ahora, [{ ruta: `${CARPETA}/billing.md`, estado: "D" }], base);
+    expect(r.avisos).toMatchObject([{ tipo: "cobertura_quitada", severidad: "nota" }]);
+  });
+  it("un patrón movido a otro documento (o un documento renombrado) no quita cobertura", () => {
+    const ahora = leerElMapa(CARPETA, [doc("cobros.md", ["app/billing/**"]), doc("payments.md", ["app/payments/**"])]);
+    const r = avisosDelCambio(ahora, [{ ruta: "app/billing/invoice.ts", estado: "M" }, { ruta: `${CARPETA}/billing.md`, estado: "D" }, { ruta: `${CARPETA}/cobros.md`, estado: "A" }], base);
+    expect(r.avisos).toEqual([]);
+  });
+  it("un patrón reescrito que todavía cubre el código tocado: no es un aviso", () => {
+    const ahora = leerElMapa(CARPETA, [doc("billing.md", ["app/billing"]), doc("payments.md", ["app/payments/**"])]);
+    const r = avisosDelCambio(ahora, M(["app/billing/invoice.ts", `${CARPETA}/billing.md`]), base);
+    expect(r.avisos.filter((a) => a.severidad === "aviso")).toEqual([]);
   });
 });

@@ -83,7 +83,7 @@ describe("describe --json", () => {
     expect(s.codigos).toEqual([0, 1, 3, 4]);
     expect(s.resumen).toMatch(/No AI, no engine call, no sign-in/);
     expect(s.resumen).toMatch(/fetch-depth: 0/);
-    for (const tipo of ["mapa_vacio", "mapa_roto", "fuente_sin_archivos", "cambio_cosmetico", "no_se_pudo_comparar", "fuera_del_mapa"]) expect(s.resumen, tipo).toContain(tipo);
+    for (const tipo of ["mapa_vacio", "mapa_roto", "fuente_sin_archivos", "cambio_cosmetico", "cobertura_quitada", "no_se_pudo_comparar", "fuera_del_mapa"]) expect(s.resumen, tipo).toContain(tipo);
     expect(s.resumen).toMatch(/never says «nothing to warn» when it couldn't look/);
   });
 

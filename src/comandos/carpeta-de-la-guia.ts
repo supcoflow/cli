@@ -94,10 +94,10 @@ export function leerLaCarpeta(d: DepsDeCarpeta, raiz: string): LecturaDeLaCarpet
   return { tipo: "carpeta", documentos, archivoIgnorado: hay(RUTA_DE_LA_GUIA) || hay(RUTA_VIEJA_DE_LA_GUIA) };
 }
 
-// ─── Nombres de sección repetidos entre documentos ───
+// ─── Nombres de sección repetidos ───
 // El chat busca una sección por su nombre y toma las primeras tres coincidencias (`buscar-seccion` del sdk), así que dos
-// documentos con una sección que se llama igual hacen que una quede fuera de esa búsqueda. No es un error (ya era posible
-// en un solo archivo): se avisa. Se compara como la búsqueda del chat: sin mayúsculas ni tildes.
+// secciones que se llaman igual (en dos documentos o en el mismo) hacen que una quede fuera de esa búsqueda. No es un
+// error: se avisa. Se compara como la búsqueda del chat: sin mayúsculas ni tildes.
 const claveDeNombre = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** Los nombres de las secciones (`## Nombre`) de un documento, como los ve el motor: después de la cabecera. */
@@ -108,14 +108,15 @@ export function nombresDeSecciones(texto: string): string[] {
 
 export type NombreRepetido = { nombre: string; documentos: string[] };
 export function nombresRepetidos(documentos: readonly DocumentoDeLaGuia[]): NombreRepetido[] {
-  const porClave = new Map<string, { nombre: string; documentos: Set<string> }>();
+  const porClave = new Map<string, { nombre: string; documentos: Set<string>; veces: number }>();
   for (const d of ordenarDocumentos(documentos)) {
     for (const nombre of nombresDeSecciones(d.texto)) {
       const k = claveDeNombre(nombre);
-      const e = porClave.get(k) ?? { nombre, documentos: new Set<string>() };
+      const e = porClave.get(k) ?? { nombre, documentos: new Set<string>(), veces: 0 };
       e.documentos.add(d.nombre);
+      e.veces++;
       porClave.set(k, e);
     }
   }
-  return [...porClave.values()].filter((e) => e.documentos.size > 1).map((e) => ({ nombre: e.nombre, documentos: [...e.documentos] }));
+  return [...porClave.values()].filter((e) => e.veces > 1).map((e) => ({ nombre: e.nombre, documentos: [...e.documentos] }));
 }

@@ -172,6 +172,40 @@ describe("guide stale: los casos preparados", () => {
   });
 });
 
+describe("guide stale: el mapa de la base (lo que el cambio borró o quitó no esconde el código)", () => {
+  it("borró el documento en el mismo cambio que toca su código → cobertura_quitada, no «nada que avisar»", async () => {
+    const { raiz, deps } = repo();
+    escribir(raiz, "app/billing/invoice.ts", "export const a = 2;\n");
+    git(raiz, "rm", "-q", `${K}/billing.md`);
+    commit(raiz, "borrar el documento y tocar su código");
+    const r = await guiaStale(deps, F);
+    expect(r.codigo).toBe(0);
+    expect(r.json.avisos).toMatchObject([{ tipo: "cobertura_quitada", documento: `${K}/billing.md`, patrones: ["app/billing/**"], archivos: ["app/billing/invoice.ts"] }]);
+    expect(r.texto).not.toContain("Nothing to warn");
+    expect((await guiaStale(deps, { ...F, strict: true })).codigo).toBe(4);
+  });
+  it("quitó el patrón de `sources` y tocó su código → cobertura_quitada", async () => {
+    const { raiz, deps } = repo();
+    escribir(raiz, "app/billing/invoice.ts", "export const a = 2;\n");
+    escribir(raiz, `${K}/billing.md`, DOC("Billing", ["app/other/**"]));
+    escribir(raiz, "app/other/x.ts", "x\n");
+    commit(raiz, "quitar el patrón");
+    const r = await guiaStale(deps, F);
+    expect(tipos(r)).toEqual(["cobertura_quitada"]);
+    expect(r.json.avisos).toMatchObject([{ documento: `${K}/billing.md`, patrones: ["app/billing/**"], archivos: ["app/billing/invoice.ts"] }]);
+  });
+  it("una base sin mapa: compara contra el mapa de ahora y no inventa cobertura quitada", async () => {
+    const { raiz, deps } = repo({ documentos: null });
+    escribir(raiz, `${K}/billing.md`, DOC("Billing", ["app/billing/**"]));
+    escribir(raiz, "app/billing/invoice.ts", "export const a = 2;\n");
+    commit(raiz, "primer mapa");
+    const r = await guiaStale(deps, F);
+    expect(r.json).toMatchObject({ comparado: true });
+    expect(tipos(r)).toEqual([]);
+    expect(notas(r)).toEqual([]);
+  });
+});
+
 describe("guide stale: la base que falta (nunca «nada que avisar» si no pudo mirar)", () => {
   it("una base que no existe: no_se_pudo_comparar, lo dice, sugiere fetch-depth: 0 y sale 0", async () => {
     const { deps } = repo();

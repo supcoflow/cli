@@ -162,10 +162,16 @@ describe("nombres de sección repetidos entre documentos: aviso, nunca fallo", (
     expect(r.json.nombres_repetidos).toEqual([{ nombre: "Configuración", documentos: ["a.md", "b.md", "c.md"] }]);
     expect(r.texto).toContain("Warning: the section name «Configuración» is in a.md and b.md and c.md");
   });
-  it("el mismo nombre dentro de UN documento no es «entre documentos»; nombres distintos tampoco", async () => {
-    const { d } = mundo({ "a.md": `${SEC("Pagos")}${SEC("Pagos")}`, "b.md": SEC("Cobros") });
+  it("el mismo nombre dos veces dentro de UN documento también choca en la búsqueda: se avisa y dice que es en ese documento", async () => {
+    const { d } = mundo({ "a.md": `${SEC("Pagos")}${SEC("PAGOS")}`, "b.md": SEC("Cobros") });
     const r = await guiaRevisar(d, F);
     expect(r.codigo).toBe(0);
+    expect(r.json.nombres_repetidos).toEqual([{ nombre: "Pagos", documentos: ["a.md"] }]);
+    expect(r.texto).toContain("Warning: the section name «Pagos» is repeated within a.md");
+  });
+  it("nombres distintos: sin aviso", async () => {
+    const { d } = mundo({ "a.md": SEC("Pagos"), "b.md": SEC("Cobros") });
+    const r = await guiaRevisar(d, F);
     expect("nombres_repetidos" in r.json).toBe(false);
     expect(r.texto).not.toContain("Warning");
   });

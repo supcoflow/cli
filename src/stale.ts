@@ -77,12 +77,13 @@ function aRegex(p: string): string {
 const compilados = new Map<string, (ruta: string) => boolean>();
 function compilar(patron: string): (ruta: string) => boolean {
   const sinPuntoBarra = patron.replace(/^(?:\.\/)+/, "").replace(/^\/+/, "");
+  const sinBarraFinal = sinPuntoBarra.replace(/\/+$/, "");
   if (!MAGIA.test(sinPuntoBarra)) {
-    const base = sinPuntoBarra.replace(/\/+$/, "");
-    return (ruta) => ruta === base || ruta.startsWith(`${base}/`);
+    return (ruta) => ruta === sinBarraFinal || ruta.startsWith(`${sinBarraFinal}/`);
   }
+  const glob = sinBarraFinal === sinPuntoBarra ? sinPuntoBarra : `${sinBarraFinal}/**`;
   try {
-    const re = new RegExp(`^${aRegex(sinPuntoBarra)}$`, "u");
+    const re = new RegExp(`^${aRegex(glob)}$`, "u");
     return (ruta) => re.test(ruta);
   } catch {
     return (ruta) => ruta === sinPuntoBarra; // un patrón que no se puede leer como glob vale sólo por su texto
@@ -113,7 +114,7 @@ export function leerElMapa(carpeta: string, documentos: readonly { nombre: strin
 export type Severidad = "aviso" | "nota";
 export type TipoDeAviso =
   | "mapa_vacio" | "mapa_roto" | "documento_sin_fuentes" | "fuente_sin_archivos"
-  | "documento_sin_tocar" | "cambio_cosmetico" | "fuera_del_mapa" | "no_se_pudo_comparar";
+  | "documento_sin_tocar" | "cambio_cosmetico" | "cobertura_quitada" | "fuera_del_mapa" | "no_se_pudo_comparar";
 export type Aviso = {
   tipo: TipoDeAviso;
   /** `aviso`: algo que el cambio debería arreglar (cuenta para `--strict`). `nota`: información, no bloquea. */
@@ -168,8 +169,12 @@ export function avisosDelMapa(mapa: readonly DocumentoDelMapa[], archivos: reado
 /** `A` agregado (o nuevo sin seguimiento), `M` modificado, `D` borrado (un movido es un `D` y un `A`). */
 export type Cambio = { ruta: string; estado: "A" | "M" | "D"; soloEspacios?: boolean };
 
-/** Lo que dice el cambio frente al mapa. Sólo documentos con cabecera sana y fuentes entran a la comparación. */
-export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: readonly Cambio[]): { avisos: Aviso[]; cambiados: number; cubiertos: number; sin_cubrir: number } {
+/**
+ * Lo que dice el cambio frente al mapa. Sólo documentos con cabecera sana y fuentes entran a la comparación.
+ * `mapaBase` es el mapa en el ancestro común: una fuente que estaba ahí y ya no está en ningún documento (documento
+ * borrado o patrón quitado) es `cobertura_quitada`, un aviso si el cambio tocó código que esa fuente cubría.
+ */
+export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: readonly Cambio[], mapaBase: readonly DocumentoDelMapa[] = []): { avisos: Aviso[]; cambiados: number; cubiertos: number; sin_cubrir: number } {
   const codigo = cambios.filter((c) => !esDeSupcoflow(c.ruta));
   const delMapa = mapa.filter((d) => d.errores.length === 0 && d.sources.length > 0);
   const real = new Set(cambios.filter((c) => c.estado !== "D" && c.soloEspacios !== true).map((c) => c.ruta));
@@ -195,6 +200,22 @@ export function avisosDelCambio(mapa: readonly DocumentoDelMapa[], cambios: read
   }
 
   const cubierto = (ruta: string) => delMapa.some((d) => d.sources.some((p) => coincide(p, ruta)));
+  const fuentesDeAhora = new Set(delMapa.flatMap((d) => d.sources));
+  for (const d of mapaBase.filter((b) => b.errores.length === 0)) {
+    const quitados = d.sources.filter((p) => !fuentesDeAhora.has(p));
+    if (quitados.length === 0) continue;
+    const borrado = !mapa.some((m) => m.ruta === d.ruta);
+    const archivos = codigo.filter((c) => !cubierto(c.ruta) && quitados.some((p) => coincide(p, c.ruta))).map((c) => c.ruta).sort();
+    const que = borrado ? `You deleted ${d.ruta}, and no document now covers its \`sources\` \`${lista(quitados)}\`` : `You removed \`${lista(quitados)}\` from the \`sources\` of ${d.ruta}, and no document covers it now`;
+    avisos.push({
+      tipo: "cobertura_quitada", severidad: archivos.length > 0 ? "aviso" : "nota", documento: d.ruta, patrones: quitados,
+      ...(archivos.length > 0 ? { archivos } : {}),
+      mensaje: archivos.length > 0
+        ? `${que}, but this change touches ${lista(archivos)}, which it covered. Update the document that explains that code (and put the path in its \`sources\`).`
+        : `${que}. If users still see that code, add its path to the \`sources\` of the document that explains it.`,
+    });
+  }
+
   const sinCubrir = codigo.filter((c) => !cubierto(c.ruta));
   const nuevos = sinCubrir.filter((c) => c.estado === "A").map((c) => c.ruta).sort();
   if (nuevos.length > 0) {

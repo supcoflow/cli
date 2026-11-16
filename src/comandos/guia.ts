@@ -103,7 +103,7 @@ async function leerLaGuia(d: DepsDeGuia, flags: { repo: string | null }): Promis
 }
 
 // El aviso del nombre viaja en el JSON (`aviso`) y como última línea del texto, en lo que salió bien. Los nombres de
-// sección repetidos entre documentos también (`nombres_repetidos`): son un aviso, nunca un fallo.
+// sección repetidos (entre documentos o dentro de uno) también (`nombres_repetidos`): son un aviso, nunca un fallo.
 function conAviso(r: Resultado, g: Pick<Leida, "aviso"> & { repetidos?: NombreRepetido[] }): Resultado {
   if (r.codigo !== SALIDA.ok) return r;
   let salida = r;
@@ -113,7 +113,7 @@ function conAviso(r: Resultado, g: Pick<Leida, "aviso"> & { repetidos?: NombreRe
   }
   const repetidos = g.repetidos ?? [];
   if (repetidos.length > 0) {
-    const lineas = repetidos.map((x) => `Warning: the section name «${limpio(x.nombre)}» is in ${x.documentos.map(limpio).join(" and ")}: the chat's search takes only the first three matches of a name, so give each section its own name.`);
+    const lineas = repetidos.map((x) => `Warning: the section name «${limpio(x.nombre)}» ${x.documentos.length === 1 ? `is repeated within ${limpio(x.documentos[0]!)}` : `is in ${x.documentos.map(limpio).join(" and ")}`}: the chat's search takes only the first three matches of a name, so give each section its own name.`);
     salida = {
       ...salida,
       json: { ...salida.json, nombres_repetidos: repetidos.map((x) => ({ nombre: limpio(x.nombre), documentos: x.documentos.map(limpio) })) },

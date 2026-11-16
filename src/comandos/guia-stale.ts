@@ -11,7 +11,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 import { limpiarTodo, limpio } from "../limpio.ts";
 import type { Git } from "../repo-local.ts";
 import { avisosDelCambio, avisosDelMapa, leerElMapa, type Aviso, type Cambio, type DocumentoDelMapa } from "../stale.ts";
-import { RUTA_DE_LA_CARPETA } from "../guia.ts";
+import { esCandidatoDeDocumento, RUTA_DE_LA_CARPETA } from "../guia.ts";
 import { leerLaCarpeta, type DepsDeCarpeta } from "./carpeta-de-la-guia.ts";
 
 export type DepsDeStale = DepsDeCarpeta & { git: Git; cwd: string };
@@ -24,7 +24,7 @@ const BASE_VALIDA = /^[^\s\u0000-\u001f\u007f-\u009f-][^\s\u0000-\u001f\u007f-\u
 const salida = (r: { stdout: string }): string[] => r.stdout.split("\u0000").filter((x) => x !== "");
 
 type Comparacion =
-  | { ok: true; baseCommit: string; cambios: Cambio[] }
+  | { ok: true; baseCommit: string; cambios: Cambio[]; mapaBase: DocumentoDelMapa[] }
   | { ok: false; motivo: "base_no_encontrada" | "clon_superficial" | "sin_historia_comun" | "git_no_pudo_listar"; mensaje: string };
 
 const COMO_TRAER_LA_HISTORIA = "In GitHub Actions use `actions/checkout` with `fetch-depth: 0`; elsewhere fetch the base (`git fetch origin <branch>`) and, if the clone is shallow, `git fetch --unshallow`.";
@@ -74,7 +74,20 @@ async function comparar(d: DepsDeStale, raiz: string, base: string, mapa: readon
     const antes = await git(["show", `${comun}:${c.ruta}`]);
     if (antes.codigo === 0 && antes.stdout.replace(/\s+/g, "") === actual.replace(/\s+/g, "")) c.soloEspacios = true;
   }
-  return { ok: true, baseCommit: comun, cambios };
+
+  // El mapa del ancestro común: lo que cubría antes del cambio, para no perder una fuente que el cambio borró o quitó.
+  const arbol = await git(["ls-tree", "-z", comun, "--", `${RUTA_DE_LA_CARPETA}/`]);
+  if (arbol.codigo !== 0) return { ok: false, motivo: "git_no_pudo_listar", mensaje: "git could not read the map at the base, so I could not compare the change." };
+  const documentosBase: { nombre: string; texto: string }[] = [];
+  for (const entrada of salida(arbol)) {
+    const [info, ruta] = entrada.split("\t") as [string, string | undefined];
+    const nombre = ruta?.slice(RUTA_DE_LA_CARPETA.length + 1) ?? "";
+    if (!/^100(?:644|755) blob /.test(info) || !esCandidatoDeDocumento(nombre)) continue;
+    const texto = await git(["show", `${comun}:${ruta}`]);
+    if (texto.codigo !== 0) return { ok: false, motivo: "git_no_pudo_listar", mensaje: "git could not read the map at the base, so I could not compare the change." };
+    documentosBase.push({ nombre, texto: texto.stdout });
+  }
+  return { ok: true, baseCommit: comun, cambios, mapaBase: leerElMapa(RUTA_DE_LA_CARPETA, documentosBase) };
 }
 
 const sinSeveridad = ({ severidad: _s, ...resto }: Aviso) => resto;
@@ -114,7 +127,7 @@ export async function guiaStale(d: DepsDeStale, flags: Pick<Flags, "base" | "str
   if (hayMapaUsable) {
     comparacion = await comparar(d, raiz, base, mapa, textos);
     if (comparacion.ok) {
-      const r = avisosDelCambio(mapa, comparacion.cambios);
+      const r = avisosDelCambio(mapa, comparacion.cambios, comparacion.mapaBase);
       avisos.push(...r.avisos);
       resumen = { cambiados: r.cambiados, cubiertos: r.cubiertos, sin_cubrir: r.sin_cubrir };
       baseCommit = comparacion.baseCommit;

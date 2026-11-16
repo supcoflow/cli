@@ -235,8 +235,8 @@ line, never ignored.
 - **The limits count for the whole folder:** 64 KB and 60 sections in total (and at most 60 documents), not per document.
 - `guide check` prints a problem per document (`documento` in each `errores` item, and «billing.md, line 4: …» in the
   text). It also **warns, without failing** (exit 0, `nombres_repetidos` in the JSON), when a section name is repeated
-  across documents, comparing without case or accents like the chat's search does: that search takes only the first
-  three matches of a name, so give each section its own name.
+  (across documents or within one), comparing without case or accents like the chat's search does: that search takes
+  only the first three matches of a name, so give each section its own name.
 - `guide publish` uploads the documents as one version. With `--from-github` it sends the fingerprint of the whole set
   (names and contents); the terminal and the engine compute it the same way, byte for byte, so it matches the commit on
   the main branch when the folder is pushed.
@@ -271,7 +271,9 @@ supcoflow guide stale --base origin/main
 It answers one question: «did this change touch code that a document explains, without touching that document?». It
 uses no AI, makes no engine call and needs no sign-in: it only reads git and the clone. It diffs the merge base with
 `--base` against what is on disk now (committed, staged and untracked files, so an assistant can run it before the
-commit too) and crosses the changed files with the `sources` of each document's header. A pattern with no wildcard
+commit too) and crosses the changed files with the `sources` of each document's header. It also reads the map at the
+merge base, so deleting a document (or removing a pattern from its `sources`) in the same change doesn't hide the code it
+covered. A pattern with no wildcard
 (`app/billing`) covers that file or everything inside that folder; `*` and `?` don't cross a `/`, `**` does, and
 `{a,b}` and `[abc]` work.
 
@@ -281,6 +283,7 @@ Each warning says what to do, and the JSON gives them apart with a `tipo`:
 |---|---|
 | `documento_sin_tocar` | You changed code a document's `sources` cover and didn't change that document (it also says which documents you did change). A deleted or moved file counts as a change. |
 | `cambio_cosmetico` | The document changed only in whitespace, which doesn't update what it says. |
+| `cobertura_quitada` | A `sources` pattern that the map had at the base is in no document now (you deleted the document or removed the pattern), and this change touches code it covered. Without changed code under it, it is a note. |
 | `fuente_sin_archivos` | A `sources` pattern matches no file in the repo: the code was moved or deleted. Point it where it lives now. |
 | `mapa_vacio` | There are no documents, or none declares `sources`: nothing to compare against. |
 | `mapa_roto` | A header (or the folder) can't be read: the line and the reason come with it. |
