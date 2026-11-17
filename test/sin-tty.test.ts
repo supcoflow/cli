@@ -2,7 +2,7 @@
 // motor falso en un puerto libre. Nunca toca el llavero real: SUPCOFLOW_SIN_LLAVERO=1 siempre,
 // porque quitar `security` del PATH no alcanza (la terminal lo llama por ruta absoluta).
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -277,7 +277,7 @@ describe("supcoflow sin terminal", () => {
   it("`describe --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describe", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(34);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(35);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");
@@ -872,5 +872,71 @@ describe("supcoflow agents (binario): la clave de IA no sale por ningún lado", 
     };
     mirar(tmp);
     expect(hallados).toEqual([]);
+  });
+});
+
+// `guide stale` con el binario compilado: sin sesión, sin motor y sin terminal. Sólo lee git y el clon.
+describe("supcoflow guide stale (binario compilado)", () => {
+  const ENTORNO_GIT = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.com", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.com", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const git = (cwd: string, ...a: string[]) => execFileSync("git", a, { cwd, env: ENTORNO_GIT, stdio: "ignore" });
+  const DOC = "---\ntitle: Billing\nsources:\n  - app/billing/**\n---\n## Billing\nWhat it's for: x\nWhat users can do: y\n";
+  function repoConMapa(): string {
+    const dir = mkdtempSync(join(tmp, "stale-"));
+    git(dir, "init", "-q", "-b", "main");
+    mkdirSync(join(dir, "app/billing"), { recursive: true });
+    mkdirSync(join(dir, ".supcoflow/knowledge"), { recursive: true });
+    writeFileSync(join(dir, "app/billing/a.ts"), "1\n");
+    writeFileSync(join(dir, ".supcoflow/knowledge/billing.md"), DOC);
+    git(dir, "add", "-A"); git(dir, "commit", "-q", "-m", "base");
+    git(dir, "checkout", "-q", "-b", "feature");
+    return dir;
+  }
+  const sinPedidos = async (f: () => Promise<Corrida>) => {
+    const antes = motor.claves.length;
+    const r = await f();
+    expect(motor.claves.length).toBe(antes);
+    return r;
+  };
+
+  it("sin --base: 3 falta_base, una línea de JSON; no pide sesión", async () => {
+    const dir = repoConMapa();
+    const r = await correrSinTty(["guide", "stale", "--json"], { cwd: dir });
+    expect(r.codigo).toBe(3);
+    expect(r.stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: false, error: "falta_base" });
+  });
+  it("avisa sin fallar (0) y con --strict sale 4, con la misma línea de JSON y el detalle", async () => {
+    const dir = repoConMapa();
+    writeFileSync(join(dir, "app/billing/a.ts"), "2\n");
+    git(dir, "commit", "-q", "-am", "cambio");
+    const r = await sinPedidos(() => correrSinTty(["guide", "stale", "--base", "main", "--json"], { cwd: dir }));
+    expect(r.codigo).toBe(0);
+    expect(r.stdout.trim().split("\n")).toHaveLength(1);
+    expect(JSON.parse(r.stdout)).toMatchObject({ ok: true, comparado: true, avisos: [{ tipo: "documento_sin_tocar", documento: ".supcoflow/knowledge/billing.md" }] });
+    const e = await correrSinTty(["guide", "stale", "--base", "main", "--strict", "--json"], { cwd: dir });
+    expect(e.codigo).toBe(4);
+    expect(JSON.parse(e.stdout)).toMatchObject({ ok: false, error: "guia_desactualizada" });
+    const texto = await correrSinTty(["guide", "stale", "--base", "main"], { cwd: dir });
+    expect(texto.codigo).toBe(0);
+    expect(texto.stdout).toContain("didn't change .supcoflow/knowledge/billing.md");
+  });
+  it("con una base que no existe dice que no pudo comparar (y nunca «Nothing to warn»)", async () => {
+    const dir = repoConMapa();
+    const r = await correrSinTty(["guide", "stale", "--base", "origin/main"], { cwd: dir });
+    expect(r.codigo).toBe(0);
+    expect(r.stdout).toContain("could not compare");
+    expect(r.stdout).toContain("fetch-depth: 0");
+    expect(r.stdout).not.toContain("Nothing to warn");
+  });
+  it("los flags de otros comandos no aplican: --repo y --from-github salen 3 flag_no_aplica", async () => {
+    const dir = repoConMapa();
+    for (const f of [["--repo", "d/r"], ["--from-github"]]) {
+      const r = await correrSinTty(["guide", "stale", "--base", "main", ...f, "--json"], { cwd: dir });
+      expect(r.codigo, f.join(" ")).toBe(3);
+      expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
+    }
+    const otro = await correrSinTty(["guide", "check", "--base", "main", "--json"], { cwd: dir });
+    expect(otro.codigo).toBe(3);
+    expect(JSON.parse(otro.stdout).error).toBe("flag_no_aplica");
   });
 });

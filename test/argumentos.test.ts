@@ -6,7 +6,7 @@ const VACIOS = {
   json: false, dryRun: false, fromGithub: false, help: false, start: false, wait: false, repo: null, install: null, test: null,
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
   skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
-  agent: null, fromEnv: null, provider: null, option: null, dataRetention: null,
+  agent: null, fromEnv: null, provider: null, option: null, dataRetention: null, base: null, strict: false,
 };
 
 it("lee comando y flags", () => {

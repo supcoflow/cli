@@ -35,6 +35,7 @@ function depsDeGuia(git: Git) {
     api: new URL("http://localhost:3000"), guardado, git, cwd: "/w/reservas",
     buscarProyecto: async (_a, _k, repo) => { buscados.push(repo); return PROY; },
     leerArchivoChico: (p) => { lecturas.push(p); return { bytes: new TextEncoder().encode(GUIA) }; },
+    listarCarpeta: () => ({ error: "it doesn't exist" }),
     fetch: (async () => { throw new Error("sin red"); }) as never,
     gitDeclarado: async (args) => ({ codigo: 0, stdout: args.includes("--abbrev-ref") ? "main\n" : "abc1234def5678abc1234def5678abc1234def56\n" }),
     revisar: async (_a, _k, proyecto, contenido) => { pedidos.push({ que: "revisar", proyecto, cuerpo: contenido }); return R(200, { ok: true, secciones: 1 }); },
@@ -54,7 +55,7 @@ describe("V-1 (c): un clon de gitlab.com con --repo equipo/reservas no es ese re
       expect(r.texto).toBe(
         "This clone is `https://gitlab.com/equipo/reservas.git`, which I can't tie to github.com/equipo/reservas. "
         + "If this is equipo/reservas on GitHub, tell me once: `git remote add supcoflow https://github.com/equipo/reservas.git` (it's never fetched). "
-        + "The guide is read from .supcoflow/guide.md in the repo's clone: stand in it.",
+        + "The guide is read from .supcoflow/knowledge/ or .supcoflow/guide.md in the repo's clone: stand in it.",
       );
       expect(r.texto).not.toMatch(/I don't have that repo's clone/);
       expect([pedidos, lecturas, buscados]).toEqual([[], [], []]);

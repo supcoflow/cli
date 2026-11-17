@@ -1,0 +1,17 @@
+[
+  "a «sources» entry is empty",
+  "a «sources» entry is over 200 characters",
+  "a «sources» entry opens a quote it never closes",
+  "at most 50 «sources» per document",
+  "the document name isn't a valid .md file name",
+  "the folder has more than 60 sections in total (all the documents count together)",
+  "the folder has no documents",
+  "the header key «…» is empty",
+  "the header key «…» is over … characters",
+  "the header key «…» is repeated",
+  "the header lines are «key: value» (title, summary, sources)",
+  "the header opened with --- is never closed",
+  "the «sources» list opened with [ is never closed",
+  "two documents have the same name",
+  "unknown header key «…» (allowed: title, summary, sources)"
+]

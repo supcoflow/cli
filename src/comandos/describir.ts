@@ -6,7 +6,7 @@ import { SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.10.3";
+const VERSION = "0.11.0";
 
 export const DESCRIPCION: {
   version: string;
@@ -194,15 +194,15 @@ export const DESCRIPCION: {
     },
     {
       nombre: "guide check",
-      resumen: "Checks .supcoflow/guide.md (this clone's root) against the engine, without publishing anything: says whether it's well formed and how many sections it has. It's the step before the commit. If guide.md doesn't exist it reads the old name .supcoflow/guia.md and says so.",
+      resumen: "Checks the guide in this clone against the engine, without publishing anything: says whether it's well formed and how many sections (and documents) it has. It's the step before the commit. The guide is the folder .supcoflow/knowledge/ if it has at least one .md file (every .md directly inside it is a document, sent together as ONE guide; a .md whose name isn't valid is rejected by name, never skipped; the folder governs and says if guide.md is ignored); otherwise .supcoflow/guide.md, or the old name .supcoflow/guia.md only if guide.md doesn't exist (and says so). Per-document problems come with `documento` in `errores`. It warns (exit 0, `nombres_repetidos` in the JSON) when a section name is repeated (across documents or within one), comparing without case or accents as the chat's search does.",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin» (the guide is read from this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 falta_guia saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)", "--dry-run: says what it would send without sending it", "--json"],
       ejemplos: ["supcoflow guide check --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "guide publish",
-      resumen: "Uploads .supcoflow/guide.md directly (or the old name guia.md, only if guide.md doesn't exist): sends the content, the file it read and the commit and branch this clone declares (if there's git and commits; otherwise, no commit). The engine checks it and makes it the active guide; the commit is kept as «declared by the terminal, not verified in GitHub». With --from-github it keeps the earlier route: it sends the fingerprint and the engine compares it with the main branch's; if it isn't pushed to that branch yet (or it's another one), it exits 5.",
-      flags: ["--from-github: doesn't upload the file; verifies against GitHub's main branch (exits 5 guia_no_subida / guia_distinta if it doesn't match)", "--repo owner/repo: the repo, if it isn't this folder's «origin» (the guide is read from this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 falta_guia saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)", "--dry-run: says what it would send (or the fingerprint with --from-github), without requesting anything", "--json"],
+      resumen: "Uploads the guide directly: the folder .supcoflow/knowledge/ as ONE version (all its .md documents, the same rule as guide check) or, without that folder, .supcoflow/guide.md (or the old name guia.md, only if guide.md doesn't exist). It sends the content, what it read and the commit and branch this clone declares (if there's git and commits; otherwise, no commit). The engine checks it and makes it the active guide; the commit is kept as «declared by the terminal, not verified in GitHub». With --from-github it keeps the earlier route: it sends the fingerprint (for a folder, the fingerprint of the whole set: names and contents) and the engine compares it with the main branch's; if it isn't pushed to that branch yet (or it's another one), it exits 5. Meant for CI after the merge (see the README).",
+      flags: ["--from-github: doesn't upload the file or the documents; verifies against GitHub's main branch (exits 5 guia_no_subida / guia_distinta if it doesn't match)", "--repo owner/repo: the repo, if it isn't this folder's «origin» (the guide is read from this clone only if it is that repo: its origin, or a `supcoflow` remote at https://github.com/owner/repo.git; otherwise it exits 3 falta_guia saying what this clone is and the exact `git remote add supcoflow …`, without asking the engine)", "--dry-run: says what it would send (or the fingerprint with --from-github), without requesting anything", "--json"],
       ejemplos: ["supcoflow guide publish --json"],
       codigos: [0, 1, 2, 3, 4, 5],
     },
@@ -226,6 +226,17 @@ export const DESCRIPCION: {
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { vigente, publicaciones }"],
       ejemplos: ["supcoflow guide versions --json"],
       codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "guide stale",
+      resumen: "Warns when a change touches code a document of .supcoflow/knowledge/ explains and doesn't touch that document. No AI, no engine call, no sign-in: it only reads git and the clone. It reads each document's header (`sources`: globs of code), diffs the working tree against the merge base with --base (committed, staged and untracked files, so it also works before the commit) and says «you changed X and didn't change the document that explains it». It also warns, each with its own `tipo`: `mapa_vacio` (no documents, or none declares `sources`), `mapa_roto` (a header or the folder can't be read), `fuente_sin_archivos` (a `sources` pattern matches no file: moved or deleted), `cambio_cosmetico` (the document changed only in whitespace), `cobertura_quitada` (it also reads the map at the merge base: the document was deleted or a `sources` pattern removed, and the change touches code it covered that no document covers now), `no_se_pudo_comparar` (the base is missing, the clone is shallow, or git couldn't list the repo's files, `motivo: git_no_pudo_listar`: it says it could NOT compare or complete the check, keeps what it did compute, `comparado` is false, and it suggests `fetch-depth: 0` when that is the cause; it never says «nothing to warn» when it couldn't look). New files that no `sources` covers come apart as `notas` (`fuera_del_mapa`), which never fail --strict. It can't tell whether a text is true or enough, only what was touched. Exits 0 even with warnings; with --strict, 4 (guia_desactualizada) if there is any warning (not a note). JSON: { ok, comparado, base, base_commit, documentos, cambiados, cubiertos, sin_cubrir, avisos: [{ tipo, mensaje, documento, archivos, patrones, … }], notas }.",
+      flags: [
+        "--base ref: what to compare against, for example origin/main (required; in CI the checkout needs fetch-depth: 0)",
+        "--strict: exit 4 if there is any warning (notes don't count)",
+        "--json",
+      ],
+      ejemplos: ["supcoflow guide stale --base origin/main --json", "supcoflow guide stale --base origin/main --strict"],
+      codigos: [0, 1, 3, 4],
     },
     {
       nombre: "agents show",
@@ -331,7 +342,7 @@ export const DESCRIPCION: {
   facultades: [
     {
       nombre: "read",
-      incluye: "Identity and team, projects, configuration, cases, issues, runs, costs, installation state, reading and checking the guide (guide check, guide show, guide versions)",
+      incluye: "Identity and team, projects, configuration, cases, issues, runs, costs, installation state, reading and checking the guide (guide check, guide show, guide versions); guide stale needs none (it only reads git)",
       con_api_key: true,
     },
     {

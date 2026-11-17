@@ -58,7 +58,7 @@ describe("V-7 (1): un pedido PARCIAL no toca un proyecto distinto del que anota 
 
   it("guide publish", async () => {
     const m = clonDeA();
-    const d = { ...base(m), fetch: (async () => { throw new Error("sin red"); }) as never, leerArchivoChico: () => ({ bytes: new TextEncoder().encode("## A\n") }),
+    const d = { ...base(m), fetch: (async () => { throw new Error("sin red"); }) as never, leerArchivoChico: () => ({ bytes: new TextEncoder().encode("## A\n") }), listarCarpeta: () => ({ error: "it doesn't exist" }),
       gitDeclarado: async () => ({ codigo: 0, stdout: "main\n" }), publicar: f(m, "publicar"), revisar: f(m, "revisar"), ver: f(m, "ver"), elegir: f(m, "elegir"), versiones: f(m, "versiones") } as unknown as DepsDeGuia;
     const r = await guiaPublicar(d, { repo: null, dryRun: false, fromGithub: false });
     incoherente(r, "proyecto_del_clon_distinto");

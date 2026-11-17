@@ -9,6 +9,7 @@ import { agentesConfigurar, agentesPonerClave, agentesQuitar, agentesValidar, ag
 import { clavesCrear, clavesListar, clavesRevocar } from "./comandos/claves.ts";
 import { chatLogo, chatMarca, chatPrenderApagar, comandoConfiguracion, sitios } from "./comandos/configurar.ts";
 import { guiaPublicar, guiaRevisar, guiaUsar, guiaVer, guiaVersiones } from "./comandos/guia.ts";
+import { guiaStale } from "./comandos/guia-stale.ts";
 import { instalacionAnotar } from "./comandos/instalacion.ts";
 import { comandoCatalogo, datosFijar, politicaFijar } from "./comandos/datos-y-politica.ts";
 import { ayuda, comandoDescribir, DESCRIPCION } from "./comandos/describir.ts";
@@ -48,7 +49,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       start: flags.start, wait: flags.wait, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
       site: flags.site !== null, title: flags.title !== null, greeting: flags.greeting !== null, theme: flags.theme.length > 0,
       file: flags.file !== null, allow: flags.allow !== null, mode: flags.mode !== null,
-      name: flags.name !== null, saveTo: flags.saveTo !== null, id: flags.id !== null, source: flags.source !== null, fromGithub: flags.fromGithub,
+      name: flags.name !== null, saveTo: flags.saveTo !== null, id: flags.id !== null, source: flags.source !== null, fromGithub: flags.fromGithub, base: flags.base !== null, strict: flags.strict,
       skill: flags.skill !== null, app: flags.app !== null, shape: flags.shape !== null,
       authorizeSpend: flags.authorizeSpend, message: flags.message !== null, testId: flags.testId !== null,
       ceiling: flags.ceiling !== null, expectPolicy: flags.expectPolicy !== null,
@@ -137,6 +138,8 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await guiaUsar(e.guia, flags), json };
       case "guide versions":
         return { r: await guiaVersiones(e.guia, flags), json };
+      case "guide stale":
+        return { r: await guiaStale(e.stale, flags), json };
       case "agents show":
         return { r: await agentesVer(e.agentes, flags), json };
       case "agents set-key":

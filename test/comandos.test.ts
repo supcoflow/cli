@@ -380,6 +380,11 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("guide check", "fromGithub")).not.toBeNull();
     expect(sin("guide show", "fromGithub")).not.toBeNull();
     expect(sin("guide versions", "fromGithub")).not.toBeNull();
+    expect(sin("guide check", "base")).not.toBeNull();
+    expect(sin("guide publish", "strict")).not.toBeNull();
+    expect(sin("whoami", "base", "strict")).not.toBeNull();
+    expect(sin("guide stale", "repo")).not.toBeNull();
+    expect(sin("guide stale", "fromGithub")).not.toBeNull();
   });
   it("los flags de cada comando de configurar sí aplican", () => {
     expect(sin("sites add", "site", "repo")).toBeNull();
@@ -394,6 +399,7 @@ describe("flags que no aplican (despacho)", () => {
     expect(sin("guide check", "repo")).toBeNull();
     expect(sin("guide publish", "fromGithub", "repo")).toBeNull();
     expect(sin("guide versions", "repo")).toBeNull();
+    expect(sin("guide stale", "base", "strict")).toBeNull();
     expect(sin("project show", "repo")).toBeNull();
   });
   it("bloque 6: --skill y --app sólo en `install record`; --file también en `chat logo`; `widget` toma --repo", () => {

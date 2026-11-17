@@ -3,7 +3,7 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
-  accessSync, chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, statSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
+  accessSync, chmodSync, closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync, statSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeSync,
 } from "node:fs";
 import { NO_LEIDO } from "./lectura.ts";
 import { homedir, hostname } from "node:os";
@@ -18,6 +18,8 @@ import type { DepsDeAgentes } from "./comandos/agentes.ts";
 import { crearCandados, type FsDelCandado } from "./candado.ts";
 import type { DepsDeClaves } from "./comandos/claves.ts";
 import type { DepsDeGuia } from "./comandos/guia.ts";
+import type { EntradaDeCarpeta } from "./comandos/carpeta-de-la-guia.ts";
+import type { DepsDeStale } from "./comandos/guia-stale.ts";
 import { esCarpetaReal, esEnlaceReal, rutaRealOEnNada, type DepsDeInstalacion } from "./comandos/instalacion.ts";
 import { DESCRIPCION } from "./comandos/describir.ts";
 import type { DepsDeWidget } from "./comandos/widget.ts";
@@ -277,9 +279,9 @@ export const correrReal: Correr = (bin, args, stdin, techoMs) =>
 // `git` con entorno mínimo (sólo PATH): ni GIT_DIR ni GIT_CONFIG del shell desvían la lectura, y
 // SUPCOFLOW_TOKEN no le llega. Un git ausente (ENOENT) es «sin git», no un fallo. El plazo es parámetro para no
 // duplicar la función: lo que git imprima nunca sale a la terminal, sólo el código y el stdout.
-const gitConPlazo = (plazoMs: number): Git => (args, cwd) =>
+const gitConPlazo = (plazoMs: number, maxBuffer?: number): Git => (args, cwd) =>
   new Promise((resolve) => {
-    execFile("git", args, { cwd, timeout: plazoMs, env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
+    execFile("git", args, { cwd, timeout: plazoMs, ...(maxBuffer !== undefined ? { maxBuffer } : {}), env: { PATH: process.env.PATH ?? "" } }, (e, stdout) => {
       if (!e) return resolve({ codigo: 0, stdout: String(stdout) });
       const codigo = (e as NodeJS.ErrnoException).code;
       resolve({ codigo: typeof codigo === "number" ? codigo : null, stdout: "" });
@@ -295,6 +297,28 @@ export const gitReal: Git = Object.assign(gitConPlazo(5_000), {
 // El commit y la rama que la terminal DECLARA al subir la guía: 3 segundos (no 5) porque esto es un extra que nunca
 // debe hacer esperar a nadie.
 export const gitRapido: Git = gitConPlazo(3_000);
+
+// El git de `guide stale`: lista los archivos de todo el repo y el diff de un cambio grande, así que tiene más plazo y
+// más lugar para la salida (el tope por defecto, 1 MB, cortaría en silencio un repo grande). Sólo lee.
+export const gitDeLecturas: Git = gitConPlazo(30_000, 256 * 1024 * 1024);
+
+// Las entradas directas de una carpeta, sin seguir enlaces (ni el de la carpeta misma): lo que hay adentro de un clon
+// ajeno no puede llevar a leer otra cosa. Una entrada que no es archivo común ni enlace (una subcarpeta, un FIFO) es «otro».
+export function listarCarpetaReal(p: string): { entradas: EntradaDeCarpeta[] } | { error: string } {
+  try {
+    // Ni la carpeta ni la que la contiene (`.supcoflow`) se siguen si son enlaces: un clon ajeno no puede llevar la lectura a otro lado.
+    if (lstatSync(dirname(p), { throwIfNoEntry: false })?.isSymbolicLink()) return { error: NO_LEIDO.esUnEnlace };
+    const st = lstatSync(p);
+    if (st.isSymbolicLink()) return { error: NO_LEIDO.esUnEnlace };
+    if (!st.isDirectory()) return { error: NO_LEIDO.noExiste };
+    return {
+      entradas: readdirSync(p, { withFileTypes: true }).map((e) => ({ nombre: e.name, tipo: e.isSymbolicLink() ? "enlace" : e.isFile() ? "archivo" : "otro" })),
+    };
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return { error: code === "ENOENT" || code === "ENOTDIR" ? NO_LEIDO.noExiste : NO_LEIDO.noSePudoLeer };
+  }
+}
 
 // `.supcoflow/proyecto.json` vive DENTRO del repo, y el repo puede ser un clon ajeno: su contenido lo
 // decide quien lo escribió. Por eso ni la carpeta ni el archivo se siguen si son enlaces (uno hacia
@@ -478,6 +502,7 @@ export type Entorno = {
   proyecto: DepsDeProyecto;
   configurar: DepsDeCatalogo;
   guia: DepsDeGuia;
+  stale: DepsDeStale;
   claves: DepsDeClaves;
   agentes: DepsDeAgentes;
   widget: DepsDeWidget;
@@ -589,9 +614,11 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     },
     guia: {
       ...configurarEnElMotor,
-      leerArchivoChico, fetch, gitDeclarado: gitRapido,
+      leerArchivoChico, listarCarpeta: listarCarpetaReal, fetch, gitDeclarado: gitRapido,
       revisar: revisarGuia, publicar: publicarGuia, ver: leerGuia, elegir: elegirOrigen, versiones: leerVersionesDeLaGuia,
     },
+    // `guide stale` no llama al motor ni necesita sesión: sólo git y el disco del clon.
+    stale: { git: gitDeLecturas, cwd, leerArchivoChico, listarCarpeta: listarCarpetaReal },
     claves: {
       ...configurarEnElMotor,
       listarClaves: (a, clave, id) => listarClaves(a, clave, id, fetch),

@@ -29,6 +29,7 @@ function deps(o: Partial<DepsDeGuia> = {}, archivo: Archivo = bytes("## A\n"), v
       lecturas.push(p.replace("/w/r/", ""));
       return p.endsWith("guia.md") ? viejo : archivo;
     },
+    listarCarpeta: () => ({ error: NO_LEIDO.noExiste }),
     fetch: (async () => { throw new Error("sin red"); }) as never,
     gitDeclarado: async (args) => ({ codigo: 0, stdout: args.includes("--abbrev-ref") ? "main\n" : `${HEAD}\n` }),
     revisar: async (...args) => { pedidos.push({ que: "revisar", args }); return R(200, { ok: true, secciones: 3 }); },

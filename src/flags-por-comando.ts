@@ -26,6 +26,7 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
   { flags: ["name", "saveTo"], comandos: ["keys create"], texto: "--name and --save-to belong to `supcoflow keys create`." },
   { flags: ["source"], comandos: ["guide use"], texto: "--source belongs to `supcoflow guide use`." },
   { flags: ["fromGithub"], comandos: ["guide publish"], texto: "--from-github belongs to `supcoflow guide publish`." },
+  { flags: ["base", "strict"], comandos: ["guide stale"], texto: "--base and --strict belong to `supcoflow guide stale`." },
   { flags: ["id"], comandos: ["keys revoke"], texto: "--id belongs to `supcoflow keys revoke`." },
   {
     flags: ["authorizeSpend", "ceiling", "expectPolicy", "message", "testId"], comandos: ["test"],

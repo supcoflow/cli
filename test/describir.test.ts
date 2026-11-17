@@ -20,7 +20,7 @@ describe("describe --json", () => {
     expect(r.json.ok).toBe(true);
     const comandos = r.json.comandos as { nombre: string }[];
     expect(comandos.map((c) => c.nombre).slice(0, 7)).toEqual(["login", "logout", "whoami", "describe", "repo connect", "project create", "project show"]);
-    expect(comandos).toHaveLength(34);
+    expect(comandos).toHaveLength(35);
     expect(Object.keys(r.json.codigos as object)).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
     const facultades = r.json.facultades as { nombre: string; con_api_key: boolean }[];
     const sin = facultades.filter((f) => !f.con_api_key).map((f) => f.nombre);
@@ -68,9 +68,28 @@ describe("describe --json", () => {
     expect(g("guide publish").resumen).toMatch(/main branch/);
   });
 
+  it("la guía como carpeta: check y publish dicen la regla de la carpeta, y `guide stale` es el detector sin IA", () => {
+    const g = (n: string) => DESCRIPCION.comandos.find((x) => x.nombre === n)!;
+    for (const n of ["guide check", "guide publish"]) {
+      expect(g(n).resumen, n).toContain(".supcoflow/knowledge/");
+      expect(g(n).resumen, n).toMatch(/ONE (guide|version)/);
+    }
+    expect(g("guide check").resumen).toMatch(/rejected by name, never skipped/);
+    expect(g("guide check").resumen).toContain("nombres_repetidos");
+    expect(g("guide publish").resumen).toMatch(/fingerprint of the whole set/);
+    const s = g("guide stale");
+    expect(s.flags.join(" ")).toContain("--base");
+    expect(s.flags.join(" ")).toContain("--strict");
+    expect(s.codigos).toEqual([0, 1, 3, 4]);
+    expect(s.resumen).toMatch(/No AI, no engine call, no sign-in/);
+    expect(s.resumen).toMatch(/fetch-depth: 0/);
+    for (const tipo of ["mapa_vacio", "mapa_roto", "fuente_sin_archivos", "cambio_cosmetico", "cobertura_quitada", "no_se_pudo_comparar", "fuera_del_mapa"]) expect(s.resumen, tipo).toContain(tipo);
+    expect(s.resumen).toMatch(/never says «nothing to warn» when it couldn't look/);
+  });
+
   it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
     const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "whoami", "describe", "repo connect", "project create", "project show", "catalog", "diagnose", "test"].includes(c.nombre));
-    expect(configurar).toHaveLength(24);
+    expect(configurar).toHaveLength(25);
     for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
   });
 
@@ -164,10 +183,10 @@ describe("describe --json", () => {
     expect(c.flags.find((f) => f.startsWith("--install"))).toBeDefined();
     expect(c.ejemplos.join(" ")).not.toContain("--test");
   });
-  it("la versión es la del package.json, y es la 0.10.3", () => {
+  it("la versión es la del package.json, y es la 0.11.0", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
     expect(DESCRIPCION.version).toBe(pkg.version);
-    expect(pkg.version).toBe("0.10.3");
+    expect(pkg.version).toBe("0.11.0");
     // api.ts la manda en el user-agent: a mano, tiene que ser la misma.
     expect(readFileSync(new URL("../src/api.ts", import.meta.url), "utf8")).toContain(`const VERSION = "${pkg.version}";`);
   });
@@ -240,8 +259,8 @@ describe("T3.1: ni un nombre castellano en describe (los alias no salen)", () =>
     const { leerArgumentos } = await import("../src/argumentos.ts");
     for (const c of DESCRIPCION.comandos) expect(leerArgumentos(c.nombre.split(" ")).comando, c.nombre).toBe(c.nombre);
   });
-  it("describe --json se escribe en una sola línea con la versión 0.10.3", () => {
-    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.10.3" });
+  it("describe --json se escribe en una sola línea con la versión 0.11.0", () => {
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: "0.11.0" });
   });
 });
 
