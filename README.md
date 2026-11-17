@@ -37,7 +37,7 @@ the English ones.
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
 | `supcoflow guide stale --base origin/main` | Warns when a change touches code a document explains and doesn't touch the document. No AI, no engine, no sign-in (see «Keep the folder up to date»). |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
-| `supcoflow install record --skill 0.6.12 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
+| `supcoflow install record --skill 0.7.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
 | `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
 | `supcoflow diagnose` | Free: how far the installation is (N of 7, or N of 8 when the engine also counts the chat's AI account) and whether a test would go in (including whether this machine can save the test request and the triage agent's AI account). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
