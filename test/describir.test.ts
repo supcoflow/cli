@@ -362,5 +362,10 @@ describe("R13: `describe <comando>` describe sólo ese comando", () => {
     expect(dg).toMatch(/--full/);
     expect(dg).toMatch(/faltan/);
     expect(dg).toMatch(/siguiente/);
+    expect(dg).toMatch(/detalle/);
+  });
+
+  it("`describe` declara el 3 con el que sale para un comando que no existe", () => {
+    expect(Object.keys(json("describe").codigos)).toEqual(["0", "3"]);
   });
 });

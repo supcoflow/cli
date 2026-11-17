@@ -580,6 +580,12 @@ describe("supcoflow sin terminal", () => {
         expect(puntoDe(nuevo.stdout)).toMatchObject({ ok: false });
         expect(puntoDe(nuevo.stdout).mensaje).toContain("2.0.0");
         expect(JSON.parse(nuevo.stdout).instalacion).toMatchObject({ ok: 6, total: 7 });
+        // F2: con `listo` true el próximo paso es la prueba; el arreglo del aviso va en su ítem, sin huecos para rellenar.
+        const corto = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        expect(corto.codigo, corto.stdout).toBe(0);
+        const jc = JSON.parse(corto.stdout);
+        expect(jc).toMatchObject({ ok: true, listo: true, siguiente: "supcoflow test --json", faltan: [{ punto: "interfaz", aviso: true, siguiente: expect.stringContaining("supcoflow install record") }] });
+        expect(corto.stdout).not.toMatch(/<[a-z]+>|example\./);
 
         // Con el motor de hoy (sin el campo nuevo) no se compara, y un archivo que se borró sí se nota.
         motor.contratoDeclarado = null;

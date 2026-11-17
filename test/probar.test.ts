@@ -188,8 +188,9 @@ describe("diagnose", () => {
     expect(r.json).toMatchObject({
       ok: false, error: "no_listo", message: expect.stringContaining("needs fixing"), listo: false, instalacion: { ok: 6, total: 7 },
       faltan: [{ punto: "sitios", mensaje: "La lista de sitios está vacía." }],
-      siguiente: "supcoflow sites add --site https://your-site.example",
+      siguiente: expect.stringContaining("supcoflow sites add --site"),
     });
+    expect(r.json.siguiente).not.toMatch(/<[a-z]+>|https?:\/\/|example\./);
     expect(r.json).not.toHaveProperty("puntos");
   });
 
@@ -202,6 +203,28 @@ describe("diagnose", () => {
     expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/supcoflow agents set-key.*never goes through an assistant/);
     expect(siguienteDelDiagnostico([punto("algo_nuevo")], false)).toBe("Fix «algo_nuevo»: falta algo_nuevo Then run `supcoflow diagnose` again.");
     expect(siguienteDelDiagnostico([], true)).toBe("supcoflow test --json");
+  });
+
+  it("F2: con `listo` true el próximo paso es siempre la prueba, aunque haya avisos; sin `listo` nunca hay huecos para rellenar", () => {
+    const punto = (p: string, extra: object = {}) => ({ punto: p, ok: false, mensaje: `falta ${p}`, grupo: "instalacion" as const, ...extra });
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true })], true)).toBe("supcoflow test --json");
+    expect(siguienteDelDiagnostico([punto("algo_nuevo", { aviso: true })], true)).toBe("supcoflow test --json");
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true })], false)).toBe("supcoflow diagnose --full --json");
+    for (const p of ["sign-in", "repo", "instalacion", "sitios", "chat", "ia_del_chat", "ia_del_triaje", "guia", "interfaz"]) {
+      expect(siguienteDelDiagnostico([punto(p)], false), p).not.toMatch(/<[a-z]+>|https?:\/\/|example\./);
+    }
+  });
+
+  it("F2: un aviso con `listo` true sale en `faltan` con su propio `siguiente`, y el `siguiente` de arriba es la prueba", async () => {
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, puntos: [...DIAG.puntos, { punto: "algo_nuevo", ok: false, mensaje: "Conviene revisarlo.", aviso: true, grupo: "instalacion" }] }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toMatchObject({
+      ok: true, listo: true, siguiente: "supcoflow test --json",
+      faltan: [{ punto: "algo_nuevo", mensaje: "Conviene revisarlo.", aviso: true, siguiente: "Fix «algo_nuevo»: Conviene revisarlo. Then run `supcoflow diagnose` again." }],
+    });
   });
 
   it("R13: con --full el JSON trae todo el detalle de antes, más `siguiente`", async () => {

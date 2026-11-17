@@ -50,7 +50,7 @@ export const DESCRIPCION: {
       resumen: "Describes commands, flags, capabilities and exit codes, for an assistant. `describe <command>` (for example `describe diagnose` or `describe repo connect`) describes only that command: its summary, flags, examples and the exit codes it uses (`comando`, `flags_globales`, `codigos`); an unknown name exits 3 comando_desconocido and lists the commands. Without a command it prints the whole contract.",
       flags: ["<command>: describe only that command (optional)", "--json"],
       ejemplos: ["supcoflow describe --json", "supcoflow describe diagnose --json"],
-      codigos: [0],
+      codigos: [0, 3],
     },
     {
       nombre: "repo connect",
@@ -322,7 +322,7 @@ export const DESCRIPCION: {
       flags: [
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
         "--full: the whole detail (every point, the machine check, the pending attempt, the ceiling and balances). Without it `--json` is a short summary",
-        "--json: by default a short summary { ok, listo, proyecto, instalacion: { ok, total: 7 | 8 }, faltan: [{ punto, mensaje, aviso? }], siguiente } (on exit 4 also error: no_listo and message); `siguiente` is the next command to run, or null when everything is ready. With --full, the whole detail as before: { instalacion: { ok, total, puntos }, prueba: { listo, puntos }, puntos, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, politica, techo_usd, saldo_usd, tope_usd, comprometido_usd, prueba_abierta, … } plus `siguiente`",
+        "--json: by default a short summary { ok, listo, proyecto, instalacion: { ok, total: 7 | 8 }, faltan: [{ punto, mensaje, aviso?, siguiente? }], siguiente, detalle } (on exit 4 also error: no_listo and message); `siguiente` is `supcoflow test --json` when `listo` is true (advice, `aviso: true`, doesn't change it: that item of `faltan` carries its own `siguiente`), otherwise the fix for the first point that stops a test, as a command to run or, when it needs data the terminal doesn't have, in words; `detalle` is `supcoflow diagnose --full --json`. With --full, the whole detail as before: { instalacion: { ok, total, puntos }, prueba: { listo, puntos }, puntos, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, politica, techo_usd, saldo_usd, tope_usd, comprometido_usd, prueba_abierta, … } plus `siguiente`",
       ],
       ejemplos: ["supcoflow diagnose --json", "supcoflow diagnose --full --json"],
       codigos: [0, 1, 2, 3, 4],

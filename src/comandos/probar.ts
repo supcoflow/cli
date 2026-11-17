@@ -160,18 +160,21 @@ const SIGUIENTE_POR_PUNTO: Readonly<Record<string, string>> = {
   "sign-in": "supcoflow login",
   repo: "Run it from a clone of the project's repo, or pass --repo owner/repo.",
   instalacion: "supcoflow repo connect",
-  sitios: "supcoflow sites add --site https://your-site.example",
+  sitios: "Ask the person for the https address of the site where the chat goes, then add it with `supcoflow sites add --site` and that address.",
   chat: "supcoflow chat on",
   ia_del_chat: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
   ia_del_triaje: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
   guia: "supcoflow guide publish",
-  interfaz: "supcoflow install record --skill <version> --file <path>",
+  interfaz: "Update the own interface to the contract version the project declares, then record it again with `supcoflow install record` (the skill version and the interface's files).",
 };
-/** El comando (o la acción) siguiente: el del primer punto que falta que cuenta, el aviso al final; con todo listo, la prueba. */
-export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean): string | null {
-  if (faltan.length === 0) return listo ? "supcoflow test --json" : "supcoflow diagnose --full --json";
-  const primero = faltan.find((x) => x.aviso !== true) ?? faltan[0]!;
-  return SIGUIENTE_POR_PUNTO[primero.punto] ?? `Fix «${primero.punto}»: ${primero.mensaje} Then run \`supcoflow diagnose\` again.`;
+export function pasoDelPunto(x: Punto): string {
+  return SIGUIENTE_POR_PUNTO[x.punto] ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose\` again.`;
+}
+/** El comando (o la acción) siguiente: con todo listo, la prueba (los avisos no la frenan); si no, el del primer punto que la frena. */
+export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean): string {
+  if (listo) return "supcoflow test --json";
+  const primero = faltan.find((x) => x.aviso !== true);
+  return primero === undefined ? "supcoflow diagnose --full --json" : pasoDelPunto(primero);
 }
 
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> & { full?: boolean }): Promise<Resultado> {
@@ -218,7 +221,7 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> &
     proyecto: completo.proyecto,
     listo,
     instalacion: { ok: buenos, total },
-    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true } : {}) })),
+    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true, siguiente: pasoDelPunto(x) } : {}) })),
     siguiente,
     detalle: "supcoflow diagnose --full --json",
   };
