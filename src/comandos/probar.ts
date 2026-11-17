@@ -173,10 +173,13 @@ export function pasoDelPunto(x: Punto, repo: string | null = null): string {
   const r = conRepo(repo);
   return SIGUIENTE_POR_PUNTO[x.punto]?.(r, repo) ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose${r}\` again.`;
 }
-/** El comando (o la acción) siguiente: con todo listo, la prueba (los avisos no la frenan); si no, el del primer punto que la frena. */
+/** El comando (o la acción) siguiente: con todo listo, la prueba (los avisos no la frenan); si no, el del primer punto que la frena
+ * (sign-in y repo, después los de la prueba, `maquina` primero; los demás de la instalación sólo si nada de eso falta). */
 export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean, repo: string | null = null): string {
   if (listo) return `supcoflow test${conRepo(repo)} --json`;
-  const primero = faltan.find((x) => x.aviso !== true);
+  const primero = faltan.find((x) => x.punto === "sign-in" || x.punto === "repo")
+    ?? faltan.find((x) => x.grupo === "prueba")
+    ?? faltan.find((x) => x.aviso !== true);
   return primero === undefined ? `supcoflow diagnose --full${conRepo(repo)} --json` : pasoDelPunto(primero, repo);
 }
 
@@ -314,7 +317,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const revision = await revisarLaMaquina(d, proyecto.id);
     const completo = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const datos = flags.full === true ? completo : {
-      proyecto: completo.proyecto, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
+      proyecto: completo.proyecto, listo: g.listo, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
       detalle: autorizado !== null && flags.dryRun
         ? `${comandoDeReintento({ clave: "", mensaje: null, ...autorizado }, flags.repo)} --dry-run --full --json`
         : `supcoflow test${flags.dryRun ? " --dry-run" : ""} --full${conRepo(flags.repo)} --json`,
@@ -350,6 +353,8 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose${conRepo(flags.repo)}\` first says whether everything is ready.${pendiente}`;
     const siguiente = !revision.maquina.ok
       ? `Fix this machine first (see \`message\`), then run \`supcoflow diagnose${conRepo(flags.repo)} --json\`.`
+      : !g.listo
+        ? `Not ready for a test yet: run \`supcoflow diagnose${conRepo(flags.repo)} --json\` and fix what it says before asking for the spend.`
       : previo !== null
         ? `Ask the person to authorize the spend, then recover the request waiting for confirmation with \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica }, flags.repo)}\`.`
         : `Ask the person to authorize the spend, then run \`${lanzar}\`.`;

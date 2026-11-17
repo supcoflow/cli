@@ -318,6 +318,18 @@ describe("diagnose", () => {
     });
   });
 
+  it("R6-2: con la guía sin reportar y la máquina sin poder guardar, el `siguiente` de arriba es lo que frena la prueba (la máquina), no la guía", async () => {
+    const base = deps(motor()).d;
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, puntos: DIAG.puntos.filter((p) => p.punto !== "guia") }),
+      pruebas: { ...base.pruebas, revisar: async () => { throw new Error("boom"); } },
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.json).toMatchObject({ listo: false });
+    expect(String(r.json.siguiente)).toMatch(/^Fix «maquina»/);
+    expect(r.json.faltan).toEqual(expect.arrayContaining([expect.objectContaining({ punto: "guia", siguiente: "supcoflow guide publish" })]));
+  });
+
   it("R2-1: sin `listo`, cada punto que falta trae su propio arreglo, y el de arriba es el del primero", async () => {
     const { d } = deps(motor(), undefined, {
       leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "chat" || p.punto === "guia" ? { ...p, ok: false } : p)) }),
@@ -562,7 +574,7 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const r = await probar(d, F);
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
     expect(r.json).toEqual({
-      ok: false, error: "falta_autorizacion", message: expect.any(String), proyecto: { id: PROY.id, repo: "d/r" }, politica: "relevar", techo_usd: 2,
+      ok: false, error: "falta_autorizacion", message: expect.any(String), proyecto: { id: PROY.id, repo: "d/r" }, listo: true, politica: "relevar", techo_usd: 2,
       prueba_abierta: null, maquina: { ok: true }, intento_pendiente: null,
       siguiente: "Ask the person to authorize the spend, then run `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`.",
       detalle: "supcoflow test --full --json",
@@ -605,6 +617,14 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     expect(r.json.message).toContain("`supcoflow diagnose --repo d/r` first says");
     const reintento = await probar(d, { ...AUT, ceiling: "3", repo: "d/r" });
     expect(reintento.json.error).not.toBe("intento_pendiente");
+  });
+
+  it("R6-1: si el motor dice que la prueba no entra, el JSON corto lo dice (`listo` false) y `siguiente` manda a diagnose, no a pedir el gasto", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, listo: false }) });
+    const r = await probar(d, { ...F, repo: "d/r" });
+    expect(r.json).toMatchObject({ error: "falta_autorizacion", listo: false });
+    expect(r.json.siguiente).toBe("Not ready for a test yet: run `supcoflow diagnose --repo d/r --json` and fix what it says before asking for the spend.");
+    expect((await probar(d, { ...F, dryRun: true })).json).toMatchObject({ dry_run: true, listo: false });
   });
 
   it("R6: con --message y sin el flag, igual: 4 y nada guardado", async () => {
