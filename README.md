@@ -22,12 +22,12 @@ the English ones.
 
 | Command | What it does |
 |---|---|
-| `supcoflow login` | Opens the approval page in your browser (and shows the link and the code too); you approve it in the console and the terminal keeps its key. |
-| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser and exits 5 with the link and the code. |
+| `supcoflow login` | Opens the approval page in your browser and shows the link and the code too (the browser from the next release; 0.11.0 only shows them, see [The contract](#the-contract)); you approve it in the console and the terminal keeps its key. |
+| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser (from the next release; 0.11.0 only shows the link, see [The contract](#the-contract)) and exits 5 with the link and the code. |
 | `supcoflow login --wait` | The second step: waits for the approval up to 90 s. If it hasn't arrived, exits 5: run it again. |
 | `supcoflow logout` | Revokes the key in use and deletes it from this machine. |
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
-| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser (and shows it) and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
+| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser and shows it (the browser from the next release; 0.11.0 only shows it, see [The contract](#the-contract)), and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks the guide against the engine without publishing anything: the folder `.supcoflow/knowledge/` if it has `.md` documents, otherwise `.supcoflow/guide.md`. |
