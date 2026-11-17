@@ -46,7 +46,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       return { r: { codigo: SALIDA.ok, json: { ok: true, ayuda: texto }, texto }, json };
     }
     const presentes: Record<string, boolean> = {
-      start: flags.start, wait: flags.wait, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
+      start: flags.start, wait: flags.wait, noBrowser: flags.noBrowser, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
       site: flags.site !== null, title: flags.title !== null, greeting: flags.greeting !== null, theme: flags.theme.length > 0,
       file: flags.file !== null, allow: flags.allow !== null, mode: flags.mode !== null,
       name: flags.name !== null, saveTo: flags.saveTo !== null, id: flags.id !== null, source: flags.source !== null, fromGithub: flags.fromGithub, base: flags.base !== null, strict: flags.strict,
@@ -74,13 +74,15 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
     }
 
     const e = entornoReal();
+    // `--no-browser` (y SUPCOFLOW_NO_BROWSER=1, que lee el abridor): la URL y el código se muestran como siempre.
+    const abrirNavegador = flags.noBrowser ? undefined : e.abrirNavegador;
     switch (comando) {
       case "login":
-        if (flags.start) return { r: await loginStart(e.login, flags), json };
+        if (flags.start) return { r: await loginStart({ ...e.login, abrirNavegador }, flags), json };
         if (flags.wait) return { r: await loginWait(e.login), json };
         // Sin TTY, `login --dry-run` igual tiene algo que decir: lo que haría el primer paso.
         if (flags.dryRun) return { r: await loginStart(e.login, { dryRun: true }), json };
-        return { r: await loginInteractivo({ ...e.login, esTty: e.esTty, mostrar: e.mostrar }, flags), json };
+        return { r: await loginInteractivo({ ...e.login, abrirNavegador, esTty: e.esTty, mostrar: e.mostrar }, flags), json };
       case "logout":
         return {
           r: await comandoLogout({
@@ -92,12 +94,12 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       case "whoami":
         return { r: await comandoQuienSoy({ api: e.api, guardado: e.guardado, quienSoy: e.quienSoy, avisar: e.avisar }), json };
       case "repo connect":
-        if (flags.start) return { r: await repoConectarStart(e.conexion, flags), json };
+        if (flags.start) return { r: await repoConectarStart({ ...e.conexion, abrirNavegador }, flags), json };
         // `--wait` sólo lee (un GET por tramo): con --dry-run haría lo mismo, así que no se rechaza.
         if (flags.wait) return { r: await repoConectarWait(e.conexion, flags), json };
         // Como `login`: sin TTY, --dry-run igual dice lo que haría el primer paso, sin tocar el motor.
         if (flags.dryRun) return { r: await repoConectarStart(e.conexion, { repo: flags.repo, dryRun: true }), json };
-        return { r: await repoConectarInteractivo({ ...e.conexion, esTty: e.esTty, mostrar: e.mostrar }, flags), json };
+        return { r: await repoConectarInteractivo({ ...e.conexion, abrirNavegador, esTty: e.esTty, mostrar: e.mostrar }, flags), json };
       case "project create":
         return { r: await proyectoCrear(e.proyecto, flags), json };
       case "project show":

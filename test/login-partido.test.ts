@@ -100,6 +100,7 @@ describe("loginStart", () => {
     expect(r.json).toEqual({
       ok: false, esperando: "persona", verification_uri: pedido.verificationUri,
       verification_uri_complete: pedido.verificationUriComplete, user_code: "BCDF-GHJK", expires_in: 600,
+      navegador_abierto: false,
     });
     expect(r.texto).toBe(`Open ${pedido.verificationUriComplete} and confirm the code BCDF-GHJK. Then run \`supcoflow login --wait\`.`);
     expect(await g.leerPendiente(ORIGEN)).toEqual({
@@ -410,5 +411,35 @@ describe("loginWait con la clave anterior ilegible (Review Focus 12 y 14)", () =
     const r = await loginWait(d);
     expect(r.codigo).toBe(0);
     expect(llamadas).toContain(`revocarPropia ${A}`);
+  });
+});
+
+describe("loginStart abre el navegador (R-B)", () => {
+  it("con un abridor que lo logra: lo abre con la URL completa y lo dice en el json y el texto", async () => {
+    const { d } = armar();
+    const abiertas: string[] = [];
+    const r = await loginStart({ ...d, abrirNavegador: async (u) => { abiertas.push(u); return true; } }, { dryRun: false });
+    expect(abiertas).toEqual([pedido.verificationUriComplete]);
+    expect(r.codigo).toBe(5);
+    expect(r.json).toMatchObject({ verification_uri_complete: pedido.verificationUriComplete, user_code: "BCDF-GHJK", navegador_abierto: true });
+    expect(r.texto).toContain("I opened");
+    expect(r.texto).toContain("BCDF-GHJK");
+  });
+  it("si no se pudo abrir: igual que siempre (URL y código), navegador_abierto false", async () => {
+    const { d } = armar();
+    const r = await loginStart({ ...d, abrirNavegador: async () => false }, { dryRun: false });
+    expect(r.json.navegador_abierto).toBe(false);
+    expect(r.texto).toBe(`Open ${pedido.verificationUriComplete} and confirm the code BCDF-GHJK. Then run \`supcoflow login --wait\`.`);
+  });
+  it("--dry-run no abre nada", async () => {
+    const { d } = armar();
+    let abierto = false;
+    await loginStart({ ...d, abrirNavegador: async () => { abierto = true; return true; } }, { dryRun: true });
+    expect(abierto).toBe(false);
+  });
+  it("el pendiente queda guardado aunque el abridor tarde o falle", async () => {
+    const { d, g } = armar();
+    await loginStart({ ...d, abrirNavegador: async () => false }, { dryRun: false });
+    expect(await g.leerPendiente(ORIGEN)).not.toBeNull();
   });
 });

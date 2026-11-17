@@ -460,3 +460,23 @@ describe("tanda 9: flags de `agents`", () => {
     expect(sin("whoami", "fromEnv")).not.toMatch(/vck_/);
   });
 });
+
+describe("loginInteractivo abre el navegador (R-B)", () => {
+  it("lo abre una sola vez (no en cada tramo de espera) y se lo dice a la persona", async () => {
+    const { d, mostrado } = armar({ canjes: [{ tipo: "pendiente" }, { tipo: "token", clave: A, equipo: "acme" }] });
+    const abiertas: string[] = [];
+    const r = await loginInteractivo(
+      { ...d, tramoMs: 15_000, abrirNavegador: async (u) => { abiertas.push(u); return true; }, esTty: true, mostrar: (s) => mostrado.push(s) },
+      { json: false, dryRun: false },
+    );
+    expect(r.codigo).toBe(0);
+    expect(abiertas).toEqual([pedido.verificationUriComplete]);
+    expect(mostrado.join("\n")).toContain("I opened");
+    expect(mostrado.join("\n")).toContain("BCDF-GHJK");
+  });
+  it("sin poder abrirlo: muestra la URL y el código como siempre", async () => {
+    const { d, mostrado } = armar({ canjes: [{ tipo: "token", clave: A, equipo: "acme" }] });
+    await loginInteractivo({ ...d, abrirNavegador: async () => false, esTty: true, mostrar: (s) => mostrado.push(s) }, { json: false, dryRun: false });
+    expect(mostrado.join("\n")).toContain(`Open ${pedido.verificationUriComplete} and confirm the code BCDF-GHJK`);
+  });
+});

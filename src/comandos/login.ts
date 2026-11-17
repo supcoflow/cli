@@ -4,6 +4,7 @@
 import type { Canje, PedidoDeCodigo } from "../api.ts";
 import { FalloDeLaTerminal, resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
 import { NOMBRE_DE_LA_FUENTE, type Guardado, type Pendiente } from "../guardado/index.ts";
+import type { AbrirNavegador } from "../navegador.ts";
 import { PLAZO_MINIMO_MS, RESERVA_PARA_CERRAR_MS, sondearUnTramo, TRAMO_MAXIMO_MS } from "../sondeo.ts";
 
 export type DepsDeLogin = {
@@ -17,6 +18,8 @@ export type DepsDeLogin = {
   revocarPropia: (api: URL, clave: string, plazoMs: number) => Promise<"revocada" | "ya_no_valia">;
   avisar: (s: string) => void;
   tramoMs?: number;
+  // Abre la URL en el navegador de la persona y dice si lo logró; sin él (`--no-browser`) no se abre nada.
+  abrirNavegador?: AbrirNavegador;
 };
 
 const TECHO_DE_UN_PASO_MS = 5_000;
@@ -99,13 +102,18 @@ export async function loginStart(d: DepsDeLogin, flags: { dryRun: boolean }): Pr
     return fallo(SALIDA.inesperado, e instanceof FalloDeLaTerminal ? e.error : "no_se_pudo_guardar",
       `I couldn't save the login in progress: ${motivo(e)}`);
   }
+  // El pendiente ya está guardado: abrir el navegador no puede romper nada de lo anterior.
+  const abierto = (await d.abrirNavegador?.(c.verificationUriComplete)) === true;
   return {
     codigo: SALIDA.esperandoAUnaPersona,
     json: {
       ok: false, esperando: "persona", verification_uri: c.verificationUri,
       verification_uri_complete: c.verificationUriComplete, user_code: c.userCode, expires_in: c.expiresIn,
+      navegador_abierto: abierto,
     },
-    texto: `Open ${c.verificationUriComplete} and confirm the code ${c.userCode}. Then run \`supcoflow login --wait\`.`,
+    texto: abierto
+      ? `I opened ${c.verificationUriComplete} in your browser: confirm the code ${c.userCode}. Then run \`supcoflow login --wait\`.`
+      : `Open ${c.verificationUriComplete} and confirm the code ${c.userCode}. Then run \`supcoflow login --wait\`.`,
   };
 }
 
@@ -196,8 +204,10 @@ export async function loginInteractivo(
   const inicio = await loginStart(d, flags);
   if (inicio.codigo !== SALIDA.esperandoAUnaPersona) return inicio;
   // El texto de `--start` le dice a la persona que corra `--wait`; acá eso lo hace el comando solo.
-  const { verification_uri_complete: url, user_code: codigo } = inicio.json;
-  d.mostrar(`Open ${String(url)} and confirm the code ${String(codigo)}. I'll wait here...`);
+  const { verification_uri_complete: url, user_code: codigo, navegador_abierto: abierto } = inicio.json;
+  d.mostrar(abierto === true
+    ? `I opened ${String(url)} in your browser: confirm the code ${String(codigo)}. I'll wait here...`
+    : `Open ${String(url)} and confirm the code ${String(codigo)}. I'll wait here...`);
   // Cada tramo termina por su cuenta (≤ 90 s) y el código vence a los pocos minutos, así que el
   // bucle tiene fin aunque la persona nunca conteste: termina en `codigo_vencido`.
   let r: Resultado;

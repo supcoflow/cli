@@ -2,7 +2,7 @@
 // motor falso en un puerto libre. Nunca toca el llavero real: SUPCOFLOW_SIN_LLAVERO=1 siempre,
 // porque quitar `security` del PATH no alcanza (la terminal lo llama por ruta absoluta).
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -220,6 +220,8 @@ function correr(args: string[], o: { stdin: "ignore"; techoMs?: number; cwd?: st
         // mínimo de 2 s (PLAZO_MINIMO_DE_SONDEO_MS); con 3 s sobraban 2000 ms justos y cualquier
         // milisegundo gastado antes del primer sondeo lo salteaba (flaky, T18).
         SUPCOFLOW_API_URL: api, SUPCOFLOW_SIN_LLAVERO: "1", SUPCOFLOW_TRAMO_MS: "9000",
+        // Los tests nunca abren el navegador de quien los corre; la apertura se prueba aparte, con un `open` falso en el PATH.
+        SUPCOFLOW_NO_BROWSER: "1",
         ...o.env,
       },
     });
@@ -938,5 +940,50 @@ describe("supcoflow guide stale (binario compilado)", () => {
     const otro = await correrSinTty(["guide", "check", "--base", "main", "--json"], { cwd: dir });
     expect(otro.codigo).toBe(3);
     expect(JSON.parse(otro.stdout).error).toBe("flag_no_aplica");
+  });
+});
+
+// R-B de punta a punta: el binario de verdad, con un `open`/`xdg-open` falso al principio del PATH que sólo anota con qué lo llamaron.
+describe("abre el navegador (R-B)", () => {
+  const BIN = process.platform === "darwin" ? "open" : "xdg-open";
+  const sePuede = (process.platform === "darwin" || process.platform === "linux") && !(process.platform === "linux" && existsSync("/.dockerenv"));
+  function falso(): { env: Record<string, string>; anotado: () => string[] } {
+    const dir = mkdtempSync(join(tmp, "bin-"));
+    const lista = join(dir, "llamadas.txt");
+    writeFileSync(join(dir, BIN), `#!/bin/sh\nprintf '%s\\n' "$@" >> '${lista}'\n`);
+    chmodSync(join(dir, BIN), 0o755);
+    return {
+      env: { PATH: `${dir}:${process.env.PATH ?? ""}`, SUPCOFLOW_NO_BROWSER: "", DISPLAY: ":0" },
+      anotado: () => (existsSync(lista) ? readFileSync(lista, "utf8").split("\n").filter(Boolean) : []),
+    };
+  }
+  it.skipIf(!sePuede)("login --start --json lo abre con la URL completa y dice navegador_abierto true", async () => {
+    const { env, anotado } = falso();
+    const r = await correrSinTty(["login", "--start", "--json"], { env });
+    expect(r.codigo).toBe(5);
+    const j = JSON.parse(r.stdout);
+    expect(j.navegador_abierto).toBe(true);
+    expect(anotado()).toEqual([j.verification_uri_complete]);
+    expect(j).toMatchObject({ ok: false, esperando: "persona" });
+    expect(typeof j.user_code).toBe("string");
+  });
+  it.skipIf(!sePuede)("--no-browser y SUPCOFLOW_NO_BROWSER=1: no abren nada y la salida lleva la URL y el código", async () => {
+    const { env, anotado } = falso();
+    const a = await correrSinTty(["login", "--start", "--json", "--no-browser"], { env });
+    expect(JSON.parse(a.stdout)).toMatchObject({ navegador_abierto: false, esperando: "persona" });
+    const b = await correrSinTty(["login", "--start", "--json"], { env: { ...env, SUPCOFLOW_NO_BROWSER: "1" } });
+    expect(JSON.parse(b.stdout).navegador_abierto).toBe(false);
+    expect(anotado()).toEqual([]);
+  });
+  it.skipIf(!sePuede)("por SSH no se abre", async () => {
+    const { env, anotado } = falso();
+    const r = await correrSinTty(["login", "--start", "--json"], { env: { ...env, SSH_CONNECTION: "1.2.3.4 1 5.6.7.8 22" } });
+    expect(JSON.parse(r.stdout).navegador_abierto).toBe(false);
+    expect(anotado()).toEqual([]);
+  });
+  it("--no-browser en un comando que no lo usa: 3 flag_no_aplica", async () => {
+    const r = await correrSinTty(["whoami", "--no-browser", "--json"]);
+    expect(r.codigo).toBe(3);
+    expect(JSON.parse(r.stdout).error).toBe("flag_no_aplica");
   });
 });
