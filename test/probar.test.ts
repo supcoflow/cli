@@ -288,6 +288,14 @@ describe("diagnose", () => {
     expect(r.json).toMatchObject({ instalacion: { ok: 6, total: 7 } });
   });
 
+  it("R4-1: con --repo desde una carpeta de otro origin, el paso del punto `repo` dice desde dónde correrlo y no vuelve a pedir --repo", async () => {
+    const { d } = deps(motor(), undefined, otroOrigin);
+    const r = await diagnosticar(d, { repo: "d/r" });
+    expect(r.json).toMatchObject({ listo: false, faltan: [{ punto: "repo" }] });
+    expect(r.json.siguiente).toContain("clone of d/r");
+    expect(String(r.json.siguiente)).not.toContain("--repo");
+  });
+
   it("el origin coincide sin importar mayúsculas", async () => {
     const { d } = deps(motor(), undefined, { git: async (a: string[]) => (a[0] === "rev-parse" ? { codigo: 0, stdout: "/w/r\n" } : { codigo: 0, stdout: "git@github.com:D/R.git\n" }) });
     expect((await diagnosticar(d, { repo: null, full: true })).json).toMatchObject({ instalacion: { ok: 7 } });
@@ -593,6 +601,8 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const r = await probar(d, { ...F, repo: "d/r" });
     expect(r.json.siguiente).toBe("Ask the person to authorize the spend, then recover the request waiting for confirmation with `supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate --repo d/r`.");
     expect(r.json.detalle).toBe("supcoflow test --full --repo d/r --json");
+    expect(r.json.message).toContain("`supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate --repo d/r`");
+    expect(r.json.message).toContain("`supcoflow diagnose --repo d/r` first says");
     const reintento = await probar(d, { ...AUT, ceiling: "3", repo: "d/r" });
     expect(reintento.json.error).not.toBe("intento_pendiente");
   });

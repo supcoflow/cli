@@ -81,10 +81,11 @@ const aLaPoliticaDeLaApi = (p: string): PoliticaEsperada | null =>
 // política (lo guardó la 0.7.0, o se pidió con el alias viejo) sólo se retoma por el alias: el comando canónico exige
 // `--expect-policy` (3 falta_politica) y, con una política, ya no es el mismo pedido (4 intento_pendiente). No se inventa
 // una política para él: cambiaría su cuerpo y su clave.
-const comandoDeReintento = (i: IntentoDePrueba) =>
-  i.politicaEsperada === null
+const conRepo = (repo: string | null) => (repo === null ? "" : ` --repo ${repo}`);
+const comandoDeReintento = (i: IntentoDePrueba, repo: string | null) =>
+  (i.politicaEsperada === null
     ? `supcoflow probar --autorizo-gasto --ceiling ${i.techoUsd}`
-    : `supcoflow test --authorize-spend --ceiling ${i.techoUsd} --expect-policy ${enInglesLaPolitica(i.politicaEsperada)}`;
+    : `supcoflow test --authorize-spend --ceiling ${i.techoUsd} --expect-policy ${enInglesLaPolitica(i.politicaEsperada)}`) + conRepo(repo);
 
 function datosDelDiagnostico(g: Diagnostico) {
   return {
@@ -157,9 +158,9 @@ async function puntoDeLaInterfazDeEsteClon(
 // El próximo paso que sigue a un punto que falta: un comando que se pueda correr (o, si hace falta una persona, qué hacer). Sólo
 // se nombra lo que esta terminal sabe: lo que no se conoce (un punto nuevo del motor) cae en el paso genérico.
 // `r` es ` --repo owner/repo` cuando se pidió con --repo (o vacío): el paso sigue hablando del mismo proyecto.
-const SIGUIENTE_POR_PUNTO: Readonly<Record<string, (r: string) => string>> = {
+const SIGUIENTE_POR_PUNTO: Readonly<Record<string, (r: string, repo: string | null) => string>> = {
   "sign-in": () => "supcoflow login",
-  repo: () => "Run it from a clone of the project's repo, or pass --repo owner/repo.",
+  repo: (_, repo) => `Run it from a clone of ${repo ?? "the project's repo"} (a folder whose «origin» is that repo on GitHub).`,
   instalacion: (r) => `supcoflow repo connect${r}`,
   sitios: (r) => `Ask the person for the https address of the site where the chat goes, then add it with \`supcoflow sites add${r} --site\` and that address.`,
   chat: (r) => `supcoflow chat on${r}`,
@@ -168,10 +169,9 @@ const SIGUIENTE_POR_PUNTO: Readonly<Record<string, (r: string) => string>> = {
   guia: (r) => `supcoflow guide publish${r}`,
   interfaz: (r) => `Update the own interface to the contract version the project declares, then record it again with \`supcoflow install record${r}\` (the skill version and the interface's files).`,
 };
-const conRepo = (repo: string | null) => (repo === null ? "" : ` --repo ${repo}`);
 export function pasoDelPunto(x: Punto, repo: string | null = null): string {
   const r = conRepo(repo);
-  return SIGUIENTE_POR_PUNTO[x.punto]?.(r) ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose${r}\` again.`;
+  return SIGUIENTE_POR_PUNTO[x.punto]?.(r, repo) ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose${r}\` again.`;
 }
 /** El comando (o la acción) siguiente: con todo listo, la prueba (los avisos no la frenan); si no, el del primer punto que la frena. */
 export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean, repo: string | null = null): string {
@@ -300,7 +300,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   const proyecto = p.proyecto;
   const clave = p.clave;
 
-  if (flags.wait) return seguir(d, clave, proyecto.id, flags.testId, inicio);
+  if (flags.wait) return seguir(d, clave, proyecto.id, flags.testId, inicio, flags.repo);
 
   // ── Sin el flag, o con --dry-run: sólo el diagnóstico (gratis). Nada que escriba, ni acá ni en el motor.
   if (autorizado === null || flags.dryRun) {
@@ -315,7 +315,9 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const completo = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const datos = flags.full === true ? completo : {
       proyecto: completo.proyecto, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
-      detalle: `${autorizado !== null && flags.dryRun ? `${comandoDeReintento({ clave: "", mensaje: null, ...autorizado })} --dry-run` : `supcoflow test${flags.dryRun ? " --dry-run" : ""}`} --full${conRepo(flags.repo)} --json`,
+      detalle: autorizado !== null && flags.dryRun
+        ? `${comandoDeReintento({ clave: "", mensaje: null, ...autorizado }, flags.repo)} --dry-run --full --json`
+        : `supcoflow test${flags.dryRun ? " --dry-run" : ""} --full${conRepo(flags.repo)} --json`,
     };
     const gasto = g.politica === "guardar"
       ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
@@ -344,12 +346,12 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const impide = revision.maquina.ok ? "" : `This machine can't save the test request yet: ${detalles(revision)} Fix that before authorizing. `;
     const previo = revision.intentoPendiente;
     const pendiente = previo === null ? ""
-      : ` There's a test request waiting for confirmation (ceiling ${usd(previo.techoUsd)}, policy ${enInglesLaPolitica(previo.politica)}): to recover that same request, repeat \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}\`.`;
-    const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.${pendiente}`;
+      : ` There's a test request waiting for confirmation (ceiling ${usd(previo.techoUsd)}, policy ${enInglesLaPolitica(previo.politica)}): to recover that same request, repeat \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica }, flags.repo)}\`.`;
+    const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose${conRepo(flags.repo)}\` first says whether everything is ready.${pendiente}`;
     const siguiente = !revision.maquina.ok
       ? `Fix this machine first (see \`message\`), then run \`supcoflow diagnose${conRepo(flags.repo)} --json\`.`
       : previo !== null
-        ? `Ask the person to authorize the spend, then recover the request waiting for confirmation with \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}${conRepo(flags.repo)}\`.`
+        ? `Ask the person to authorize the spend, then recover the request waiting for confirmation with \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica }, flags.repo)}\`.`
         : `Ask the person to authorize the spend, then run \`${lanzar}\`.`;
     return {
       codigo: SALIDA.haceFaltaUnaPersona,
@@ -367,11 +369,11 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
       const igual = Math.abs(previo.techoUsd - autorizado.techoUsd) < 1e-9 && previo.politicaEsperada === autorizado.politicaEsperada;
       if (mensaje !== null && mensaje !== previo.mensaje) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
-          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(previo)}\` without --message to recover it.`);
+          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(previo, flags.repo)}\` without --message to recover it.`);
       }
       if (!igual) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
-          `There's a test request waiting for confirmation, authorized with a ceiling of ${usd(previo.techoUsd)}; repeat it with exactly that to recover it: \`${comandoDeReintento(previo)}\`.`);
+          `There's a test request waiting for confirmation, authorized with a ceiling of ${usd(previo.techoUsd)}; repeat it with exactly that to recover it: \`${comandoDeReintento(previo, flags.repo)}\`.`);
       }
       intento = previo;
     } else {
@@ -389,7 +391,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     try {
       await d.pruebas.confirmar(proyecto.id, r.pruebaId);
     } catch {
-      const message = `The engine accepted test ${r.pruebaId}, but I couldn't save it on this machine. Repeat \`${comandoDeReintento(intento)}\` (it recovers the same one) or follow it with \`supcoflow test --wait --test-id ${r.pruebaId}\`.`;
+      const message = `The engine accepted test ${r.pruebaId}, but I couldn't save it on this machine. Repeat \`${comandoDeReintento(intento, flags.repo)}\` (it recovers the same one) or follow it with \`supcoflow test --wait --test-id ${r.pruebaId}${conRepo(flags.repo)}\`.`;
       return { codigo: SALIDA.inesperado, json: { ok: false, error: "prueba_no_guardada", message, prueba_id: r.pruebaId, intento_pendiente: true }, texto: message };
     }
     return {
@@ -399,7 +401,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     };
   }
   if (r.tipo === "ambigua") {
-    const message = `${r.message} The request was saved: repeat \`${comandoDeReintento(intento)}\` and I'll pick up the same test, without asking for another.`;
+    const message = `${r.message} The request was saved: repeat \`${comandoDeReintento(intento, flags.repo)}\` and I'll pick up the same test, without asking for another.`;
     return { codigo: SALIDA.inesperado, json: { ok: false, error: r.error, message, intento_pendiente: true }, texto: message };
   }
 
@@ -409,19 +411,19 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   } catch {
     d.avisar("I couldn't close the saved request; the next `test --authorize-spend` will resend it.");
   }
-  return rechazo(r, intento, d.avisar);
+  return rechazo(r, intento, d.avisar, flags.repo);
 }
 
-function enCurso(pruebaId: string): Resultado {
-  const message = `This project already has a test with no outcome (${pruebaId}). Follow it with \`supcoflow test --wait --test-id ${pruebaId}\`.`;
+function enCurso(pruebaId: string, repo: string | null): Resultado {
+  const message = `This project already has a test with no outcome (${pruebaId}). Follow it with \`supcoflow test --wait --test-id ${pruebaId}${conRepo(repo)}\`.`;
   return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "prueba_en_curso", message, prueba_id: pruebaId }, texto: message };
 }
 
-function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, intento: IntentoDePrueba, avisar: (s: string) => void): Resultado {
+function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, intento: IntentoDePrueba, avisar: (s: string) => void, repo: string | null): Resultado {
   const c = r.cuerpo;
   switch (r.error) {
     case "prueba_en_curso":
-      return typeof c.prueba_id === "string" ? enCurso(c.prueba_id) : fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
+      return typeof c.prueba_id === "string" ? enCurso(c.prueba_id, repo) : fallo(SALIDA.haceFaltaUnaPersona, r.error, r.message);
     case "techo_distinto": {
       // Sin reintentar: lo que se autorizó ya no es lo que hay, y decidir de nuevo es de la persona (con el número nuevo).
       const nuevo = typeof c.techo_usd === "number" ? c.techo_usd : null;
@@ -446,7 +448,7 @@ function rechazo(r: Extract<RespuestaDePrueba, { tipo: "rechazo" }>, intento: In
     case "idempotency_key_reusada":
       // No debería pasar: siempre se reenvía lo guardado con su clave. Si pasa, la clave ya no sirve.
       avisar("The engine says this request's key was already used with other content; I discarded it.");
-      return fallo(SALIDA.inesperado, r.error, `${r.message} Run \`${comandoDeReintento(intento)}\` again to ask for a new test.`);
+      return fallo(SALIDA.inesperado, r.error, `${r.message} Run \`${comandoDeReintento(intento, repo)}\` again to ask for a new test.`);
   }
   if (r.status === 401) return fallo(SALIDA.faltaLogin, "clave_invalida", r.message);
   // Sin la cuenta de IA del triage agent (tanda 9) la prueba no arranca: la pone una persona en la pestaña Agents. El motor ya dice cuál falta.
@@ -463,7 +465,7 @@ function textoDelCobro(c: Seguimiento["cobro"]): string | null {
   return `Charge: ${c.estado} (up to ${usd(c.techo_usd)}).`;
 }
 
-function resultadoDelSeguimiento(s: Seguimiento): Resultado {
+function resultadoDelSeguimiento(s: Seguimiento, repo: string | null): Resultado {
   const datos = {
     prueba_id: s.pruebaId, estado: s.estado, abierta: s.abierta, mensaje: s.mensaje,
     reporte: s.reporte, run: s.run, issue: s.issue, cobro: s.cobro,
@@ -475,7 +477,7 @@ function resultadoDelSeguimiento(s: Seguimiento): Resultado {
     textoDelCobro(s.cobro),
   ];
   if (ABIERTOS.has(s.estado)) {
-    lineas.push("Run `supcoflow test --wait` again.");
+    lineas.push(`Run \`supcoflow test --wait${conRepo(repo)}\` again.`);
     return { codigo: SALIDA.esperandoAUnaPersona, json: { ok: false, esperando: "relevamiento", ...datos }, texto: lineas.filter(Boolean).join("\n") };
   }
   if (CON_DESENLACE_OK.has(s.estado)) return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto: lineas.filter(Boolean).join("\n") };
@@ -488,7 +490,7 @@ function resultadoDelSeguimiento(s: Seguimiento): Resultado {
   return { codigo: SALIDA.inesperado, json: { ok: false, error: "estado_desconocido", message, ...datos }, texto: message };
 }
 
-async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegida: string | null, inicio: number): Promise<Resultado> {
+async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegida: string | null, inicio: number, repo: string | null): Promise<Resultado> {
   let pruebaId = elegida;
   if (pruebaId === null) {
     try {
@@ -498,7 +500,7 @@ async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegid
       pruebaId = g.ultima;
       if (g.intento !== null) {
         return fallo(SALIDA.haceFaltaUnaPersona, "intento_pendiente",
-          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(g.intento)}\` without --message to recover it, and then \`--wait\`.`);
+          `There's a test request waiting for confirmation; repeat \`${comandoDeReintento(g.intento, repo)}\` without --message to recover it, and then \`--wait\`.`);
       }
     } catch (e) {
       return resultadoDeFallo(e);
@@ -524,5 +526,5 @@ async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegid
     if (limite - (d.ahora() + INTERVALO_DE_SEGUIMIENTO_MS) < PLAZO_MINIMO_DE_SONDEO_MS) break;
     await d.dormir(INTERVALO_DE_SEGUIMIENTO_MS);
   }
-  return resultadoDelSeguimiento(ultimo!);
+  return resultadoDelSeguimiento(ultimo!, repo);
 }
