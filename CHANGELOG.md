@@ -1,8 +1,6 @@
 # Changelog
 
-## Unreleased
-
-Not in the published 0.11.0; it will be in the next release (the number is not decided yet).
+## 0.11.1
 
 - `login` and `repo connect` open the approval/connection link in the browser by themselves, in their first step only (never while polling with `--wait`); the link and the code are still shown. Nothing opens without a display, over SSH, in a container or CI, with the new `--no-browser` or with `SUPCOFLOW_NO_BROWSER=1`. With `--json`, the `--start` result adds `navegador_abierto: true|false`.
 
