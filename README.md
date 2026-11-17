@@ -22,12 +22,12 @@ the English ones.
 
 | Command | What it does |
 |---|---|
-| `supcoflow login` | Opens the approval page in your browser and shows the link and the code too (the browser from the next release; 0.11.0 only shows them, see [The contract](#the-contract)); you approve it in the console and the terminal keeps its key. |
-| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser (from the next release; 0.11.0 only shows the link, see [The contract](#the-contract)) and exits 5 with the link and the code. |
+| `supcoflow login` | Opens the approval page in your browser and shows the link and the code too (the browser from 0.11.1; 0.11.0 only shows them, see [The contract](#the-contract)); you approve it in the console and the terminal keeps its key. |
+| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser (from 0.11.1; 0.11.0 only shows the link, see [The contract](#the-contract)) and exits 5 with the link and the code. |
 | `supcoflow login --wait` | The second step: waits for the approval up to 90 s. If it hasn't arrived, exits 5: run it again. |
 | `supcoflow logout` | Revokes the key in use and deletes it from this machine. |
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
-| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser and shows it (the browser from the next release; 0.11.0 only shows it, see [The contract](#the-contract)), and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
+| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser and shows it (the browser from 0.11.1; 0.11.0 only shows it, see [The contract](#the-contract)), and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks the guide against the engine without publishing anything: the folder `.supcoflow/knowledge/` if it has `.md` documents, otherwise `.supcoflow/guide.md`. |
@@ -326,7 +326,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npx supcoflow@0.11.0 guide stale --base origin/${{ github.base_ref }}
+      - run: npx supcoflow@0.11.1 guide stale --base origin/${{ github.base_ref }}
 
   publish:                                 # only for a project of your own (it uses a personal key)
     if: github.event_name == 'push'
@@ -336,7 +336,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npx supcoflow@0.11.0 guide publish --from-github --json
+      - run: npx supcoflow@0.11.1 guide publish --from-github --json
         env:
           SUPCOFLOW_TOKEN: ${{ secrets.SUPCOFLOW_TOKEN }}
 ```
@@ -487,7 +487,7 @@ Made to be read by a program, not only by a person:
 - **No questions without an interactive terminal** (or with `--json`): if something is missing, it exits 3 saying which
   flag to use. `supcoflow login` without a terminal exits 3 and points you to the two-step path.
 - **The browser opens by itself, only where a person has to act** (not in the published 0.11.0: this and `--no-browser` /
-  `SUPCOFLOW_NO_BROWSER` arrive in the next release): `login` (the approval page) and `repo connect` (the
+  `SUPCOFLOW_NO_BROWSER` arrive in 0.11.1): `login` (the approval page) and `repo connect` (the
   link to install the GitHub App and confirm the connection), in their first step (`--start`, or the whole command at a
   terminal), never while polling with `--wait`. It uses `open` (macOS), `xdg-open` (Linux) or `cmd /c start` (Windows),
   never through a shell string, and only for `https` links (or `http` against `localhost`). If it can't open (no display,
