@@ -413,7 +413,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     return {
       codigo: SALIDA.esperandoAUnaPersona,
       json: { ok: false, esperando: "relevamiento", prueba_id: r.pruebaId, reporte_id: r.reporteId, estado: r.estado },
-      texto: `Test ${r.pruebaId} requested (${r.estado}). Follow it with \`supcoflow test --wait\`.`,
+      texto: `Test ${r.pruebaId} requested (${r.estado}). Follow it with \`supcoflow test --wait${conRepo(flags.repo)}\`.`,
     };
   }
   if (r.tipo === "ambigua") {

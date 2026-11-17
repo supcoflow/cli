@@ -861,6 +861,13 @@ describe("test --authorize-spend: el ciclo de la clave", () => {
     expect(await d.pruebas.leer(PROY.id)).toEqual({ intento: null, ultima: "prb_0000000000000001" });
   });
 
+  it("R8-1: con --repo, el texto de la prueba pedida manda a seguirla con el mismo --repo", async () => {
+    const { d } = deps(motor());
+    const r = await probar(d, { ...AUT, repo: "d/r" });
+    expect(r.codigo).toBe(SALIDA.esperandoAUnaPersona);
+    expect(r.texto).toBe("Test prb_0000000000000001 requested (creada). Follow it with `supcoflow test --wait --repo d/r`.");
+  });
+
   it("estricto: si el intento no se puede guardar, no se manda nada (sale 1)", async () => {
     const m = motor();
     const almacen = memoria();
