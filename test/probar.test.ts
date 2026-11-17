@@ -1345,7 +1345,7 @@ describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marc
     const r = await diagnosticar(d, { repo: null });
     expect(r.codigo).toBe(SALIDA.inesperado);
     expect(r.texto).toContain("socket hang up");
-    expect(r.texto).toContain("Try again in a minute");
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
     expect(r.json.message).toBe(r.texto);
   });
   it("un seguimiento cerrado que pide una persona manda a la consola y no a lanzar otra prueba", async () => {
@@ -1355,5 +1355,43 @@ describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marc
     const r = await probar(d, { ...W, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
     expect(r.json.message).toMatch(/A person has to look at it in the console.*don't launch another test/);
+  });
+});
+
+describe("Sol R3, huecos: red caída al resolver el proyecto y seguimiento que pide persona sin mensaje", () => {
+  const sinRed = () => { throw new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "I couldn't reach the engine (the network is down or it took too long)."); };
+  it("diagnose: si resolver el proyecto falla por la red, dice revisar la conexión y repetir el mismo comando", async () => {
+    const { d } = deps(motor(), undefined, { buscarProyecto: async () => sinRed() });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json).toMatchObject({ ok: false, error: "motor_inalcanzable" });
+    expect(r.texto).toContain("I couldn't reach the engine");
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
+    expect(r.json.message).toBe(r.texto);
+  });
+  it("test: lo mismo, y sin haber pedido ni guardado nada", async () => {
+    const m = motor();
+    const { d } = deps(m, undefined, { buscarProyecto: async () => sinRed() });
+    const r = await probar(d, AUT);
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json).toMatchObject({ ok: false, error: "motor_inalcanzable" });
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
+    expect(r.json.message).toBe(r.texto);
+    expect(m.posts).toEqual([]);
+  });
+  it.each([
+    ["sin mensaje y sin reporte", { mensaje: null, reporte: null }],
+    ["con mensaje y sin reporte", { mensaje: "Algo pasó.", reporte: null }],
+    ["sin mensaje y con reporte", { mensaje: null }],
+  ])("arranque_incierto %s: siempre intervenir en la consola y no relanzar, en el JSON y en el texto", async (_n, o) => {
+    const m = motor();
+    m.seguimientos = [seg("arranque_incierto", o as Partial<Seguimiento>)];
+    const { d } = deps(m, undefined, { tramoMs: 3_000 });
+    const r = await probar(d, { ...F, wait: true, testId: "prb_aaaaaaaaaaaaaaaa" });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    for (const t of [r.json.message as string, r.texto]) {
+      expect(t).toMatch(/A person has to look at it in the console/);
+      expect(t).toMatch(/don't launch another test from the terminal/);
+    }
   });
 });

@@ -190,13 +190,13 @@ export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean, repo: s
 // Un fallo de afuera (la red, el motor) explica qué pasó, no qué hacer: se le suma el paso. Los que ya traen su acción no se tocan.
 function conSiguiente(r: Resultado): Resultado {
   if (r.codigo !== SALIDA.inesperado) return r;
-  const message = `${r.texto} Try again in a minute; if it keeps failing, tell the person what it says.`;
+  const message = `${r.texto} Check the connection and run the same command again in a minute; if it keeps failing, tell the person what it says.`;
   return { ...r, json: { ...r.json, message }, texto: message };
 }
 
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> & { full?: boolean }): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
-  if (!p.ok) return p.resultado;
+  if (!p.ok) return conSiguiente(p.resultado);
   let g: Diagnostico;
   try {
     g = await d.leerDiagnostico(d.api, p.clave, p.proyecto.id);
@@ -310,7 +310,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   }
 
   const p = await proyectoDelRepo(d, flags);
-  if (!p.ok) return p.resultado;
+  if (!p.ok) return conSiguiente(p.resultado);
   const proyecto = p.proyecto;
   const clave = p.clave;
 
@@ -499,8 +499,11 @@ function resultadoDelSeguimiento(s: Seguimiento, repo: string | null): Resultado
   if (CON_DESENLACE_OK.has(s.estado)) return { codigo: SALIDA.ok, json: { ok: true, ...datos }, texto: lineas.filter(Boolean).join("\n") };
   if (PIDEN_UNA_PERSONA.has(s.estado)) {
     if (s.reporte) lineas.push(`The case in the console: ${s.reporte.url}`);
+    // Siempre, con o sin mensaje del motor y con o sin reporte: una persona interviene en la consola y no se relanza desde la terminal.
+    const accion = `A person has to look at it in the console${s.reporte ? `: ${s.reporte.url}` : ""}; don't launch another test from the terminal meanwhile.`;
+    lineas.push(accion);
     const texto = lineas.filter(Boolean).join("\n");
-    return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: s.estado, message: s.mensaje ? `${s.mensaje} A person has to look at it in the console${s.reporte ? `: ${s.reporte.url}` : ""}; don't launch another test from the terminal meanwhile.` : texto, ...datos }, texto };
+    return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: s.estado, message: s.mensaje ? `${s.mensaje} ${accion}` : texto, ...datos }, texto };
   }
   const message = `The engine says the test is in «${s.estado}», a state this version of the terminal doesn't know. Update supcoflow or look at it in the console.`;
   return { codigo: SALIDA.inesperado, json: { ok: false, error: "estado_desconocido", message, ...datos }, texto: message };
