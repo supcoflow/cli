@@ -156,25 +156,28 @@ async function puntoDeLaInterfazDeEsteClon(
 
 // El próximo paso que sigue a un punto que falta: un comando que se pueda correr (o, si hace falta una persona, qué hacer). Sólo
 // se nombra lo que esta terminal sabe: lo que no se conoce (un punto nuevo del motor) cae en el paso genérico.
-const SIGUIENTE_POR_PUNTO: Readonly<Record<string, string>> = {
-  "sign-in": "supcoflow login",
-  repo: "Run it from a clone of the project's repo, or pass --repo owner/repo.",
-  instalacion: "supcoflow repo connect",
-  sitios: "Ask the person for the https address of the site where the chat goes, then add it with `supcoflow sites add --site` and that address.",
-  chat: "supcoflow chat on",
-  ia_del_chat: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
-  ia_del_triaje: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
-  guia: "supcoflow guide publish",
-  interfaz: "Update the own interface to the contract version the project declares, then record it again with `supcoflow install record` (the skill version and the interface's files).",
+// `r` es ` --repo owner/repo` cuando se pidió con --repo (o vacío): el paso sigue hablando del mismo proyecto.
+const SIGUIENTE_POR_PUNTO: Readonly<Record<string, (r: string) => string>> = {
+  "sign-in": () => "supcoflow login",
+  repo: () => "Run it from a clone of the project's repo, or pass --repo owner/repo.",
+  instalacion: (r) => `supcoflow repo connect${r}`,
+  sitios: (r) => `Ask the person for the https address of the site where the chat goes, then add it with \`supcoflow sites add${r} --site\` and that address.`,
+  chat: (r) => `supcoflow chat on${r}`,
+  ia_del_chat: (r) => `Ask the person to run \`supcoflow agents set-key --agent chat${r}\` in their own terminal (the AI key never goes through an assistant).`,
+  ia_del_triaje: (r) => `Ask the person to run \`supcoflow agents set-key --agent triage${r}\` in their own terminal (the AI key never goes through an assistant).`,
+  guia: (r) => `supcoflow guide publish${r}`,
+  interfaz: (r) => `Update the own interface to the contract version the project declares, then record it again with \`supcoflow install record${r}\` (the skill version and the interface's files).`,
 };
-export function pasoDelPunto(x: Punto): string {
-  return SIGUIENTE_POR_PUNTO[x.punto] ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose\` again.`;
+const conRepo = (repo: string | null) => (repo === null ? "" : ` --repo ${repo}`);
+export function pasoDelPunto(x: Punto, repo: string | null = null): string {
+  const r = conRepo(repo);
+  return SIGUIENTE_POR_PUNTO[x.punto]?.(r) ?? `Fix «${x.punto}»: ${x.mensaje} Then run \`supcoflow diagnose${r}\` again.`;
 }
 /** El comando (o la acción) siguiente: con todo listo, la prueba (los avisos no la frenan); si no, el del primer punto que la frena. */
-export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean): string {
-  if (listo) return "supcoflow test --json";
+export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean, repo: string | null = null): string {
+  if (listo) return `supcoflow test${conRepo(repo)} --json`;
   const primero = faltan.find((x) => x.aviso !== true);
-  return primero === undefined ? "supcoflow diagnose --full --json" : pasoDelPunto(primero);
+  return primero === undefined ? `supcoflow diagnose --full${conRepo(repo)} --json` : pasoDelPunto(primero, repo);
 }
 
 export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> & { full?: boolean }): Promise<Resultado> {
@@ -204,7 +207,7 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> &
   const total = totalDeLaInstalacion(instalacion);
   const listo = g.listo && revision.maquina.ok && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
   const faltan = [...instalacion, ...prueba].filter((x) => !x.ok);
-  const siguiente = siguienteDelDiagnostico(faltan, listo);
+  const siguiente = siguienteDelDiagnostico(faltan, listo, flags.repo);
   const completo = {
     proyecto: { id: p.proyecto.id, repo: p.proyecto.repo },
     ...datosDelDiagnostico(g),
@@ -221,9 +224,9 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> &
     proyecto: completo.proyecto,
     listo,
     instalacion: { ok: buenos, total },
-    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true } : {}), siguiente: pasoDelPunto(x) })),
+    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true } : {}), siguiente: pasoDelPunto(x, flags.repo) })),
     siguiente,
-    detalle: "supcoflow diagnose --full --json",
+    detalle: `supcoflow diagnose --full${conRepo(flags.repo)} --json`,
   };
   const resumen = `A test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
   const motivos = [
@@ -312,7 +315,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const completo = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const datos = flags.full === true ? completo : {
       proyecto: completo.proyecto, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
-      detalle: `supcoflow test --full${flags.dryRun ? " --dry-run" : ""} --json`,
+      detalle: `${autorizado !== null && flags.dryRun ? `${comandoDeReintento({ clave: "", mensaje: null, ...autorizado })} --dry-run` : `supcoflow test${flags.dryRun ? " --dry-run" : ""}`} --full${conRepo(flags.repo)} --json`,
     };
     const gasto = g.politica === "guardar"
       ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
@@ -336,16 +339,18 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
         texto: `With --dry-run I do nothing. ${flags.authorizeSpend ? "Without --dry-run, I" : "With --authorize-spend and without --dry-run, I"}${haria.replace(/^would/, "")} (project ${proyecto.repo}, policy ${enInglesLaPolitica(g.politica)}). ${gasto}`,
       };
     }
-    const lanzar = `supcoflow test --authorize-spend --ceiling ${g.techoUsd} --expect-policy ${enInglesLaPolitica(g.politica)}`;
+    const lanzar = `supcoflow test --authorize-spend --ceiling ${g.techoUsd} --expect-policy ${enInglesLaPolitica(g.politica)}${conRepo(flags.repo)}`;
     // Primero lo que impide, si algo: es lo que la persona tiene que saber antes de decir que sí.
     const impide = revision.maquina.ok ? "" : `This machine can't save the test request yet: ${detalles(revision)} Fix that before authorizing. `;
     const previo = revision.intentoPendiente;
     const pendiente = previo === null ? ""
       : ` There's a test request waiting for confirmation (ceiling ${usd(previo.techoUsd)}, policy ${enInglesLaPolitica(previo.politica)}): to recover that same request, repeat \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}\`.`;
     const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.${pendiente}`;
-    const siguiente = revision.maquina.ok
-      ? `Ask the person to authorize the spend, then run \`${lanzar}\`.`
-      : "Fix this machine first (see `message`), then run `supcoflow diagnose --json`.";
+    const siguiente = !revision.maquina.ok
+      ? `Fix this machine first (see \`message\`), then run \`supcoflow diagnose${conRepo(flags.repo)} --json\`.`
+      : previo !== null
+        ? `Ask the person to authorize the spend, then recover the request waiting for confirmation with \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}${conRepo(flags.repo)}\`.`
+        : `Ask the person to authorize the spend, then run \`${lanzar}\`.`;
     return {
       codigo: SALIDA.haceFaltaUnaPersona,
       json: { ok: false, error: "falta_autorizacion", message, ...datos, ...datosDelIntentoPendiente(revision), ...(flags.full === true ? {} : { siguiente }) },

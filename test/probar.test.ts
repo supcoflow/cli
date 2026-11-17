@@ -200,7 +200,11 @@ describe("diagnose", () => {
     expect(siguienteDelDiagnostico([punto("sign-in")], false)).toBe("supcoflow login");
     expect(siguienteDelDiagnostico([punto("instalacion")], false)).toBe("supcoflow repo connect");
     expect(siguienteDelDiagnostico([punto("chat")], false)).toBe("supcoflow chat on");
-    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/supcoflow agents set-key.*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/`supcoflow agents set-key --agent chat` .*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("ia_del_triaje")], false)).toMatch(/`supcoflow agents set-key --agent triage` .*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("chat")], false, "o/x")).toBe("supcoflow chat on --repo o/x");
+    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false, "o/x")).toContain("`supcoflow agents set-key --agent chat --repo o/x`");
+    expect(siguienteDelDiagnostico([], true, "o/x")).toBe("supcoflow test --repo o/x --json");
     expect(siguienteDelDiagnostico([punto("algo_nuevo")], false)).toBe("Fix «algo_nuevo»: falta algo_nuevo Then run `supcoflow diagnose` again.");
     expect(siguienteDelDiagnostico([], true)).toBe("supcoflow test --json");
   });
@@ -583,6 +587,16 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     }
   });
 
+  it("R3-2: con un pedido esperando confirmación con otro techo, `siguiente` da el comando que lo recupera, no uno con el techo de ahora", async () => {
+    const { d } = deps(motor());
+    await d.pruebas.abrir(PROY.id, { clave: "k-1", mensaje: null, techoUsd: 3, politicaEsperada: "relevar" });
+    const r = await probar(d, { ...F, repo: "d/r" });
+    expect(r.json.siguiente).toBe("Ask the person to authorize the spend, then recover the request waiting for confirmation with `supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate --repo d/r`.");
+    expect(r.json.detalle).toBe("supcoflow test --full --repo d/r --json");
+    const reintento = await probar(d, { ...AUT, ceiling: "3", repo: "d/r" });
+    expect(reintento.json.error).not.toBe("intento_pendiente");
+  });
+
   it("R6: con --message y sin el flag, igual: 4 y nada guardado", async () => {
     const m = motor();
     const { d, almacen } = deps(m);
@@ -596,7 +610,8 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const { d, almacen } = deps(m);
     const r = await probar(d, { ...AUT, dryRun: true });
     expect(r.codigo).toBe(SALIDA.ok);
-    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, politica: "relevar", maquina: { ok: true }, detalle: "supcoflow test --full --dry-run --json" });
+    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, politica: "relevar", maquina: { ok: true }, detalle: "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --dry-run --full --json" });
+    expect((await probar(d, { ...F, dryRun: true, repo: "d/r" })).json).toMatchObject({ detalle: "supcoflow test --dry-run --full --repo d/r --json" });
     expect(r.json).not.toHaveProperty("saldo_usd");
     expect((await probar(d, { ...AUT, dryRun: true, full: true })).json).toMatchObject({ dry_run: true, saldo_usd: 7.5, puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] } });
     expect(String(r.json.haria)).toContain(`POST ${RUTA}`);

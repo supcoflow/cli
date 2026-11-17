@@ -584,7 +584,7 @@ describe("supcoflow sin terminal", () => {
         const corto = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(corto.codigo, corto.stdout).toBe(0);
         const jc = JSON.parse(corto.stdout);
-        expect(jc).toMatchObject({ ok: true, listo: true, siguiente: "supcoflow test --json", faltan: [{ punto: "interfaz", aviso: true, siguiente: expect.stringContaining("supcoflow install record") }] });
+        expect(jc).toMatchObject({ ok: true, listo: true, siguiente: "supcoflow test --repo d/r --json", faltan: [{ punto: "interfaz", aviso: true, siguiente: expect.stringContaining("supcoflow install record") }] });
         expect(corto.stdout).not.toMatch(/<[a-z]+>|example\./);
 
         // Con el motor de hoy (sin el campo nuevo) no se compara, y un archivo que se borró sí se nota.
@@ -660,7 +660,7 @@ describe("supcoflow sin terminal", () => {
     it("R13: el binario: `diagnose --json` es corto y `--full` trae el detalle; `describe <comando>` describe uno", async () => {
       const corto = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repoDeGit() });
       const j = JSON.parse(corto.stdout);
-      expect(j).toMatchObject({ ok: true, listo: true, faltan: [], siguiente: "supcoflow test --json" });
+      expect(j).toMatchObject({ ok: true, listo: true, faltan: [], siguiente: "supcoflow test --repo d/r --json", detalle: "supcoflow diagnose --full --repo d/r --json" });
       expect(j).not.toHaveProperty("puntos");
       const largo = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repoDeGit() });
       expect(JSON.parse(largo.stdout)).toMatchObject({ puntos: expect.any(Array), instalacion: { puntos: expect.any(Array) } });
@@ -697,7 +697,7 @@ describe("supcoflow sin terminal", () => {
       }
       // R6 por el binario: el 4 trae los números del diagnóstico y no deja nada guardado.
       const sin = await correrSinTty(["test", "--json", "--repo", "d/r"], { conClave: true });
-      expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, detalle: "supcoflow test --full --json" });
+      expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, detalle: "supcoflow test --full --repo d/r --json" });
       const entero = await correrSinTty(["test", "--full", "--json", "--repo", "d/r"], { conClave: true });
       expect(JSON.parse(entero.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5 });
       expect(existsSync(pruebas())).toBe(false);
