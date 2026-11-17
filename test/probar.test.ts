@@ -196,12 +196,12 @@ describe("diagnose", () => {
 
   it("R13: el próximo paso sigue al primer punto que cuenta; un aviso (interfaz) va después y un punto desconocido cae en el paso genérico", () => {
     const punto = (p: string, extra: object = {}) => ({ punto: p, ok: false, mensaje: `falta ${p}`, grupo: "instalacion" as const, ...extra });
-    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true }), punto("guia")], false)).toBe("supcoflow guide publish");
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true }), punto("guia")], false)).toMatch(/supcoflow guide versions.*first guide goes from this terminal.*--from-github/);
     expect(siguienteDelDiagnostico([punto("sign-in")], false)).toBe("supcoflow login");
     expect(siguienteDelDiagnostico([punto("instalacion")], false)).toBe("supcoflow repo connect");
     expect(siguienteDelDiagnostico([punto("chat")], false)).toBe("supcoflow chat on");
-    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/`supcoflow agents set-key --agent chat` .*never goes through an assistant/);
-    expect(siguienteDelDiagnostico([punto("ia_del_triaje")], false)).toMatch(/`supcoflow agents set-key --agent triage` .*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/`supcoflow agents set-key --agent chat`.*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("ia_del_triaje")], false)).toMatch(/`supcoflow agents set-key --agent triage`.*never goes through an assistant/);
     expect(siguienteDelDiagnostico([punto("chat")], false, "o/x")).toBe("supcoflow chat on --repo o/x");
     expect(siguienteDelDiagnostico([punto("ia_del_chat")], false, "o/x")).toContain("`supcoflow agents set-key --agent chat --repo o/x`");
     expect(siguienteDelDiagnostico([], true, "o/x")).toBe("supcoflow test --repo o/x --json");
@@ -314,7 +314,7 @@ describe("diagnose", () => {
     expect(r.codigo).toBe(SALIDA.ok);
     expect(r.json).toMatchObject({
       listo: true, siguiente: "supcoflow test --json",
-      faltan: [{ punto: "guia", mensaje: "The engine didn't report this point.", siguiente: "supcoflow guide publish" }],
+      faltan: [{ punto: "guia", mensaje: "The engine didn't report this point.", siguiente: expect.stringContaining("supcoflow guide versions") }],
     });
   });
 
@@ -327,7 +327,7 @@ describe("diagnose", () => {
     const r = await diagnosticar(d, { repo: null });
     expect(r.json).toMatchObject({ listo: false });
     expect(String(r.json.siguiente)).toMatch(/^Fix «maquina»/);
-    expect(r.json.faltan).toEqual(expect.arrayContaining([expect.objectContaining({ punto: "guia", siguiente: "supcoflow guide publish" })]));
+    expect(r.json.faltan).toEqual(expect.arrayContaining([expect.objectContaining({ punto: "guia", siguiente: expect.stringContaining("supcoflow guide versions") })]));
   });
 
   it("R2-1: sin `listo`, cada punto que falta trae su propio arreglo, y el de arriba es el del primero", async () => {
@@ -337,7 +337,7 @@ describe("diagnose", () => {
     const r = await diagnosticar(d, { repo: null });
     expect(r.json).toMatchObject({
       siguiente: "supcoflow chat on",
-      faltan: [{ punto: "chat", siguiente: "supcoflow chat on" }, { punto: "guia", siguiente: "supcoflow guide publish" }],
+      faltan: [{ punto: "chat", siguiente: "supcoflow chat on" }, { punto: "guia", siguiente: expect.stringContaining("supcoflow guide versions") }],
     });
   });
 
@@ -690,7 +690,7 @@ describe("test --authorize-spend exige --ceiling y --expect-policy, y manda esos
     const r = await probar(d, { ...F, authorizeSpend: true, expectPolicy: "investigate" });
     expect(r.codigo).toBe(SALIDA.entradaInvalida);
     expect(r.json.error).toBe("falta_techo");
-    expect(r.texto).toContain("--ceiling <usd>");
+    expect(r.texto).toContain("--ceiling with the number you were shown");
     expect(m.posts).toEqual([]);
     expect(m.diagnosticos).toBe(0);
     expect(almacen.datos.size).toBe(0);
@@ -805,8 +805,8 @@ describe("test --authorize-spend exige --ceiling y --expect-policy, y manda esos
       const r = await probar(d, V);
       expect(r.codigo).toBe(3);
       expect(r.json.error).toBe("falta_techo");
-      expect(r.texto).toContain("`probar --autorizo-gasto` now needs --ceiling <usd>");
-      expect(r.texto).toContain("`supcoflow test --authorize-spend --ceiling <usd> --expect-policy investigate|save`");
+      expect(r.texto).toContain("`probar --autorizo-gasto` now needs --ceiling with the number you were shown");
+      expect(r.texto).toContain("run `supcoflow test --json` (free) to see the ceiling and the policy");
       expect(r.texto).toContain("supcoflow 0.7.0");
       expect(m.posts).toEqual([]);
       expect(m.diagnosticos).toBe(0);
@@ -1227,5 +1227,107 @@ describe("la orden de recuperación que imprime un mensaje se puede ejecutar", (
       expect(otra.codigo, r.texto).toBe(SALIDA.esperandoAUnaPersona);
       expect(m.pruebas.size).toBe(1);
     }
+  });
+});
+
+describe("Sol R1: el próximo paso de una cuenta de IA o de la interfaz depende del motivo, no del identificador", () => {
+  const punto = (p: string, mensaje: string) => ({ punto: p, ok: false, mensaje, grupo: "instalacion" as const });
+  it.each([["ia_del_chat", "chat"], ["ia_del_triaje", "triage"]])("%s: cuenta lista con modelo no aprobado → aprobar el modelo (la clave queda); revisión fallida → esperar; sin cuenta → set-key", (id, agente) => {
+    const paso = siguienteDelDiagnostico([punto(id, "The account is ready, but its model is not approved. Approve it in the Agents tab.")], false);
+    expect(paso).toContain("model isn't approved, ask the person to approve the model in the Agents tab (the key stays as it is)");
+    expect(paso).toContain("couldn't be checked, wait a minute");
+    expect(paso).toContain(`if the account is missing or its key doesn't work, ask the person to run \`supcoflow agents set-key --agent ${agente}\``);
+    expect(paso).toContain("never goes through an assistant");
+    // La orden de cambiar la clave está condicionada a «falta o no sirve»: nunca es el paso incondicional.
+    expect(paso.startsWith("Read the message of this point and act on its cause")).toBe(true);
+  });
+  it("interfaz: cada causa tiene su paso (actualizar la terminal, volver a anotar, actualizar la interfaz)", () => {
+    const paso = siguienteDelDiagnostico([punto("interfaz", "The installation record was written by a newer terminal; update supcoflow.")], false);
+    expect(paso).toContain("if it says to update supcoflow, update the terminal (`npm i -g supcoflow@latest` or `npx supcoflow@latest`)");
+    expect(paso).toContain("if the record can't be read or its files are gone, record it again with `supcoflow install record`");
+    expect(paso).toContain("if the project declares a new contract version, update the own interface to it first");
+  });
+  it("el JSON corto lleva ese paso en `faltan[].siguiente` y en el de arriba", async () => {
+    const m = motor();
+    const { d } = deps(m, undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: [...DIAG.puntos, { punto: "ia_del_chat", ok: false, mensaje: "Model not approved.", grupo: "instalacion" }] }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    const faltan = r.json.faltan as { punto: string; siguiente: string }[];
+    expect(faltan.find((x) => x.punto === "ia_del_chat")!.siguiente).toContain("approve the model in the Agents tab");
+    expect(r.json.siguiente).toContain("approve the model in the Agents tab");
+  });
+});
+
+describe("Sol R2: el próximo paso de la guía distingue la primera publicación de la publicación desde GitHub", () => {
+  it("manda a ver qué hay publicado, pide permiso y nombra los dos caminos, con --repo si se pidió", () => {
+    const paso = siguienteDelDiagnostico([{ punto: "guia", ok: false, mensaje: "No guide yet.", grupo: "instalacion" }], false, "o/x");
+    expect(paso).toContain("`supcoflow guide versions --repo o/x`");
+    expect(paso).toContain("ask the person before publishing");
+    expect(paso).toContain("if nothing was published from GitHub yet, the first guide goes from this terminal with `supcoflow guide publish --repo o/x`");
+    expect(paso).toContain("once one was published from GitHub, publish from the project's main branch after the merge with `supcoflow guide publish --repo o/x --from-github`");
+  });
+});
+
+describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marcadores sin completar", () => {
+  const W = { ...F, wait: true };
+  const tramoCorto = { tramoMs: 3_000 };
+  const MARCADOR = /<[a-z-]+>|prb_…|investigate\|save/;
+  it("los de validación de flags de `test` (sin tocar el motor)", async () => {
+    const { d } = deps(motor());
+    const casos: Parameters<typeof probar>[1][] = [
+      { ...W, wait: true, ceiling: "2" } as never,
+      { ...AUT, ceiling: null } as never,
+      { ...AUT, expectPolicy: null } as never,
+      { ...AUT, ceiling: null, viejo: true } as never,
+    ];
+    for (const f of casos) {
+      const r = await probar(d, f);
+      expect(r.codigo, JSON.stringify(f)).toBe(SALIDA.entradaInvalida);
+      expect(r.texto).not.toMatch(MARCADOR);
+      expect(r.texto).toMatch(/supcoflow test/);
+    }
+    const idSolo = await probar(d, { ...AUT, authorizeSpend: false, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
+    expect(idSolo.texto).not.toMatch(MARCADOR);
+    expect(idSolo.texto).toContain("`supcoflow test --wait --test-id`");
+  });
+  it("sin ninguna prueba guardada, `test --wait` manda al preview gratuito, sin marcadores", async () => {
+    const { d } = deps(motor(), undefined, tramoCorto);
+    const r = await probar(d, W);
+    expect(r.json.error).toBe("sin_prueba");
+    expect(r.texto).not.toMatch(MARCADOR);
+    expect(r.texto).toContain("`supcoflow test --json` (free)");
+  });
+  it.each([
+    ["tope_mensual", 429, 6, /Don't retry.*only a person can raise it/],
+    ["clave_invalida", 401, 2, /supcoflow login/],
+    ["chat_deshabilitado", 409, 4, /supcoflow diagnose/],
+    ["cosa_nueva", 500, 3, /supcoflow diagnose/],
+    ["prueba_en_curso", 409, 4, /supcoflow test --wait/],
+  ])("un rechazo del motor (%s) que sólo explica el estado trae además qué hacer", async (error, status, codigo, quiere) => {
+    const m = motor();
+    m.guion = [{ tipo: "rechazo", status, error, message: "The operation was refused.", cuerpo: {} }];
+    const { d } = deps(m);
+    const r = await probar(d, AUT);
+    expect(r.codigo).toBe(codigo);
+    expect(r.texto).toMatch(quiere);
+    expect(r.json.message).toBe(r.texto);
+    expect(r.texto).not.toMatch(MARCADOR);
+  });
+  it("un fallo inesperado de afuera (la red) al leer el diagnóstico trae un paso", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => { throw new Error("socket hang up"); } });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.texto).toContain("socket hang up");
+    expect(r.texto).toContain("Try again in a minute");
+    expect(r.json.message).toBe(r.texto);
+  });
+  it("un seguimiento cerrado que pide una persona manda a la consola y no a lanzar otra prueba", async () => {
+    const m = motor();
+    m.seguimientos = [seg("arranque_incierto", { mensaje: "The run's start is uncertain." })];
+    const { d } = deps(m, undefined, tramoCorto);
+    const r = await probar(d, { ...W, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json.message).toMatch(/A person has to look at it in the console.*don't launch another test/);
   });
 });

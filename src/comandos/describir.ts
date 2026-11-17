@@ -391,7 +391,7 @@ export function comandoDescribir(sobre: string | null = null): Resultado {
   const comando = DESCRIPCION.comandos.find((c) => c.nombre === nombre);
   if (comando === undefined) {
     const lista = DESCRIPCION.comandos.map((c) => c.nombre).join(", ");
-    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "comando_desconocido", `Unknown command «${sobre.slice(0, 40)}». The commands are: ${lista}. Try \`supcoflow describe <command> --json\`.`);
+    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "comando_desconocido", `Unknown command «${sobre.slice(0, 40)}». The commands are: ${lista}. Try \`supcoflow describe --json\`.`);
   }
   const codigos = Object.fromEntries(comando.codigos.map((n) => [n, DESCRIPCION.codigos[n]!]));
   return {

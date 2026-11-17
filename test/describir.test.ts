@@ -369,3 +369,16 @@ describe("R13: `describe <comando>` describe sólo ese comando", () => {
     expect(Object.keys(json("describe").codigos)).toEqual(["0", "3"]);
   });
 });
+
+describe("Sol R3: el error de `describe <comando>` desconocido no trae marcadores", () => {
+  it("manda a `supcoflow describe --json`, sin <command>", () => {
+    try {
+      comandoDescribir("nada");
+      expect.unreachable();
+    } catch (e) {
+      const m = (e as Error).message;
+      expect(m).toContain("`supcoflow describe --json`");
+      expect(m).not.toMatch(/<[a-z-]+>/);
+    }
+  });
+});
