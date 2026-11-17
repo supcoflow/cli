@@ -697,7 +697,9 @@ describe("supcoflow sin terminal", () => {
       }
       // R6 por el binario: el 4 trae los números del diagnóstico y no deja nada guardado.
       const sin = await correrSinTty(["test", "--json", "--repo", "d/r"], { conClave: true });
-      expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5 });
+      expect(JSON.parse(sin.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, detalle: "supcoflow test --full --json" });
+      const entero = await correrSinTty(["test", "--full", "--json", "--repo", "d/r"], { conClave: true });
+      expect(JSON.parse(entero.stdout)).toMatchObject({ error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5 });
       expect(existsSync(pruebas())).toBe(false);
     }, 60_000);
 

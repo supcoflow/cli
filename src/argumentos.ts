@@ -5,7 +5,7 @@ import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 
 export type Flags = {
   json: boolean; dryRun: boolean; help: boolean; start: boolean; wait: boolean; noBrowser: boolean;
-  // Salidas cortas: `--full` pide el detalle entero (hoy, `diagnose`); `sobre` es el comando que se pide a `describe <comando>`.
+  // Salidas cortas: `--full` pide el detalle entero (hoy, `diagnose` y `test` sin gasto); `sobre` es el comando que se pide a `describe <comando>`.
   full: boolean; sobre: string | null;
   repo: string | null; install: string | null; test: string | null;
   site: string | null; title: string | null; greeting: string | null; file: string | null; allow: string | null;

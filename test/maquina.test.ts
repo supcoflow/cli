@@ -60,12 +60,13 @@ function deps(rutaDir = dir, o: Partial<DepsDePrueba> = {}, fuera?: () => string
   return { d, posts, ruta };
 }
 const F = { repo: null, authorizeSpend: false, dryRun: false, message: null, wait: false, testId: null, ceiling: null, expectPolicy: null };
+const FULL = { ...F, full: true };
 const archivosDe = (p: string) => (existsSync(p) ? readdirSync(p) : null);
 
 type Maquina = { ok: boolean; impedimentos: { codigo: string; detalle: string }[] };
 async function ver(d: DepsDePrueba) {
   const antes = JSON.stringify(archivosDe(dir));
-  const t = await probar(d, F);
+  const t = await probar(d, FULL);
   const g = await diagnosticar(d, { repo: null, full: true });
   expect(JSON.stringify(archivosDe(dir))).toBe(antes); // sin escrituras
   return { t, g, maquina: t.json.maquina as Maquina };
@@ -177,7 +178,7 @@ describe("V-3: git no deja guardar bajo la carpeta personal: diagnose propone un
     expect(maquina.ok).toBe(false);
     const nuevaDir = join(sugerida, "supcoflow");
     const { d, posts } = deps(nuevaDir);
-    expect((await probar(d, F)).json.maquina).toEqual({ ok: true, impedimentos: [] });
+    expect((await probar(d, FULL)).json.maquina).toEqual({ ok: true, impedimentos: [] });
     const r = await probar(d, { ...F, authorizeSpend: true, ceiling: "2", expectPolicy: "save" });
     expect(r.codigo).toBe(5);
     expect(posts).toHaveLength(1);
@@ -196,7 +197,7 @@ describe("V-3: el pedido pendiente", () => {
   it("con un intento guardado de otro techo, `intento_pendiente` lo trae: sólo techo y política, nunca el mensaje ni la clave", async () => {
     const { d } = deps();
     await d.pruebas.abrir("proj_r-1", { clave: "clave-secreta-1", mensaje: "texto privado", techoUsd: 3, politicaEsperada: "relevar" });
-    const t = await probar(d, F);
+    const t = await probar(d, FULL);
     expect(t.json.intento_pendiente).toEqual({ techo_usd: 3, politica: "relevar" });
     expect(t.texto).toContain("ceiling US$ 3.00, policy investigate");
     expect(t.texto).toContain("`supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate`");
@@ -210,12 +211,12 @@ describe("V-3: el pedido pendiente", () => {
     const { d, ruta } = deps();
     mkdirSync(dir, { recursive: true });
     writeFileSync(ruta, JSON.stringify({ "http://localhost:3000#prueba#proj_r-1": { valor: JSON.stringify({ intento: { clave: "k", mensaje: null, techo_usd: 2 }, ultima: null }), escritoEn: 1 } }));
-    const t = await probar(d, F);
+    const t = await probar(d, FULL);
     expect(t.json.intento_pendiente).toEqual({ techo_usd: 2, politica: null });
     expect(t.texto).toContain("`supcoflow probar --autorizo-gasto --ceiling 2`");
   });
   it("sin intento: null", async () => {
-    expect((await probar(deps().d, F)).json.intento_pendiente).toBeNull();
+    expect((await probar(deps().d, FULL)).json.intento_pendiente).toBeNull();
   });
 });
 
@@ -229,7 +230,7 @@ describe("V-3: el aviso no cambia lo demás", () => {
   });
   it("si el prechequeo mismo falla, es «no ok» y no un error", async () => {
     const { d } = deps(dir, { pruebas: { ...deps().d.pruebas, revisar: async () => { throw new Error("boom"); } } });
-    const t = await probar(d, F);
+    const t = await probar(d, FULL);
     expect(t.json.maquina).toMatchObject({ ok: false, impedimentos: [{ codigo: "no_se_pudo_revisar" }] });
     expect(t.codigo).toBe(4);
   });

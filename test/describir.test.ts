@@ -206,7 +206,7 @@ describe("describe --json", () => {
     const pr = g("test");
     expect(pr).toBeDefined();
     const flags = pr.flags.join(" ");
-    for (const f of ["--authorize-spend", "--ceiling", "--expect-policy", "--wait", "--test-id", "--message", "--dry-run", "--repo", "--json"]) expect(flags, f).toContain(f);
+    for (const f of ["--authorize-spend", "--ceiling", "--expect-policy", "--wait", "--test-id", "--message", "--dry-run", "--repo", "--full", "--json"]) expect(flags, f).toContain(f);
     expect(pr.codigos).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(pr.ejemplos).toEqual(expect.arrayContaining(["supcoflow test --json", "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --wait --json"]));
     // Lo que gasta se dice: sin el flag no se manda nada, y el techo lo pone el motor.

@@ -51,7 +51,7 @@ export type DepsDePrueba = DepsDelProyectoDelRepo & {
 
 // `viejo` es true si el pedido llegó por `probar` o por `--autorizo-gasto`: ese alias no puede ampliar lo autorizado
 // (exige `--ceiling`) pero tampoco exige la política, como la 0.7.0.
-type FlagsDeProbar = Pick<Flags, "repo" | "dryRun" | "wait" | "authorizeSpend" | "message" | "testId" | "ceiling" | "expectPolicy"> & { viejo?: boolean };
+type FlagsDeProbar = Pick<Flags, "repo" | "dryRun" | "wait" | "authorizeSpend" | "message" | "testId" | "ceiling" | "expectPolicy"> & { viejo?: boolean; full?: boolean };
 
 // Las cotas de `BugReportSchema` del motor (D2): el mensaje es el cuerpo del reporte. Se mira acá para no
 // gastar un pedido (ni guardar un intento que el motor va a rechazar); la regla de verdad es la del motor.
@@ -221,7 +221,7 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> &
     proyecto: completo.proyecto,
     listo,
     instalacion: { ok: buenos, total },
-    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true, siguiente: pasoDelPunto(x) } : {}) })),
+    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true } : {}), siguiente: pasoDelPunto(x) })),
     siguiente,
     detalle: "supcoflow diagnose --full --json",
   };
@@ -250,6 +250,9 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   if (flags.wait && (flags.authorizeSpend || flags.message !== null || flags.ceiling !== null || flags.expectPolicy !== null)) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles",
       "`test --wait` only follows a test: no --authorize-spend, --ceiling, --expect-policy or --message. First `supcoflow test --authorize-spend --ceiling <usd> --expect-policy <policy>`, then `supcoflow test --wait`.");
+  }
+  if (flags.full === true && (flags.wait || (flags.authorizeSpend && !flags.dryRun))) {
+    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--full goes with `supcoflow test` without --authorize-spend, or with --dry-run: the outputs that carry the diagnosis.");
   }
   if (!flags.wait && flags.testId !== null) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--test-id goes with --wait: `supcoflow test --wait --test-id prb_…`.");
@@ -306,7 +309,11 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     }
     // Lo que esta máquina puede hacer con el pedido, visto ANTES del sí de gasto (fricción 3).
     const revision = await revisarLaMaquina(d, proyecto.id);
-    const datos = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
+    const completo = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
+    const datos = flags.full === true ? completo : {
+      proyecto: completo.proyecto, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
+      detalle: `supcoflow test --full${flags.dryRun ? " --dry-run" : ""} --json`,
+    };
     const gasto = g.politica === "guardar"
       ? `With the \`save\` policy the test goes as far as the saved case and spends nothing; the ceiling it authorizes is still ${usd(g.techoUsd)}.`
       : `A test runs an investigation that spends up to ${usd(g.techoUsd)}.`;
@@ -336,7 +343,14 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const pendiente = previo === null ? ""
       : ` There's a test request waiting for confirmation (ceiling ${usd(previo.techoUsd)}, policy ${enInglesLaPolitica(previo.politica)}): to recover that same request, repeat \`${comandoDeReintento({ clave: "", mensaje: null, techoUsd: previo.techoUsd, politicaEsperada: previo.politica })}\`.`;
     const message = `${impide}${gasto} To launch it: \`${lanzar}\`. \`supcoflow diagnose\` first says whether everything is ready.${pendiente}`;
-    return { codigo: SALIDA.haceFaltaUnaPersona, json: { ok: false, error: "falta_autorizacion", message, ...datos, ...datosDelIntentoPendiente(revision) }, texto: message };
+    const siguiente = revision.maquina.ok
+      ? `Ask the person to authorize the spend, then run \`${lanzar}\`.`
+      : "Fix this machine first (see `message`), then run `supcoflow diagnose --json`.";
+    return {
+      codigo: SALIDA.haceFaltaUnaPersona,
+      json: { ok: false, error: "falta_autorizacion", message, ...datos, ...datosDelIntentoPendiente(revision), ...(flags.full === true ? {} : { siguiente }) },
+      texto: message,
+    };
   }
 
   // ── Con --authorize-spend: el ciclo de la clave.

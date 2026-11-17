@@ -296,6 +296,27 @@ describe("diagnose", () => {
     expect(r.texto).toContain("[missing] guide: The engine didn't report this point.");
   });
 
+  it("R2-1: un punto que no es aviso y falta con `listo` true trae su arreglo en su ítem; el `siguiente` de arriba sigue siendo la prueba", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, puntos: DIAG.puntos.filter((p) => p.punto !== "guia") }) });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toMatchObject({
+      listo: true, siguiente: "supcoflow test --json",
+      faltan: [{ punto: "guia", mensaje: "The engine didn't report this point.", siguiente: "supcoflow guide publish" }],
+    });
+  });
+
+  it("R2-1: sin `listo`, cada punto que falta trae su propio arreglo, y el de arriba es el del primero", async () => {
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "chat" || p.punto === "guia" ? { ...p, ok: false } : p)) }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.json).toMatchObject({
+      siguiente: "supcoflow chat on",
+      faltan: [{ punto: "chat", siguiente: "supcoflow chat on" }, { punto: "guia", siguiente: "supcoflow guide publish" }],
+    });
+  });
+
   it("un fallo del motor sale con su código (2 sin clave válida)", async () => {
     const m = motor();
     const { d } = deps(m, undefined, { leerDiagnostico: async () => { throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", "La clave ya no vale."); } });
@@ -528,12 +549,38 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const { d, almacen } = deps(m);
     const r = await probar(d, F);
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
-    expect(r.json).toMatchObject({ ok: false, error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar" });
+    expect(r.json).toEqual({
+      ok: false, error: "falta_autorizacion", message: expect.any(String), proyecto: { id: PROY.id, repo: "d/r" }, politica: "relevar", techo_usd: 2,
+      prueba_abierta: null, maquina: { ok: true }, intento_pendiente: null,
+      siguiente: "Ask the person to authorize the spend, then run `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`.",
+      detalle: "supcoflow test --full --json",
+    });
     expect(r.texto).toContain("`supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`");
     expect(r.texto).toContain("US$ 2.00");
     expect(r.texto).not.toMatch(/monthly balance/i);
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
+  });
+
+  it("R2-2: sin --authorize-spend y con --full, el detalle de antes: saldo, tope, comprometido, puntos y la máquina con sus impedimentos", async () => {
+    const { d } = deps(motor());
+    const r = await probar(d, { ...F, full: true });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json).toMatchObject({
+      ok: false, error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar",
+      listo: true, puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] }, intento_pendiente: null,
+    });
+    expect(r.json).not.toHaveProperty("detalle");
+  });
+
+  it("R2-2: --full con --wait o con un --authorize-spend de verdad sale 3 flags_incompatibles sin tocar el motor", async () => {
+    for (const flags of [{ ...F, wait: true, full: true }, { ...AUT, full: true }]) {
+      const m = motor();
+      const r = await probar(deps(m).d, flags);
+      expect(r.codigo).toBe(SALIDA.entradaInvalida);
+      expect(r.json.error).toBe("flags_incompatibles");
+      expect(m.posts).toEqual([]);
+    }
   });
 
   it("R6: con --message y sin el flag, igual: 4 y nada guardado", async () => {
@@ -549,7 +596,9 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const { d, almacen } = deps(m);
     const r = await probar(d, { ...AUT, dryRun: true });
     expect(r.codigo).toBe(SALIDA.ok);
-    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, saldo_usd: 7.5, politica: "relevar" });
+    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, politica: "relevar", maquina: { ok: true }, detalle: "supcoflow test --full --dry-run --json" });
+    expect(r.json).not.toHaveProperty("saldo_usd");
+    expect((await probar(d, { ...AUT, dryRun: true, full: true })).json).toMatchObject({ dry_run: true, saldo_usd: 7.5, puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] } });
     expect(String(r.json.haria)).toContain(`POST ${RUTA}`);
     expect(String(r.json.haria)).toContain("techo_usd: 2, politica_esperada: relevar");
     expect(r.texto).toContain("With --dry-run I do nothing.");
