@@ -876,7 +876,21 @@ describe("test --authorize-spend: el ciclo de la clave", () => {
     const r = await probar(d, AUT);
     expect(r.codigo).toBe(SALIDA.inesperado);
     expect(r.json.error).toBe("prueba_no_guardada");
+    expect(r.texto).not.toMatch(/connection/i);
+    expect(r.json.message).toBe(r.texto);
     expect(m.posts).toEqual([]);
+  });
+
+  it.each([
+    ["diagnose", (d: DepsDePrueba) => diagnosticar(d, { repo: null })],
+    ["test", (d: DepsDePrueba) => probar(d, AUT)],
+  ])("R9-1: %s con el llavero sin contestar dice desbloquearlo, no revisar la conexión", async (_n, correr) => {
+    const { d } = deps(motor(), undefined, { guardado: { leerClaveCompleta: async () => ({ valor: null, completa: false }) } as never });
+    const r = await correr(d);
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json.error).toBe("llavero_no_responde");
+    expect(r.texto).toContain("Unlock it and try again.");
+    expect(r.texto).not.toMatch(/connection/i);
   });
 
   it("R14c: respuesta perdida → el próximo manda la MISMA clave con el mismo mensaje y techo; 2 POST, 1 prueba, la última = esa", async () => {

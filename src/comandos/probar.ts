@@ -188,8 +188,9 @@ export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean, repo: s
 }
 
 // Un fallo de afuera (la red, el motor) explica qué pasó, no qué hacer: se le suma el paso. Los que ya traen su acción no se tocan.
+const FALLOS_DE_AFUERA = new Set(["motor_inalcanzable", "respuesta_inesperada", "demasiados_pedidos", "inesperado"]);
 function conSiguiente(r: Resultado): Resultado {
-  if (r.codigo !== SALIDA.inesperado) return r;
+  if (r.codigo !== SALIDA.inesperado || !FALLOS_DE_AFUERA.has(String(r.json.error))) return r;
   const message = `${r.texto} Check the connection and run the same command again in a minute; if it keeps failing, tell the person what it says.`;
   return { ...r, json: { ...r.json, message }, texto: message };
 }
