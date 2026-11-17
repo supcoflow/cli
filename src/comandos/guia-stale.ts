@@ -107,10 +107,15 @@ export async function guiaStale(d: DepsDeStale, flags: Pick<Flags, "base" | "str
   const mapa = leerElMapa(RUTA_DE_LA_CARPETA, documentos);
   const textos = new Map(documentos.map((x) => [`${RUTA_DE_LA_CARPETA}/${x.nombre}`, x.texto]));
 
+  // El inventario de archivos del repo ahora. Las DOS lecturas tienen que salir bien: si una falla, no se reemplaza por una
+  // lista vacía (ni se asume que no hay borrados): sin inventario fiable no se afirma nada de los patrones que no coinciden con
+  // ningún archivo, y se avisa que la comprobación quedó incompleta.
   const lista = await d.git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], raiz);
   const borrados = await d.git(["ls-files", "--deleted", "-z"], raiz);
-  const sinBorrados = new Set(borrados.codigo === 0 ? salida(borrados) : []);
-  const archivos = lista.codigo === 0 ? salida(lista).filter((f) => !sinBorrados.has(f)) : null;
+  const fallidas = [lista.codigo === 0 ? null : "`git ls-files`", borrados.codigo === 0 ? null : "`git ls-files --deleted`"].filter((x) => x !== null);
+  const inventarioCompleto = fallidas.length === 0;
+  const sinBorrados = new Set(inventarioCompleto ? salida(borrados) : []);
+  const archivos = inventarioCompleto ? salida(lista).filter((f) => !sinBorrados.has(f)) : null;
 
   const avisos: Aviso[] = [];
   if (carpeta.tipo === "error") {
@@ -135,7 +140,16 @@ export async function guiaStale(d: DepsDeStale, flags: Pick<Flags, "base" | "str
       avisos.push({ tipo: "no_se_pudo_comparar", severidad: "aviso", mensaje: comparacion.mensaje, motivo: comparacion.motivo });
     }
   }
-  const comparado = comparacion?.ok === true;
+  if (!inventarioCompleto) {
+    avisos.push({
+      tipo: "no_se_pudo_comparar", severidad: "aviso", motivo: "git_no_pudo_listar",
+      mensaje: `git could not list the files of the repo (${fallidas.join(" and ")} failed), so I could not complete the check: I can't tell which \`sources\` patterns still match a file. Run it again; if it keeps failing, check that git works in this clone.`,
+    });
+  }
+  // `comparado` dice que la comprobación se COMPLETÓ: el diff contra la base Y el inventario de archivos. Lo que sí se calculó
+  // (los avisos del diff, `cambiados`, `cubiertos`) se conserva aunque `comparado` sea false.
+  const diffComparado = comparacion?.ok === true;
+  const comparado = diffComparado && inventarioCompleto;
 
   // Lo que viene del repo (rutas, globs, nombres) se limpia ANTES de armar el texto: limpiar el texto entero se llevaría
   // también los saltos de línea del propio mensaje.
@@ -152,6 +166,8 @@ export async function guiaStale(d: DepsDeStale, flags: Pick<Flags, "base" | "str
     lineas.push(resumen.cambiados === 0
       ? `Compared with \`${baseLimpia}\`: no files changed (map of ${n} ${n === 1 ? "document" : "documents"}).`
       : `Compared ${resumen.cambiados} changed ${resumen.cambiados === 1 ? "file" : "files"} with \`${baseLimpia}\` against the map of ${n} ${n === 1 ? "document" : "documents"}.`);
+  } else if (diffComparado) {
+    lineas.push(`Compared ${resumen.cambiados} changed ${resumen.cambiados === 1 ? "file" : "files"} with \`${baseLimpia}\`, but I could not complete the check (see below).`);
   } else if (hayMapaUsable) lineas.push(`I could not compare the change with \`${baseLimpia}\`.`);
   else lineas.push("I could not compare the change: there is no usable map (see below).");
   if (reales.length === 0 && comparado) lineas.push("Nothing to warn.");

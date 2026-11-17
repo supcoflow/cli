@@ -83,7 +83,8 @@ function compilar(patron: string): (ruta: string) => boolean {
   }
   const glob = sinBarraFinal === sinPuntoBarra ? sinPuntoBarra : `${sinBarraFinal}/**`;
   try {
-    const re = new RegExp(`^${aRegex(glob)}$`, "u");
+    // `s`: un punto también cubre un salto de línea (un nombre legal en git), para que `**` y `**/` no lo dejen afuera.
+    const re = new RegExp(`^${aRegex(glob)}$`, "su");
     return (ruta) => re.test(ruta);
   } catch {
     return (ruta) => ruta === sinPuntoBarra; // un patrón que no se puede leer como glob vale sólo por su texto

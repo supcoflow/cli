@@ -39,6 +39,14 @@ describe("coincide: los globs de `sources`", () => {
     ["app/*/", "app/billing/invoice.ts", true], // con comodines y `/` al final también es una carpeta
     ["app/billing/**/", "app/billing/a/b.ts", true],
     ["app/*/", "app/a.ts", false],
+    ["app/billing/**", "app/billing/odd\nname.ts", true], // un salto de línea es un nombre legal en git: `**` lo cubre
+    ["app/billing/**", "app/billing/dir\nx/y.ts", true],
+    ["**/*.ts", "a\nb/c.ts", true],
+    ["**/*.ts", "a/b\nc.ts", true],
+    ["app/*.ts", "app/a\nb.ts", true],
+    ["app/*.ts", "app/a\nb/c.ts", false], // `*` sigue sin cruzar una `/`
+    ["app/page-?.tsx", "app/page-\n.tsx", true],
+    ["app/billing", "app/billing/odd\nname.ts", true],
   ];
   for (const [patron, ruta, esperado] of casos) it(`${patron} ${esperado ? "coincide con" : "no coincide con"} ${ruta}`, () => expect(coincide(patron, ruta)).toBe(esperado));
 });

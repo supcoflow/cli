@@ -328,3 +328,58 @@ describe("guide stale: lo que cambia la forma de usarlo", () => {
     void raiz;
   });
 });
+
+// Sol, revisión 2, F1: si git no puede listar los archivos del repo, el detector no puede afirmar nada sobre las
+// `sources` que no coinciden con ningún archivo; no lo reemplaza por una lista vacía ni dice «Nothing to warn».
+describe("guide stale: un inventario de archivos que falla no es un «todo bien»", () => {
+  const fallaLa = (cual: "ls-files-lista" | "ls-files-borrados", deps: DepsDeStale): DepsDeStale => ({
+    ...deps,
+    git: (args, cwd) => {
+      const esLista = args[0] === "ls-files" && args.includes("--cached");
+      const esBorrados = args[0] === "ls-files" && args.includes("--deleted");
+      if ((cual === "ls-files-lista" && esLista) || (cual === "ls-files-borrados" && esBorrados)) return Promise.resolve({ codigo: 128, stdout: "" });
+      return deps.git(args, cwd);
+    },
+  });
+  for (const cual of ["ls-files-lista", "ls-files-borrados"] as const) {
+    it(`falla sólo ${cual}: avisa que no pudo completar la comprobación, nunca «Nothing to warn», y --strict sale 4`, async () => {
+      const { deps } = repo({ documentos: { "a.md": DOC("A", ["app/missing/**"]) } });
+      const sano = await guiaStale(deps, { base: "main", strict: true });
+      expect(tipos(sano)).toEqual(["fuente_sin_archivos"]);
+      for (const strict of [false, true]) {
+        const r = await guiaStale(fallaLa(cual, deps), { base: "main", strict });
+        expect(r.codigo).toBe(strict ? 4 : 0);
+        expect(r.json).toMatchObject({ comparado: false });
+        expect(r.json.avisos).toMatchObject([{ tipo: "no_se_pudo_comparar", motivo: "git_no_pudo_listar" }]);
+        expect(r.texto).toContain("could not complete the check");
+        expect(r.texto).not.toContain("Nothing to warn");
+      }
+    });
+    it(`falla sólo ${cual}: conserva lo que sí pudo calcular (el diff contra la base)`, async () => {
+      const { raiz, deps } = repo();
+      escribir(raiz, "app/billing/invoice.ts", "export const a = 2;\n");
+      commit(raiz, "cambio");
+      const r = await guiaStale(fallaLa(cual, deps), F);
+      expect(tipos(r).sort()).toEqual(["documento_sin_tocar", "no_se_pudo_comparar"]);
+      expect(r.json).toMatchObject({ comparado: false, cambiados: 1, cubiertos: 1 });
+    });
+  }
+});
+
+// Sol, revisión 2, F2: un nombre con salto de línea es legal en git y `**` tiene que cubrirlo.
+describe("guide stale: nombres con salto de línea", () => {
+  it("un cambio en app/billing/odd<LF>name.ts sin tocar el documento avisa (documento_sin_tocar) y --strict sale 4", async () => {
+    const { raiz, deps } = repo();
+    escribir(raiz, "app/billing/odd\nname.ts", "1\n");
+    commit(raiz, "archivo raro");
+    git(raiz, "checkout", "-q", "-B", "main");
+    git(raiz, "checkout", "-q", "-B", "feature");
+    escribir(raiz, "app/billing/odd\nname.ts", "2\n");
+    commit(raiz, "cambio sólo del raro");
+    const r = await guiaStale(deps, { base: "main", strict: true });
+    expect(r.codigo).toBe(4);
+    expect(r.json.avisos).toMatchObject([{ tipo: "documento_sin_tocar", documento: `${K}/billing.md`, archivos: ["app/billing/oddname.ts"] }]);
+    // La ruta se compara tal cual (con su LF) y sólo se sanea al MOSTRARLA: el salto de línea no sale a la terminal.
+  });
+});
+

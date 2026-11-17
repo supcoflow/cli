@@ -288,14 +288,14 @@ Each warning says what to do, and the JSON gives them apart with a `tipo`:
 | `fuente_sin_archivos` | A `sources` pattern matches no file in the repo: the code was moved or deleted. Point it where it lives now. |
 | `mapa_vacio` | There are no documents, or none declares `sources`: nothing to compare against. |
 | `mapa_roto` | A header (or the folder) can't be read: the line and the reason come with it. |
-| `no_se_pudo_comparar` | The base isn't in this clone, or the clone is shallow. It says it **could not compare** and suggests `fetch-depth: 0`. It never says «Nothing to warn» when it couldn't look. |
+| `no_se_pudo_comparar` | The base isn't in this clone, or the clone is shallow (it suggests `fetch-depth: 0`), or git couldn't list the repo's files (`motivo: git_no_pudo_listar`). It says it **could not compare** or **could not complete the check**, keeps what it did compute, and never says «Nothing to warn» when it couldn't look. |
 
 New files that no `sources` covers come apart as `notas` (`fuera_del_mapa`): they are information (a test file doesn't
 need a document), they are in `notas` and not in `avisos`, and they never fail `--strict`. If users can see them, add
 their path to the `sources` of the document that explains them.
 
 **It exits 0 even with warnings** (it only warns). With `--strict` it exits 4 `guia_desactualizada` if there is any
-warning, including `no_se_pudo_comparar`. `--json` prints `{ ok, comparado, base, base_commit, documentos, cambiados,
+warning, including `no_se_pudo_comparar`. `comparado` is true only when the whole check completed (the diff against the base and the list of the repo's files). `--json` prints `{ ok, comparado, base, base_commit, documentos, cambiados,
 cubiertos, sin_cubrir, avisos, notas }`.
 
 What it can't do: it checks what was touched, not whether the text is true or enough. A document edited with a wrong
