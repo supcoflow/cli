@@ -46,7 +46,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       return { r: { codigo: SALIDA.ok, json: { ok: true, ayuda: texto }, texto }, json };
     }
     const presentes: Record<string, boolean> = {
-      start: flags.start, wait: flags.wait, noBrowser: flags.noBrowser, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
+      start: flags.start, wait: flags.wait, noBrowser: flags.noBrowser, full: flags.full, repo: flags.repo !== null, install: flags.install !== null, test: flags.test !== null,
       site: flags.site !== null, title: flags.title !== null, greeting: flags.greeting !== null, theme: flags.theme.length > 0,
       file: flags.file !== null, allow: flags.allow !== null, mode: flags.mode !== null,
       name: flags.name !== null, saveTo: flags.saveTo !== null, id: flags.id !== null, source: flags.source !== null, fromGithub: flags.fromGithub, base: flags.base !== null, strict: flags.strict,
@@ -63,7 +63,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
     if (flags.start && flags.wait) {
       throw invalida("flags_incompatibles", "--start and --wait go separately: first one and then the other.");
     }
-    if (comando === "describe") return { r: comandoDescribir(), json };
+    if (comando === "describe") return { r: comandoDescribir(flags.sobre), json };
 
     if (comando === "login") {
       // ANTES de armar el entorno: no hay cómo simular un canje sin consumirlo, y este error no

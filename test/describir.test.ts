@@ -206,7 +206,7 @@ describe("describe --json", () => {
     const pr = g("test");
     expect(pr).toBeDefined();
     const flags = pr.flags.join(" ");
-    for (const f of ["--authorize-spend", "--ceiling", "--expect-policy", "--wait", "--test-id", "--message", "--dry-run", "--repo", "--json"]) expect(flags, f).toContain(f);
+    for (const f of ["--authorize-spend", "--ceiling", "--expect-policy", "--wait", "--test-id", "--message", "--dry-run", "--repo", "--full", "--json"]) expect(flags, f).toContain(f);
     expect(pr.codigos).toEqual([0, 1, 2, 3, 4, 5, 6]);
     expect(pr.ejemplos).toEqual(expect.arrayContaining(["supcoflow test --json", "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --wait --json"]));
     // Lo que gasta se dice: sin el flag no se manda nada, y el techo lo pone el motor.
@@ -322,5 +322,63 @@ describe("el alias de SSH en el contrato (revisión 2): se lee como texto y nunc
     expect(r).toContain("**as plain text**");
     expect(r).toContain("**never runs `ssh`**");
     expect(r).not.toMatch(/ssh -G/);
+  });
+});
+
+describe("R13: `describe <comando>` describe sólo ese comando", () => {
+  const json = (sobre: string) => comandoDescribir(sobre).json as { ok: boolean; version: string; comando: { nombre: string; flags: string[] }; codigos: Record<string, string>; flags_globales: string[] };
+
+  it("un comando de una palabra y uno de dos: su bloque, sus códigos y nada de los demás", () => {
+    const dg = json("diagnose");
+    expect(dg).toMatchObject({ ok: true, version: DESCRIPCION.version, comando: { nombre: "diagnose" } });
+    expect(Object.keys(dg.codigos)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(dg).not.toHaveProperty("comandos");
+    expect(dg).not.toHaveProperty("facultades");
+    expect(json("repo connect").comando.nombre).toBe("repo connect");
+    expect(comandoDescribir("test").texto).toMatch(/^Usage: supcoflow test \[flags\]/);
+  });
+
+  it("es mucho más corto que el contrato entero", () => {
+    const entero = JSON.stringify(comandoDescribir().json).length;
+    for (const c of DESCRIPCION.comandos) expect(JSON.stringify(comandoDescribir(c.nombre).json).length, c.nombre).toBeLessThan(entero / 3);
+  });
+
+  it("el nombre viejo en castellano llega al mismo comando; `describe` sin argumento sigue siendo el contrato entero", () => {
+    expect(json("diagnosticar").comando.nombre).toBe("diagnose");
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: DESCRIPCION.version, comandos: expect.any(Array), facultades: expect.any(Array) });
+  });
+
+  it("un comando que no existe sale 3 comando_desconocido y lista los que hay", () => {
+    try {
+      comandoDescribir("nada");
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toMatchObject({ codigo: 3, error: "comando_desconocido", message: expect.stringContaining("diagnose") });
+    }
+  });
+
+  it("`diagnose` documenta --full y el JSON corto", () => {
+    const dg = json("diagnose").comando.flags.join(" ");
+    expect(dg).toMatch(/--full/);
+    expect(dg).toMatch(/faltan/);
+    expect(dg).toMatch(/siguiente/);
+    expect(dg).toMatch(/detalle/);
+  });
+
+  it("`describe` declara el 3 con el que sale para un comando que no existe", () => {
+    expect(Object.keys(json("describe").codigos)).toEqual(["0", "3"]);
+  });
+});
+
+describe("Sol R3: el error de `describe <comando>` desconocido no trae marcadores", () => {
+  it("manda a `supcoflow describe --json`, sin <command>", () => {
+    try {
+      comandoDescribir("nada");
+      expect.unreachable();
+    } catch (e) {
+      const m = (e as Error).message;
+      expect(m).toContain("`supcoflow describe --json`");
+      expect(m).not.toMatch(/<[a-z-]+>/);
+    }
   });
 });

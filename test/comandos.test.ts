@@ -420,6 +420,11 @@ describe("flags que no aplican (despacho)", () => {
     expect(archivosDeMas("chat logo", 0)).toBeNull();
     expect(archivosDeMas("chat logo", 2)).toMatch(/--file goes once/);
   });
+  it("R13: --full sólo en `diagnose` y `test`", () => {
+    expect(sin("diagnose", "full")).toBeNull();
+    expect(sin("test", "full")).toBeNull();
+    for (const c of ["whoami", "login", "describe", "guide check", "widget"]) expect(sin(c, "full"), c).toMatch(/--full belongs to `supcoflow diagnose` and `supcoflow test`/);
+  });
   it("bloque 7: --authorize-spend, --ceiling, --expect-policy, --message y --test-id sólo en `test`; --wait también en `test`; --repo en los dos", () => {
     expect(sin("test", "authorizeSpend", "ceiling", "expectPolicy", "message", "repo")).toBeNull();
     expect(sin("test", "wait", "testId")).toBeNull();

@@ -329,7 +329,7 @@ describe("P2-2: el pedido pendiente que dejó otro usuario no se usa", () => {
 
   it("diagnose lo dice ANTES del sí de gasto, como impedimento de la máquina", async () => {
     plantar();
-    const g = await diagnosticar(deps(conAjenos([raiz])).d, { repo: null });
+    const g = await diagnosticar(deps(conAjenos([raiz])).d, { repo: null, full: true });
     expect(g.codigo).toBe(4);
     expect(g.json.maquina).toMatchObject({ ok: false, impedimentos: expect.arrayContaining([expect.objectContaining({ codigo: "carpeta_compartida_insegura" })]) });
   });

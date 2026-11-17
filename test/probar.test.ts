@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { Diagnostico, IntentoDePrueba, RespuestaDePrueba, Seguimiento } from "../src/api.ts";
 import { leerArgumentos } from "../src/argumentos.ts";
-import { diagnosticar, probar, type DepsDePrueba } from "../src/comandos/probar.ts";
+import { diagnosticar, probar, siguienteDelDiagnostico, type DepsDePrueba } from "../src/comandos/probar.ts";
 import { FalloDeLaTerminal, SALIDA } from "../src/contrato.ts";
 import type { Almacen, Registro } from "../src/guardado/index.ts";
 import { crearRegistroDePruebas } from "../src/pruebas-guardadas.ts";
@@ -136,7 +136,7 @@ describe("diagnose", () => {
     const { d } = deps(m, undefined, {
       leerDiagnostico: async () => ({ ...DIAG, puntos: [...DIAG.puntos, { punto: "algo_nuevo", ok: true, mensaje: "Un punto que esta terminal no conoce." }] }),
     });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(SALIDA.ok);
     expect(r.json).toMatchObject({
       ok: true, listo: true, techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar", prueba_abierta: null,
@@ -153,7 +153,7 @@ describe("diagnose", () => {
 
   it("el JSON: instalacion {ok, total: 7, puntos} con sign-in y repo locales primero, y prueba {listo, puntos}", async () => {
     const { d } = deps(motor());
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     const inst = r.json.instalacion as { ok: number; total: number; puntos: { punto: string; ok: boolean; grupo: string }[] };
     expect(inst.total).toBe(7);
     expect(inst.puntos.map((p) => p.punto)).toEqual(["sign-in", "repo", "instalacion", "sitios", "chat", "guia", "interfaz"]);
@@ -165,10 +165,86 @@ describe("diagnose", () => {
     expect(r.json).toMatchObject({ maquina: { ok: true, impedimentos: [] }, intento_pendiente: null });
   });
 
+  it("R13: por defecto el JSON es corto (ok, listo, instalacion {ok,total}, faltan, siguiente) y no trae el detalle", async () => {
+    const { d } = deps(motor());
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toEqual({
+      ok: true, proyecto: expect.objectContaining({ repo: "d/r" }), listo: true, instalacion: { ok: 7, total: 7 }, faltan: [],
+      siguiente: "supcoflow test --json", detalle: "supcoflow diagnose --full --json",
+    });
+    for (const campo of ["puntos", "prueba", "maquina", "intento_pendiente", "techo_usd", "saldo_usd", "politica"]) expect(r.json, campo).not.toHaveProperty(campo);
+    expect(JSON.stringify(r.json).length).toBeLessThan(400);
+    // El texto para personas no cambia.
+    expect(r.texto.split("\n")[0]).toBe("Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: 7 of 7, at no cost.");
+  });
+
+  it("R13: con algo que falta, el JSON corto dice qué punto, su mensaje y el próximo comando; sale 4 no_listo", async () => {
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "sitios" ? { ...p, ok: false, mensaje: "La lista de sitios está vacía." } : p)) }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json).toMatchObject({
+      ok: false, error: "no_listo", message: expect.stringContaining("needs fixing"), listo: false, instalacion: { ok: 6, total: 7 },
+      faltan: [{ punto: "sitios", mensaje: "La lista de sitios está vacía." }],
+      siguiente: expect.stringContaining("supcoflow sites add --site"),
+    });
+    expect(r.json.siguiente).not.toMatch(/<[a-z]+>|https?:\/\/|example\./);
+    expect(r.json).not.toHaveProperty("puntos");
+  });
+
+  it("R13: el próximo paso sigue al primer punto que cuenta; un aviso (interfaz) va después y un punto desconocido cae en el paso genérico", () => {
+    const punto = (p: string, extra: object = {}) => ({ punto: p, ok: false, mensaje: `falta ${p}`, grupo: "instalacion" as const, ...extra });
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true }), punto("guia")], false)).toMatch(/supcoflow guide versions.*first guide goes from this terminal.*--from-github/);
+    expect(siguienteDelDiagnostico([punto("sign-in")], false)).toBe("supcoflow login");
+    expect(siguienteDelDiagnostico([punto("instalacion")], false)).toBe("supcoflow repo connect");
+    expect(siguienteDelDiagnostico([punto("chat")], false)).toBe("supcoflow chat on");
+    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false)).toMatch(/`supcoflow agents set-key --agent chat`.*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("ia_del_triaje")], false)).toMatch(/`supcoflow agents set-key --agent triage`.*never goes through an assistant/);
+    expect(siguienteDelDiagnostico([punto("chat")], false, "o/x")).toBe("supcoflow chat on --repo o/x");
+    expect(siguienteDelDiagnostico([punto("ia_del_chat")], false, "o/x")).toContain("`supcoflow agents set-key --agent chat --repo o/x`");
+    expect(siguienteDelDiagnostico([], true, "o/x")).toBe("supcoflow test --repo o/x --json");
+    expect(siguienteDelDiagnostico([punto("algo_nuevo")], false)).toBe("Fix «algo_nuevo»: falta algo_nuevo Then run `supcoflow diagnose` again.");
+    expect(siguienteDelDiagnostico([], true)).toBe("supcoflow test --json");
+  });
+
+  it("F2: con `listo` true el próximo paso es siempre la prueba, aunque haya avisos; sin `listo` nunca hay huecos para rellenar", () => {
+    const punto = (p: string, extra: object = {}) => ({ punto: p, ok: false, mensaje: `falta ${p}`, grupo: "instalacion" as const, ...extra });
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true })], true)).toBe("supcoflow test --json");
+    expect(siguienteDelDiagnostico([punto("algo_nuevo", { aviso: true })], true)).toBe("supcoflow test --json");
+    expect(siguienteDelDiagnostico([punto("interfaz", { aviso: true })], false)).toBe("supcoflow diagnose --full --json");
+    for (const p of ["sign-in", "repo", "instalacion", "sitios", "chat", "ia_del_chat", "ia_del_triaje", "guia", "interfaz"]) {
+      expect(siguienteDelDiagnostico([punto(p)], false), p).not.toMatch(/<[a-z]+>|https?:\/\/|example\./);
+    }
+  });
+
+  it("F2: un aviso con `listo` true sale en `faltan` con su propio `siguiente`, y el `siguiente` de arriba es la prueba", async () => {
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, puntos: [...DIAG.puntos, { punto: "algo_nuevo", ok: false, mensaje: "Conviene revisarlo.", aviso: true, grupo: "instalacion" }] }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toMatchObject({
+      ok: true, listo: true, siguiente: "supcoflow test --json",
+      faltan: [{ punto: "algo_nuevo", mensaje: "Conviene revisarlo.", aviso: true, siguiente: "Fix «algo_nuevo»: Conviene revisarlo. Then run `supcoflow diagnose` again." }],
+    });
+  });
+
+  it("R13: con --full el JSON trae todo el detalle de antes, más `siguiente`", async () => {
+    const { d } = deps(motor());
+    const r = await diagnosticar(d, { repo: null, full: true });
+    expect(r.json).toMatchObject({
+      ok: true, listo: true, techo_usd: 2, instalacion: { ok: 7, total: 7, puntos: expect.any(Array) }, prueba: { listo: true, puntos: expect.any(Array) },
+      puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] }, intento_pendiente: null, siguiente: "supcoflow test --json",
+    });
+    expect(r.json).not.toHaveProperty("faltan");
+  });
+
   it("agrupa por el nombre del punto si el motor viejo no manda `grupo`", async () => {
     const sinGrupo = DIAG.puntos.map(({ grupo: _g, ...p }) => p);
     const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, puntos: sinGrupo }) });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.json).toMatchObject({ instalacion: { ok: 7, total: 7 }, prueba: { listo: true } });
   });
 
@@ -177,7 +253,7 @@ describe("diagnose", () => {
     const { d } = deps(m, undefined, {
       leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "sitios" ? { ...p, ok: false, mensaje: "La lista de sitios está vacía." } : p)) }),
     });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
     expect(r.json).toMatchObject({ ok: false, error: "no_listo", listo: false, instalacion: { ok: 6, total: 7 } });
     expect(r.texto).toContain("6 of 7, at no cost.");
@@ -189,7 +265,7 @@ describe("diagnose", () => {
     const { d } = deps(motor(), undefined, {
       leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "despachos" ? { ...p, ok: false, mensaje: "Los despachos están en pausa." } : p)) }),
     });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(4);
     expect(r.json).toMatchObject({ instalacion: { ok: 7, total: 7 }, prueba: { listo: false } });
     expect(r.texto).toContain("Ready for a test: no, because Los despachos están en pausa.");
@@ -197,7 +273,7 @@ describe("diagnose", () => {
 
   it("sin git (--repo y la carpeta no es un repo): el punto repo no está ok, con el motivo, y la salida es 4 aunque el motor diga listo", async () => {
     const { d } = deps(motor(), undefined, fuera);
-    const r = await diagnosticar(d, { repo: "d/r" });
+    const r = await diagnosticar(d, { repo: "d/r", full: true });
     expect(r.codigo).toBe(4);
     expect(r.json).toMatchObject({ instalacion: { ok: 6, total: 7 }, listo: false, prueba: { listo: true } });
     expect(r.texto).toContain("[missing] repo: This folder isn't a git repo, so I can't tell which repo it is.");
@@ -206,34 +282,75 @@ describe("diagnose", () => {
 
   it("el origin de la carpeta es otro repo que el del proyecto: repo no ok y se dice cuál es cuál", async () => {
     const { d } = deps(motor(), undefined, otroOrigin);
-    const r = await diagnosticar(d, { repo: "d/r" });
+    const r = await diagnosticar(d, { repo: "d/r", full: true });
     expect(r.codigo).toBe(4);
     expect(r.texto).toContain("The origin of this folder is otro/repo, not the project's repo d/r.");
     expect(r.json).toMatchObject({ instalacion: { ok: 6, total: 7 } });
   });
 
+  it("R4-1: con --repo desde una carpeta de otro origin, el paso del punto `repo` dice desde dónde correrlo y no vuelve a pedir --repo", async () => {
+    const { d } = deps(motor(), undefined, otroOrigin);
+    const r = await diagnosticar(d, { repo: "d/r" });
+    expect(r.json).toMatchObject({ listo: false, faltan: [{ punto: "repo" }] });
+    expect(r.json.siguiente).toContain("clone of d/r");
+    expect(String(r.json.siguiente)).not.toContain("--repo");
+  });
+
   it("el origin coincide sin importar mayúsculas", async () => {
     const { d } = deps(motor(), undefined, { git: async (a: string[]) => (a[0] === "rev-parse" ? { codigo: 0, stdout: "/w/r\n" } : { codigo: 0, stdout: "git@github.com:D/R.git\n" }) });
-    expect((await diagnosticar(d, { repo: null })).json).toMatchObject({ instalacion: { ok: 7 } });
+    expect((await diagnosticar(d, { repo: null, full: true })).json).toMatchObject({ instalacion: { ok: 7 } });
   });
 
   it("un punto de la instalación que el motor no mandó no se da por bueno: cuenta como no ok", async () => {
     const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, puntos: DIAG.puntos.filter((p) => p.punto !== "guia") }) });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.json).toMatchObject({ instalacion: { ok: 6, total: 7 } });
     expect(r.texto).toContain("[missing] guide: The engine didn't report this point.");
+  });
+
+  it("R2-1: un punto que no es aviso y falta con `listo` true trae su arreglo en su ítem; el `siguiente` de arriba sigue siendo la prueba", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, puntos: DIAG.puntos.filter((p) => p.punto !== "guia") }) });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.ok);
+    expect(r.json).toMatchObject({
+      listo: true, siguiente: "supcoflow test --json",
+      faltan: [{ punto: "guia", mensaje: "The engine didn't report this point.", siguiente: expect.stringContaining("supcoflow guide versions") }],
+    });
+  });
+
+  it("R6-2: con la guía sin reportar y la máquina sin poder guardar, el `siguiente` de arriba es lo que frena la prueba (la máquina), no la guía", async () => {
+    const base = deps(motor()).d;
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, puntos: DIAG.puntos.filter((p) => p.punto !== "guia") }),
+      pruebas: { ...base.pruebas, revisar: async () => { throw new Error("boom"); } },
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.json).toMatchObject({ listo: false });
+    expect(String(r.json.siguiente)).toMatch(/^Fix «maquina»/);
+    expect(r.json.faltan).toEqual(expect.arrayContaining([expect.objectContaining({ punto: "guia", siguiente: expect.stringContaining("supcoflow guide versions") })]));
+  });
+
+  it("R2-1: sin `listo`, cada punto que falta trae su propio arreglo, y el de arriba es el del primero", async () => {
+    const { d } = deps(motor(), undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: DIAG.puntos.map((p) => (p.punto === "chat" || p.punto === "guia" ? { ...p, ok: false } : p)) }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.json).toMatchObject({
+      siguiente: "supcoflow chat on",
+      faltan: [{ punto: "chat", siguiente: "supcoflow chat on" }, { punto: "guia", siguiente: expect.stringContaining("supcoflow guide versions") }],
+    });
   });
 
   it("un fallo del motor sale con su código (2 sin clave válida)", async () => {
     const m = motor();
     const { d } = deps(m, undefined, { leerDiagnostico: async () => { throw new FalloDeLaTerminal(SALIDA.faltaLogin, "clave_invalida", "La clave ya no vale."); } });
-    expect((await diagnosticar(d, { repo: null })).codigo).toBe(SALIDA.faltaLogin);
+    expect((await diagnosticar(d, { repo: null, full: true })).codigo).toBe(SALIDA.faltaLogin);
   });
 
   it("no escribe nada ni pide pruebas: sólo lee el diagnóstico", async () => {
     const m = motor();
     const { d, almacen } = deps(m);
-    await diagnosticar(d, { repo: null });
+    await diagnosticar(d, { repo: null, full: true });
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
     expect(m.diagnosticos).toBe(1);
@@ -257,7 +374,7 @@ describe("diagnose: los puntos de la cuenta de IA (tanda 9)", () => {
 
   it("con las dos cuentas listas: el chat cuenta en la instalación (8 of 8) y el triage agent en la prueba", async () => {
     const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(true, true) });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(SALIDA.ok);
     expect(r.json).toMatchObject({ listo: true, instalacion: { ok: 8, total: 8 }, prueba: { listo: true } });
     const lineas = r.texto.split("\n");
@@ -273,7 +390,7 @@ describe("diagnose: los puntos de la cuenta de IA (tanda 9)", () => {
   });
   it("falta la cuenta del chat: baja el N (7 of 8), sale 4 y el texto dice qué hacer", async () => {
     const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(false, true) });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
     expect(r.json).toMatchObject({ ok: false, error: "no_listo", instalacion: { ok: 7, total: 8 } });
     expect(r.texto).toContain("7 of 8, at no cost.");
@@ -282,14 +399,14 @@ describe("diagnose: los puntos de la cuenta de IA (tanda 9)", () => {
   });
   it("falta la cuenta del triage agent: no baja el N de la instalación, pero la prueba no está lista y sale 4", async () => {
     const { d } = deps(motor(), undefined, { leerDiagnostico: conCuentas(true, false) });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
     expect(r.json).toMatchObject({ instalacion: { ok: 8, total: 8 }, prueba: { listo: false } });
     expect(r.texto).toContain("Ready for a test: no, because There is no AI account for the triage agent");
   });
   it("un motor sin esos puntos (el interruptor apagado, o uno anterior) queda como siempre: 7 of 7, y no se inventa una falta", async () => {
     const { d } = deps(motor());
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     expect(r.json).toMatchObject({ listo: true, instalacion: { ok: 7, total: 7 } });
     expect(r.texto.split("\n")[0]).toBe("Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: 7 of 7, at no cost.");
     expect(r.texto).not.toContain("AI account");
@@ -297,7 +414,7 @@ describe("diagnose: los puntos de la cuenta de IA (tanda 9)", () => {
   it("sólo lee: no pide ninguna cuenta ni escribe nada", async () => {
     const m = motor();
     const { d, almacen } = deps(m, undefined, { leerDiagnostico: conCuentas(true, true) });
-    await diagnosticar(d, { repo: null });
+    await diagnosticar(d, { repo: null, full: true });
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
   });
@@ -325,7 +442,7 @@ describe("diagnose: el punto 7, la interfaz", () => {
   const TODOS = { [`${RAIZ}/src/chat/panel.tsx`]: "x", [`${RAIZ}/src/chat/use-chat.ts`]: "x" };
   async function punto(m: Record<string, string>, o: Partial<DepsDePrueba> = {}) {
     const { d } = deps(motor(), undefined, { archivos: archivos(m), existe: existe(m), ...o });
-    const r = await diagnosticar(d, { repo: null });
+    const r = await diagnosticar(d, { repo: null, full: true });
     const inst = r.json.instalacion as { ok: number; total: number; puntos: { punto: string; ok: boolean; mensaje: string }[] };
     return { r, inst, p: inst.puntos.find((x) => x.punto === "interfaz")! };
   }
@@ -430,7 +547,7 @@ describe("diagnose: el punto 7, la interfaz", () => {
   });
   it("sin clon de esta carpeta (el origin no es el repo): no mira nada y no baja la cuenta por ahí", async () => {
     const { d } = deps(motor(), undefined, { ...fuera, archivos: archivos({ [INST]: instalacion() }) });
-    const r = await diagnosticar(d, { repo: "d/r" });
+    const r = await diagnosticar(d, { repo: "d/r", full: true });
     const p = (r.json.instalacion as { puntos: { punto: string; ok: boolean; mensaje: string }[] }).puntos.find((x) => x.punto === "interfaz")!;
     expect(p.ok).toBe(true);
     expect(p.mensaje).toMatch(/Not checked/);
@@ -444,7 +561,7 @@ describe("diagnose: el punto 7, la interfaz", () => {
   it("sólo lee: nada se escribe ni se pide una prueba", async () => {
     const m = motor();
     const { d, almacen } = deps(m, undefined, { archivos: archivos({ [INST]: instalacion(), ...TODOS }), leerWidget: widgetConContrato("1.1.0") });
-    await diagnosticar(d, { repo: null });
+    await diagnosticar(d, { repo: null, full: true });
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
   });
@@ -456,12 +573,67 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const { d, almacen } = deps(m);
     const r = await probar(d, F);
     expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
-    expect(r.json).toMatchObject({ ok: false, error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar" });
+    expect(r.json).toEqual({
+      ok: false, error: "falta_autorizacion", message: expect.any(String), proyecto: { id: PROY.id, repo: "d/r" }, listo: true, politica: "relevar", techo_usd: 2,
+      prueba_abierta: null, maquina: { ok: true }, intento_pendiente: null,
+      siguiente: "Ask the person to authorize the spend, then run `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`.",
+      detalle: "supcoflow test --full --json",
+    });
     expect(r.texto).toContain("`supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate`");
     expect(r.texto).toContain("US$ 2.00");
     expect(r.texto).not.toMatch(/monthly balance/i);
     expect(m.posts).toEqual([]);
     expect(almacen.datos.size).toBe(0);
+  });
+
+  it("R2-2: sin --authorize-spend y con --full, el detalle de antes: saldo, tope, comprometido, puntos y la máquina con sus impedimentos", async () => {
+    const { d } = deps(motor());
+    const r = await probar(d, { ...F, full: true });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json).toMatchObject({
+      ok: false, error: "falta_autorizacion", techo_usd: 2, saldo_usd: 7.5, tope_usd: 10, comprometido_usd: 2.5, politica: "relevar",
+      listo: true, puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] }, intento_pendiente: null,
+    });
+    expect(r.json).not.toHaveProperty("detalle");
+  });
+
+  it("R2-2: --full con --wait o con un --authorize-spend de verdad sale 3 flags_incompatibles sin tocar el motor", async () => {
+    for (const flags of [{ ...F, wait: true, full: true }, { ...AUT, full: true }]) {
+      const m = motor();
+      const r = await probar(deps(m).d, flags);
+      expect(r.codigo).toBe(SALIDA.entradaInvalida);
+      expect(r.json.error).toBe("flags_incompatibles");
+      expect(m.posts).toEqual([]);
+    }
+  });
+
+  it("R3-2: con un pedido esperando confirmación con otro techo, `siguiente` da el comando que lo recupera, no uno con el techo de ahora", async () => {
+    const { d } = deps(motor());
+    await d.pruebas.abrir(PROY.id, { clave: "k-1", mensaje: null, techoUsd: 3, politicaEsperada: "relevar" });
+    const r = await probar(d, { ...F, repo: "d/r" });
+    expect(r.json.siguiente).toBe("Ask the person to authorize the spend, then recover the request waiting for confirmation with `supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate --repo d/r`.");
+    expect(r.json.detalle).toBe("supcoflow test --full --repo d/r --json");
+    expect(r.json.message).toContain("`supcoflow test --authorize-spend --ceiling 3 --expect-policy investigate --repo d/r`");
+    expect(r.json.message).toContain("`supcoflow diagnose --repo d/r` first says");
+    const reintento = await probar(d, { ...AUT, ceiling: "3", repo: "d/r" });
+    expect(reintento.json.error).not.toBe("intento_pendiente");
+  });
+
+  it("R6-1: si el motor dice que la prueba no entra, el JSON corto lo dice (`listo` false) y `siguiente` manda a diagnose, no a pedir el gasto", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => ({ ...DIAG, listo: false }) });
+    const r = await probar(d, { ...F, repo: "d/r" });
+    expect(r.json).toMatchObject({ error: "falta_autorizacion", listo: false });
+    expect(r.json.siguiente).toBe("Not ready for a test yet: run `supcoflow diagnose --repo d/r --json` and fix what it says before asking for the spend.");
+    expect((await probar(d, { ...F, dryRun: true })).json).toMatchObject({ dry_run: true, listo: false });
+  });
+
+  it("R7-2: con la máquina sin poder guardar, el `listo` corto de `test` es false como en `diagnose`; con --full sigue el del motor", async () => {
+    const base = deps(motor()).d;
+    const { d } = deps(motor(), undefined, { pruebas: { ...base.pruebas, revisar: async () => { throw new Error("boom"); } } });
+    expect((await diagnosticar(d, { repo: null })).json).toMatchObject({ listo: false });
+    expect((await probar(d, F)).json).toMatchObject({ error: "falta_autorizacion", listo: false, maquina: { ok: false } });
+    expect((await probar(d, { ...F, dryRun: true })).json).toMatchObject({ dry_run: true, listo: false });
+    expect((await probar(d, { ...F, full: true })).json).toMatchObject({ listo: true, maquina: { ok: false } });
   });
 
   it("R6: con --message y sin el flag, igual: 4 y nada guardado", async () => {
@@ -477,7 +649,10 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     const { d, almacen } = deps(m);
     const r = await probar(d, { ...AUT, dryRun: true });
     expect(r.codigo).toBe(SALIDA.ok);
-    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, saldo_usd: 7.5, politica: "relevar" });
+    expect(r.json).toMatchObject({ ok: true, dry_run: true, proyecto: { id: PROY.id, repo: "d/r" }, techo_usd: 2, politica: "relevar", maquina: { ok: true }, detalle: "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --dry-run --full --json" });
+    expect((await probar(d, { ...F, dryRun: true, repo: "d/r" })).json).toMatchObject({ detalle: "supcoflow test --dry-run --full --repo d/r --json" });
+    expect(r.json).not.toHaveProperty("saldo_usd");
+    expect((await probar(d, { ...AUT, dryRun: true, full: true })).json).toMatchObject({ dry_run: true, saldo_usd: 7.5, puntos: expect.any(Array), maquina: { ok: true, impedimentos: [] } });
     expect(String(r.json.haria)).toContain(`POST ${RUTA}`);
     expect(String(r.json.haria)).toContain("techo_usd: 2, politica_esperada: relevar");
     expect(r.texto).toContain("With --dry-run I do nothing.");
@@ -524,7 +699,7 @@ describe("test --authorize-spend exige --ceiling y --expect-policy, y manda esos
     const r = await probar(d, { ...F, authorizeSpend: true, expectPolicy: "investigate" });
     expect(r.codigo).toBe(SALIDA.entradaInvalida);
     expect(r.json.error).toBe("falta_techo");
-    expect(r.texto).toContain("--ceiling <usd>");
+    expect(r.texto).toContain("--ceiling with the number you were shown");
     expect(m.posts).toEqual([]);
     expect(m.diagnosticos).toBe(0);
     expect(almacen.datos.size).toBe(0);
@@ -639,8 +814,8 @@ describe("test --authorize-spend exige --ceiling y --expect-policy, y manda esos
       const r = await probar(d, V);
       expect(r.codigo).toBe(3);
       expect(r.json.error).toBe("falta_techo");
-      expect(r.texto).toContain("`probar --autorizo-gasto` now needs --ceiling <usd>");
-      expect(r.texto).toContain("`supcoflow test --authorize-spend --ceiling <usd> --expect-policy investigate|save`");
+      expect(r.texto).toContain("`probar --autorizo-gasto` now needs --ceiling with the number you were shown");
+      expect(r.texto).toContain("run `supcoflow test --json` (free) to see the ceiling and the policy");
       expect(r.texto).toContain("supcoflow 0.7.0");
       expect(m.posts).toEqual([]);
       expect(m.diagnosticos).toBe(0);
@@ -686,6 +861,13 @@ describe("test --authorize-spend: el ciclo de la clave", () => {
     expect(await d.pruebas.leer(PROY.id)).toEqual({ intento: null, ultima: "prb_0000000000000001" });
   });
 
+  it("R8-1: con --repo, el texto de la prueba pedida manda a seguirla con el mismo --repo", async () => {
+    const { d } = deps(motor());
+    const r = await probar(d, { ...AUT, repo: "d/r" });
+    expect(r.codigo).toBe(SALIDA.esperandoAUnaPersona);
+    expect(r.texto).toBe("Test prb_0000000000000001 requested (creada). Follow it with `supcoflow test --wait --repo d/r`.");
+  });
+
   it("estricto: si el intento no se puede guardar, no se manda nada (sale 1)", async () => {
     const m = motor();
     const almacen = memoria();
@@ -694,7 +876,21 @@ describe("test --authorize-spend: el ciclo de la clave", () => {
     const r = await probar(d, AUT);
     expect(r.codigo).toBe(SALIDA.inesperado);
     expect(r.json.error).toBe("prueba_no_guardada");
+    expect(r.texto).not.toMatch(/connection/i);
+    expect(r.json.message).toBe(r.texto);
     expect(m.posts).toEqual([]);
+  });
+
+  it.each([
+    ["diagnose", (d: DepsDePrueba) => diagnosticar(d, { repo: null })],
+    ["test", (d: DepsDePrueba) => probar(d, AUT)],
+  ])("R9-1: %s con el llavero sin contestar dice desbloquearlo, no revisar la conexión", async (_n, correr) => {
+    const { d } = deps(motor(), undefined, { guardado: { leerClaveCompleta: async () => ({ valor: null, completa: false }) } as never });
+    const r = await correr(d);
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json.error).toBe("llavero_no_responde");
+    expect(r.texto).toContain("Unlock it and try again.");
+    expect(r.texto).not.toMatch(/connection/i);
   });
 
   it("R14c: respuesta perdida → el próximo manda la MISMA clave con el mismo mensaje y techo; 2 POST, 1 prueba, la última = esa", async () => {
@@ -1060,6 +1256,156 @@ describe("la orden de recuperación que imprime un mensaje se puede ejecutar", (
       const otra = await ejecutar(d, ordenes(r.texto)[0]!);
       expect(otra.codigo, r.texto).toBe(SALIDA.esperandoAUnaPersona);
       expect(m.pruebas.size).toBe(1);
+    }
+  });
+});
+
+describe("Sol R1: el próximo paso de una cuenta de IA o de la interfaz depende del motivo, no del identificador", () => {
+  const punto = (p: string, mensaje: string) => ({ punto: p, ok: false, mensaje, grupo: "instalacion" as const });
+  it.each([["ia_del_chat", "chat"], ["ia_del_triaje", "triage"]])("%s: cuenta lista con modelo no aprobado → aprobar el modelo (la clave queda); revisión fallida → esperar; sin cuenta → set-key", (id, agente) => {
+    const paso = siguienteDelDiagnostico([punto(id, "The account is ready, but its model is not approved. Approve it in the Agents tab.")], false);
+    expect(paso).toContain("model isn't approved, ask the person to approve the model in the Agents tab (the key stays as it is)");
+    expect(paso).toContain("couldn't be checked, wait a minute");
+    expect(paso).toContain(`if the account is missing or its key doesn't work, ask the person to run \`supcoflow agents set-key --agent ${agente}\``);
+    expect(paso).toContain("never goes through an assistant");
+    // La orden de cambiar la clave está condicionada a «falta o no sirve»: nunca es el paso incondicional.
+    expect(paso.startsWith("Read the message of this point and act on its cause")).toBe(true);
+  });
+  it("interfaz: cada causa tiene su paso (actualizar la terminal, volver a anotar, actualizar la interfaz)", () => {
+    const paso = siguienteDelDiagnostico([punto("interfaz", "The installation record was written by a newer terminal; update supcoflow.")], false);
+    expect(paso).toContain("if it says to update supcoflow, update the terminal (`npm i -g supcoflow@latest` or `npx supcoflow@latest`)");
+    expect(paso).toContain("if the record can't be read or its files are gone, record it again with `supcoflow install record`");
+    expect(paso).toContain("if the project declares a new contract version, update the own interface to it first");
+  });
+  it("el JSON corto lleva ese paso en `faltan[].siguiente` y en el de arriba", async () => {
+    const m = motor();
+    const { d } = deps(m, undefined, {
+      leerDiagnostico: async () => ({ ...DIAG, listo: false, puntos: [...DIAG.puntos, { punto: "ia_del_chat", ok: false, mensaje: "Model not approved.", grupo: "instalacion" }] }),
+    });
+    const r = await diagnosticar(d, { repo: null });
+    const faltan = r.json.faltan as { punto: string; siguiente: string }[];
+    expect(faltan.find((x) => x.punto === "ia_del_chat")!.siguiente).toContain("approve the model in the Agents tab");
+    expect(r.json.siguiente).toContain("approve the model in the Agents tab");
+  });
+});
+
+describe("Sol R2: el próximo paso de la guía distingue la primera publicación de la publicación desde GitHub", () => {
+  it("manda a ver qué hay publicado, pide permiso y nombra los dos caminos, con --repo si se pidió", () => {
+    const paso = siguienteDelDiagnostico([{ punto: "guia", ok: false, mensaje: "No guide yet.", grupo: "instalacion" }], false, "o/x");
+    expect(paso).toContain("`supcoflow guide versions --repo o/x`");
+    expect(paso).toContain("ask the person before publishing");
+    expect(paso).toContain("if nothing was published from GitHub yet, the first guide goes from this terminal with `supcoflow guide publish --repo o/x`");
+    expect(paso).toContain("once one was published from GitHub, publish from the project's main branch after the merge with `supcoflow guide publish --repo o/x --from-github`");
+  });
+});
+
+describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marcadores sin completar", () => {
+  const W = { ...F, wait: true };
+  const tramoCorto = { tramoMs: 3_000 };
+  const MARCADOR = /<[a-z-]+>|prb_…|investigate\|save/;
+  it("los de validación de flags de `test` (sin tocar el motor)", async () => {
+    const { d } = deps(motor());
+    const casos: Parameters<typeof probar>[1][] = [
+      { ...W, wait: true, ceiling: "2" } as never,
+      { ...AUT, ceiling: null } as never,
+      { ...AUT, expectPolicy: null } as never,
+      { ...AUT, ceiling: null, viejo: true } as never,
+    ];
+    for (const f of casos) {
+      const r = await probar(d, f);
+      expect(r.codigo, JSON.stringify(f)).toBe(SALIDA.entradaInvalida);
+      expect(r.texto).not.toMatch(MARCADOR);
+      expect(r.texto).toMatch(/supcoflow test/);
+      const conRepo = await probar(d, { ...f, repo: "o/x" } as never);
+      const comandos = [...conRepo.texto.matchAll(/`(supcoflow test[^`]*)`/g)].map((x) => x[1]);
+      expect(comandos.length, JSON.stringify(f)).toBeGreaterThan(0);
+      for (const c of comandos) expect(c, JSON.stringify(f)).toContain("--repo o/x");
+    }
+    const idSolo = await probar(d, { ...AUT, authorizeSpend: false, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
+    expect(idSolo.texto).not.toMatch(MARCADOR);
+    expect(idSolo.texto).toContain("`supcoflow test --wait --test-id`");
+    const idConRepo = await probar(d, { ...AUT, authorizeSpend: false, testId: "prb_aaaaaaaaaaaaaaaa", repo: "o/x" } as never);
+    expect(idConRepo.texto).toContain("`supcoflow test --wait --repo o/x --test-id`");
+  });
+  it("sin ninguna prueba guardada, `test --wait` manda al preview gratuito, sin marcadores", async () => {
+    const { d } = deps(motor(), undefined, tramoCorto);
+    const r = await probar(d, W);
+    expect(r.json.error).toBe("sin_prueba");
+    expect(r.texto).not.toMatch(MARCADOR);
+    expect(r.texto).toContain("`supcoflow test --json` (free)");
+    const conRepo = await probar(d, { ...W, repo: "o/x" });
+    expect(conRepo.json.error).toBe("sin_prueba");
+    expect(conRepo.texto).toContain("`supcoflow test --repo o/x --json` (free)");
+    expect(conRepo.texto).toContain("`supcoflow test --authorize-spend --repo o/x`");
+  });
+  it.each([
+    ["tope_mensual", 429, 6, /Don't retry.*only a person can raise it/],
+    ["clave_invalida", 401, 2, /supcoflow login/],
+    ["chat_deshabilitado", 409, 4, /supcoflow diagnose/],
+    ["cosa_nueva", 500, 3, /supcoflow diagnose/],
+    ["prueba_en_curso", 409, 4, /supcoflow test --wait/],
+  ])("un rechazo del motor (%s) que sólo explica el estado trae además qué hacer", async (error, status, codigo, quiere) => {
+    const m = motor();
+    m.guion = [{ tipo: "rechazo", status, error, message: "The operation was refused.", cuerpo: {} }];
+    const { d } = deps(m);
+    const r = await probar(d, AUT);
+    expect(r.codigo).toBe(codigo);
+    expect(r.texto).toMatch(quiere);
+    expect(r.json.message).toBe(r.texto);
+    expect(r.texto).not.toMatch(MARCADOR);
+  });
+  it("un fallo inesperado de afuera (la red) al leer el diagnóstico trae un paso", async () => {
+    const { d } = deps(motor(), undefined, { leerDiagnostico: async () => { throw new Error("socket hang up"); } });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.texto).toContain("socket hang up");
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
+    expect(r.json.message).toBe(r.texto);
+  });
+  it("un seguimiento cerrado que pide una persona manda a la consola y no a lanzar otra prueba", async () => {
+    const m = motor();
+    m.seguimientos = [seg("arranque_incierto", { mensaje: "The run's start is uncertain." })];
+    const { d } = deps(m, undefined, tramoCorto);
+    const r = await probar(d, { ...W, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    expect(r.json.message).toMatch(/A person has to look at it in the console.*don't launch another test/);
+  });
+});
+
+describe("Sol R3, huecos: red caída al resolver el proyecto y seguimiento que pide persona sin mensaje", () => {
+  const sinRed = () => { throw new FalloDeLaTerminal(SALIDA.inesperado, "motor_inalcanzable", "I couldn't reach the engine (the network is down or it took too long)."); };
+  it("diagnose: si resolver el proyecto falla por la red, dice revisar la conexión y repetir el mismo comando", async () => {
+    const { d } = deps(motor(), undefined, { buscarProyecto: async () => sinRed() });
+    const r = await diagnosticar(d, { repo: null });
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json).toMatchObject({ ok: false, error: "motor_inalcanzable" });
+    expect(r.texto).toContain("I couldn't reach the engine");
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
+    expect(r.json.message).toBe(r.texto);
+  });
+  it("test: lo mismo, y sin haber pedido ni guardado nada", async () => {
+    const m = motor();
+    const { d } = deps(m, undefined, { buscarProyecto: async () => sinRed() });
+    const r = await probar(d, AUT);
+    expect(r.codigo).toBe(SALIDA.inesperado);
+    expect(r.json).toMatchObject({ ok: false, error: "motor_inalcanzable" });
+    expect(r.texto).toContain("Check the connection and run the same command again in a minute");
+    expect(r.json.message).toBe(r.texto);
+    expect(m.posts).toEqual([]);
+  });
+  it.each([
+    ["sin mensaje y sin reporte", { mensaje: null, reporte: null }],
+    ["con mensaje y sin reporte", { mensaje: "Algo pasó.", reporte: null }],
+    ["sin mensaje y con reporte", { mensaje: null }],
+  ])("arranque_incierto %s: siempre intervenir en la consola y no relanzar, en el JSON y en el texto", async (_n, o) => {
+    const m = motor();
+    m.seguimientos = [seg("arranque_incierto", o as Partial<Seguimiento>)];
+    const { d } = deps(m, undefined, { tramoMs: 3_000 });
+    const r = await probar(d, { ...F, wait: true, testId: "prb_aaaaaaaaaaaaaaaa" });
+    expect(r.codigo).toBe(SALIDA.haceFaltaUnaPersona);
+    for (const t of [r.json.message as string, r.texto]) {
+      expect(t).toMatch(/A person has to look at it in the console/);
+      expect(t).toMatch(/don't launch another test from the terminal/);
     }
   });
 });

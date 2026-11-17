@@ -1,7 +1,8 @@
 // `supcoflow describe --json`: el contrato entero en una línea (§13), para que un asistente sepa
 // qué comandos hay, con qué flags, qué puede la clave y qué quiere decir cada código, sin leer la
 // ayuda pensada para personas. La ayuda se arma desde acá: una sola fuente, así no se desfasan.
-import { SALIDA, type Resultado } from "../contrato.ts";
+import { COMANDOS_VIEJOS } from "../alias.ts";
+import { FalloDeLaTerminal, SALIDA, type Resultado } from "../contrato.ts";
 
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
@@ -46,10 +47,10 @@ export const DESCRIPCION: {
     },
     {
       nombre: "describe",
-      resumen: "Describes commands, flags, capabilities and exit codes, for an assistant.",
-      flags: ["--json"],
-      ejemplos: ["supcoflow describe --json"],
-      codigos: [0],
+      resumen: "Describes commands, flags, capabilities and exit codes, for an assistant. `describe <command>` (for example `describe diagnose` or `describe repo connect`) describes only that command: its summary, flags, examples and the exit codes it uses (`comando`, `flags_globales`, `codigos`); an unknown name exits 3 comando_desconocido and lists the commands. Without a command it prints the whole contract.",
+      flags: ["<command>: describe only that command (optional)", "--json"],
+      ejemplos: ["supcoflow describe --json", "supcoflow describe diagnose --json"],
+      codigos: [0, 3],
     },
     {
       nombre: "repo connect",
@@ -317,14 +318,18 @@ export const DESCRIPCION: {
     },
     {
       nombre: "diagnose",
-      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7; N of 8 when the engine also reports the chat's AI account, `ia_del_chat`, which it does once AI accounts are required: without that account the chat doesn't show on the site) and, apart, whether a test of the project would go in and how far it would get: policy, the test's ceiling, open tests, whether THIS machine can save the test request (the local point `maquina`, checked without writing anything: disk and permissions, git when your home folder is a repo, and, when the config folder hangs from a shared one, that it is still only yours; when git refuses, the impediment also names, when a suitable folder is available, a persistent private folder outside any repo to use as `XDG_CONFIG_HOME`, never a temporary one; on Linux there usually isn't one and nothing is suggested), the triage agent's AI account (`ia_del_triaje`, when the engine reports it: without it a test doesn't run) and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each point; if `maquina` isn't ok, `listo` and `prueba.listo` are false and the N of 7 doesn't change. The seventh point, `interfaz`, is local and only reads: if .supcoflow/instalacion.json records an own interface (`forma: interfaz_propia`) it checks that the recorded files are still there and that the recorded contract is not behind a new major version (the first number) of the one the project declares (`interfaz_propia.contrato.version` in `widget`; a newer minor or patch only adds optional points and stays ok, saying so); without an own interface it is ok («Not applicable»). It is advice, marked `aviso: true` in the JSON: it lowers the N of 7 but doesn't stop a test.",
-      flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: { instalacion: { ok, total: 7 | 8, puntos }, prueba: { listo, puntos }, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, … }"],
-      ejemplos: ["supcoflow diagnose --json"],
+      resumen: "Says, free of charge and writing nothing, how far the installation is (sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7; N of 8 when the engine also reports the chat's AI account, `ia_del_chat`, which it does once AI accounts are required: without that account the chat doesn't show on the site) and, apart, whether a test of the project would go in and how far it would get: policy, the test's ceiling, open tests, whether THIS machine can save the test request (the local point `maquina`, checked without writing anything: disk and permissions, git when your home folder is a repo, and, when the config folder hangs from a shared one, that it is still only yours; when git refuses, the impediment also names, when a suitable folder is available, a persistent private folder outside any repo to use as `XDG_CONFIG_HOME`, never a temporary one; on Linux there usually isn't one and nothing is suggested), the triage agent's AI account (`ia_del_triaje`, when the engine reports it: without it a test doesn't run) and whatever else the engine adds. Exits 0 if everything is ready and 4 if something needs fixing (no_listo), with each missing point (and every point with --full); if `maquina` isn't ok, `listo` and `prueba.listo` are false and the N of 7 doesn't change. The seventh point, `interfaz`, is local and only reads: if .supcoflow/instalacion.json records an own interface (`forma: interfaz_propia`) it checks that the recorded files are still there and that the recorded contract is not behind a new major version (the first number) of the one the project declares (`interfaz_propia.contrato.version` in `widget`; a newer minor or patch only adds optional points and stays ok, saying so); without an own interface it is ok («Not applicable»). It is advice, marked `aviso: true` in the JSON: it lowers the N of 7 but doesn't stop a test.",
+      flags: [
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--full: the whole detail (every point, the machine check, the pending attempt, the ceiling and balances). Without it `--json` is a short summary",
+        "--json: by default a short summary { ok, listo, proyecto, instalacion: { ok, total: 7 | 8 }, faltan: [{ punto, mensaje, aviso?, siguiente }], siguiente, detalle } (on exit 4 also error: no_listo and message); each item of `faltan` carries its own fix in `siguiente`; the top-level `siguiente` is `supcoflow test --json` when `listo` is true (even if something is still missing, such as advice, `aviso: true`), otherwise the fix for the first point that stops a test, as a command to run or, when it needs data the terminal doesn't have, in words; `detalle` is `supcoflow diagnose --full --json` (with the same --repo, when given; every command in `siguiente` keeps it too). With --full, the whole detail as before: { instalacion: { ok, total, puntos }, prueba: { listo, puntos }, puntos, maquina: { ok, impedimentos: [{ codigo, detalle }] }, intento_pendiente: { techo_usd, politica } | null, politica, techo_usd, saldo_usd, tope_usd, comprometido_usd, prueba_abierta, … } plus `siguiente`",
+      ],
+      ejemplos: ["supcoflow diagnose --json", "supcoflow diagnose --full --json"],
       codigos: [0, 1, 2, 3, 4],
     },
     {
       nombre: "test",
-      resumen: "Tests the installation end to end: a problem comes in through the same door as the chat and ends up as an issue. It spends one investigation (up to the ceiling you authorize; with the save policy it goes as far as the saved case and doesn't spend). Without --authorize-spend it sends nothing: it exits 4 falta_autorizacion with techo_usd, saldo_usd, tope_usd and comprometido_usd, and, checked before you say yes and without writing anything, `maquina` { ok, impedimentos: [{ codigo, detalle }] } (whether this machine can save the test request: if it isn't ok the message says why first, and, when git is what refuses and a suitable folder is available, a persistent private folder outside any repo to use as `XDG_CONFIG_HOME`) and `intento_pendiente` { techo_usd, politica } | null (a request waiting for confirmation: only its ceiling and policy, never its message or key). With --authorize-spend, --ceiling and --expect-policy it requests the test with exactly those values (it doesn't re-read anything to choose them) and exits 5 with prueba_id; then --wait follows it. If the ceiling or the policy changed in the meantime it exits 4 techo_distinto / politica_distinta with the new values and doesn't retry: ask again. Others: 4 prueba_en_curso (with its id), chat_deshabilitado, requiere_api_key, intento_pendiente; 6 tope_mensual; 1 with intento_pendiente: true if the answer didn't arrive (repeating resumes the same test).",
+      resumen: "Tests the installation end to end: a problem comes in through the same door as the chat and ends up as an issue. It spends one investigation (up to the ceiling you authorize; with the save policy it goes as far as the saved case and doesn't spend). Without --authorize-spend it sends nothing: it exits 4 falta_autorizacion with a short summary by default { proyecto, listo, politica, techo_usd, prueba_abierta, maquina: { ok }, intento_pendiente, siguiente, detalle } (`listo` means what it means in `diagnose`: the engine's `listo` and this machine able to save the request; with --full `listo` stays the engine's, as before; `siguiente` says to fix this machine first, or, when the engine's `listo` is false, to run `diagnose` and fix what it says, or else to ask the person for the spend and gives the command to launch it; `detalle` is `supcoflow test --full --json`, keeping --repo and, with --dry-run, the authorization flags; when a request is waiting for confirmation `siguiente` gives the command that recovers it); with --full, the whole detail as before: puntos, saldo_usd, tope_usd, comprometido_usd and, checked before you say yes and without writing anything, `maquina` { ok, impedimentos: [{ codigo, detalle }] } (whether this machine can save the test request: if it isn't ok the message says why first, and, when git is what refuses and a suitable folder is available, a persistent private folder outside any repo to use as `XDG_CONFIG_HOME`) and `intento_pendiente` { techo_usd, politica } | null (a request waiting for confirmation: only its ceiling and policy, never its message or key). With --authorize-spend, --ceiling and --expect-policy it requests the test with exactly those values (it doesn't re-read anything to choose them) and exits 5 with prueba_id; then --wait follows it. If the ceiling or the policy changed in the meantime it exits 4 techo_distinto / politica_distinta with the new values and doesn't retry: ask again. Others: 4 prueba_en_curso (with its id), chat_deshabilitado, requiere_api_key, intento_pendiente; 6 tope_mensual; 1 with intento_pendiente: true if the answer didn't arrive (repeating resumes the same test).",
       flags: [
         "--authorize-spend: authorizes the spend of ONE test; without it nothing that writes is sent",
         "--ceiling usd: the ceiling you authorize, the number you were shown (required with --authorize-spend)",
@@ -333,10 +338,11 @@ export const DESCRIPCION: {
         "--wait: follows the last test up to 90 s; exits 5 while it runs, 0 with the issue (or saved), 4 if it needs a look (with the link to the inbox); the charge comes out as it is (pending is never 0)",
         "--test-id prb_…: with --wait, follows that test instead of the last saved one",
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
-        "--dry-run: says what it would do (project, ceiling, policy) without requesting anything that writes",
+        "--dry-run: says what it would do (project, ceiling, policy) without requesting anything that writes; its JSON is short too ({ dry_run, autorizado, intento_pendiente, haria, proyecto, listo, politica, techo_usd, prueba_abierta, maquina: { ok }, detalle }), the whole detail with --full",
+        "--full: with no --authorize-spend, or with --dry-run, the whole detail of the diagnosis (listo, puntos, saldo_usd, tope_usd, comprometido_usd, maquina with its impedimentos), as before 0.12.0; with --wait or a real --authorize-spend it exits 3 flags_incompatibles",
         "--json",
       ],
-      ejemplos: ["supcoflow test --json", "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --wait --json", "supcoflow test --dry-run --authorize-spend --ceiling 2 --expect-policy investigate --json"],
+      ejemplos: ["supcoflow test --json", "supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --wait --json", "supcoflow test --dry-run --authorize-spend --ceiling 2 --expect-policy investigate --json", "supcoflow test --full --json"],
       codigos: [0, 1, 2, 3, 4, 5, 6],
     },
   ],
@@ -375,8 +381,24 @@ export const DESCRIPCION: {
   },
 };
 
-export function comandoDescribir(): Resultado {
-  return { codigo: SALIDA.ok, json: { ok: true, ...DESCRIPCION }, texto: ayuda(null) };
+/**
+ * `describe` entero (sin argumento: el contrato completo, como siempre) o `describe <comando>` (sólo ese comando, con los
+ * códigos de salida que usa): lo que un asistente necesita para UN comando sin cargar el contrato de los demás.
+ */
+export function comandoDescribir(sobre: string | null = null): Resultado {
+  if (sobre === null) return { codigo: SALIDA.ok, json: { ok: true, ...DESCRIPCION }, texto: ayuda(null) };
+  const nombre = COMANDOS_VIEJOS[sobre] ?? sobre;
+  const comando = DESCRIPCION.comandos.find((c) => c.nombre === nombre);
+  if (comando === undefined) {
+    const lista = DESCRIPCION.comandos.map((c) => c.nombre).join(", ");
+    throw new FalloDeLaTerminal(SALIDA.entradaInvalida, "comando_desconocido", `Unknown command «${sobre.slice(0, 40)}». The commands are: ${lista}. Try \`supcoflow describe --json\`.`);
+  }
+  const codigos = Object.fromEntries(comando.codigos.map((n) => [n, DESCRIPCION.codigos[n]!]));
+  return {
+    codigo: SALIDA.ok,
+    json: { ok: true, version: DESCRIPCION.version, comando, flags_globales: DESCRIPCION.flags_globales, codigos, todos_los_comandos: "supcoflow describe --json" },
+    texto: ayuda(comando.nombre),
+  };
 }
 
 function bloque(c: Comando): string {
