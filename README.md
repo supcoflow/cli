@@ -22,12 +22,12 @@ the English ones.
 
 | Command | What it does |
 |---|---|
-| `supcoflow login` | Opens the approval page in your browser (and shows the link and the code too); you approve it in the console and the terminal keeps its key. |
-| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser and exits 5 with the link and the code. |
+| `supcoflow login` | Opens the approval page in your browser and shows the link and the code too (the browser from the next release; 0.11.0 only shows them, see [The contract](#the-contract)); you approve it in the console and the terminal keeps its key. |
+| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser (from the next release; 0.11.0 only shows the link, see [The contract](#the-contract)) and exits 5 with the link and the code. |
 | `supcoflow login --wait` | The second step: waits for the approval up to 90 s. If it hasn't arrived, exits 5: run it again. |
 | `supcoflow logout` | Revokes the key in use and deletes it from this machine. |
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
-| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser (and shows it) and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
+| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser and shows it (the browser from the next release; 0.11.0 only shows it, see [The contract](#the-contract)), and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks the guide against the engine without publishing anything: the folder `.supcoflow/knowledge/` if it has `.md` documents, otherwise `.supcoflow/guide.md`. |
@@ -37,7 +37,7 @@ the English ones.
 | `supcoflow guide versions` | The guide that governs now and the repo's publications, newest first; at most one says «live». |
 | `supcoflow guide stale --base origin/main` | Warns when a change touches code a document explains and doesn't touch the document. No AI, no engine, no sign-in (see «Keep the folder up to date»). |
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
-| `supcoflow install record --skill 0.3.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
+| `supcoflow install record --skill 0.7.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
 | `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
 | `supcoflow diagnose` | Free: how far the installation is (N of 7, or N of 8 when the engine also counts the chat's AI account) and whether a test would go in (including whether this machine can save the test request and the triage agent's AI account). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
@@ -124,7 +124,7 @@ owner/repo`, and the ones that write accept `--dry-run`.
 |---|---|
 | `supcoflow catalog` | What can be configured and with which values. |
 | `supcoflow config` | The project's chat, sites, brand and data agreement. |
-| `supcoflow chat on` / `chat off` | Turns the chat on or off (a guide is needed: publish the repo's with `supcoflow guide publish`, or generate and approve our agent's in Brain). |
+| `supcoflow chat on` / `chat off` | Turns the chat on or off (a guide is needed: publish the repo's with `supcoflow guide publish`, or generate and approve our agent's in the console's Guide screen). |
 | `supcoflow chat brand --title "Help" --theme acento=#0a7` | Title, greeting and colors; whatever isn't named stays as it was. The `--theme` keys are the API's: `acento`, `fondo`, `texto`, `textoSuave`, `radio`, `fuente`. |
 | `supcoflow chat logo --file logo.png` | Uploads the logo (.png, .jpg or .webp, up to 200 KB). |
 | `supcoflow sites add\|remove --site https://app.example.com` | Sites the chat loads from. |
@@ -415,11 +415,6 @@ adds optional points: the point stays ok and says so. To see that a recorded fil
 own interface recorded (no file, the widget, or nothing said) the point is ok («Not applicable»). It is advice: when it
 fails it lowers the «N of 7», it is marked `aviso: true` in the JSON, and it doesn't stop a test.
 
-**Before publishing 0.9.0.** `diagnose` now says «N of 7», and the skill of today (`SKILL.md`, `referencias/prueba.md`)
-asks literally for «6 of 6», but it pins the terminal to 0.8.1 (never `@latest`), so it won't see 0.9.0 until a skill pins it.
-The skill that pins 0.9.0 has to read `instalacion.ok` / `listo` (or `aviso`) instead of a fixed number, and 0.9.0 has to be on
-npm before or together with it.
-
 ## Test the installation
 
 With the chat in place, two commands say whether a problem that comes in through the chat reaches an issue. Both take
@@ -491,7 +486,8 @@ Made to be read by a program, not only by a person:
   Spanish, like `falta_guia`); the `message` of the engine's answers is printed as it arrives.
 - **No questions without an interactive terminal** (or with `--json`): if something is missing, it exits 3 saying which
   flag to use. `supcoflow login` without a terminal exits 3 and points you to the two-step path.
-- **The browser opens by itself, only where a person has to act**: `login` (the approval page) and `repo connect` (the
+- **The browser opens by itself, only where a person has to act** (not in the published 0.11.0: this and `--no-browser` /
+  `SUPCOFLOW_NO_BROWSER` arrive in the next release): `login` (the approval page) and `repo connect` (the
   link to install the GitHub App and confirm the connection), in their first step (`--start`, or the whole command at a
   terminal), never while polling with `--wait`. It uses `open` (macOS), `xdg-open` (Linux) or `cmd /c start` (Windows),
   never through a shell string, and only for `https` links (or `http` against `localhost`). If it can't open (no display,
