@@ -20,6 +20,8 @@ The command names are in English. The Spanish names of 0.7.0 (`quien-soy`, `guia
 `--autorizo-gasto`, `--modo relevar|guardar`…) still work as hidden aliases; `describe` and `--help` only show
 the English ones.
 
+From 0.12.0, `diagnose --json` and `test --json` (without `--authorize-spend`, and with `--dry-run`) are short by default; `--full` gives the whole detail as before, and `describe <command>` describes one command only. In 0.11.x those commands print the whole detail and have neither.
+
 | Command | What it does |
 |---|---|
 | `supcoflow login` | Opens the approval page in your browser and shows the link and the code too (the browser from 0.11.1; 0.11.0 only shows them, see [The contract](#the-contract)); you approve it in the console and the terminal keeps its key. |
@@ -327,7 +329,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npx supcoflow@0.11.1 guide stale --base origin/${{ github.base_ref }}
+      - run: npx supcoflow@0.12.0 guide stale --base origin/${{ github.base_ref }}
 
   publish:                                 # only for a project of your own (it uses a personal key)
     if: github.event_name == 'push'
@@ -337,7 +339,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: npx supcoflow@0.11.1 guide publish --from-github --json
+      - run: npx supcoflow@0.12.0 guide publish --from-github --json
         env:
           SUPCOFLOW_TOKEN: ${{ secrets.SUPCOFLOW_TOKEN }}
 ```

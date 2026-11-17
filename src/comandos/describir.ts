@@ -7,7 +7,7 @@ import { FalloDeLaTerminal, SALIDA, type Resultado } from "../contrato.ts";
 type Comando = { nombre: string; resumen: string; flags: string[]; ejemplos: string[]; codigos: number[] };
 
 // A mano a propósito, como en api.ts: tiene que coincidir con package.json (lo pinza un test).
-const VERSION = "0.11.1";
+const VERSION = "0.12.0";
 
 export const DESCRIPCION: {
   version: string;
