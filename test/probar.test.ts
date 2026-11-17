@@ -627,6 +627,15 @@ describe("test sin el flag no gasta (R6) y --dry-run tampoco (R7)", () => {
     expect((await probar(d, { ...F, dryRun: true })).json).toMatchObject({ dry_run: true, listo: false });
   });
 
+  it("R7-2: con la máquina sin poder guardar, el `listo` corto de `test` es false como en `diagnose`; con --full sigue el del motor", async () => {
+    const base = deps(motor()).d;
+    const { d } = deps(motor(), undefined, { pruebas: { ...base.pruebas, revisar: async () => { throw new Error("boom"); } } });
+    expect((await diagnosticar(d, { repo: null })).json).toMatchObject({ listo: false });
+    expect((await probar(d, F)).json).toMatchObject({ error: "falta_autorizacion", listo: false, maquina: { ok: false } });
+    expect((await probar(d, { ...F, dryRun: true })).json).toMatchObject({ dry_run: true, listo: false });
+    expect((await probar(d, { ...F, full: true })).json).toMatchObject({ listo: true, maquina: { ok: false } });
+  });
+
   it("R6: con --message y sin el flag, igual: 4 y nada guardado", async () => {
     const m = motor();
     const { d, almacen } = deps(m);
@@ -1286,10 +1295,16 @@ describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marc
       expect(r.codigo, JSON.stringify(f)).toBe(SALIDA.entradaInvalida);
       expect(r.texto).not.toMatch(MARCADOR);
       expect(r.texto).toMatch(/supcoflow test/);
+      const conRepo = await probar(d, { ...f, repo: "o/x" } as never);
+      const comandos = [...conRepo.texto.matchAll(/`(supcoflow test[^`]*)`/g)].map((x) => x[1]);
+      expect(comandos.length, JSON.stringify(f)).toBeGreaterThan(0);
+      for (const c of comandos) expect(c, JSON.stringify(f)).toContain("--repo o/x");
     }
     const idSolo = await probar(d, { ...AUT, authorizeSpend: false, testId: "prb_aaaaaaaaaaaaaaaa" } as never);
     expect(idSolo.texto).not.toMatch(MARCADOR);
     expect(idSolo.texto).toContain("`supcoflow test --wait --test-id`");
+    const idConRepo = await probar(d, { ...AUT, authorizeSpend: false, testId: "prb_aaaaaaaaaaaaaaaa", repo: "o/x" } as never);
+    expect(idConRepo.texto).toContain("`supcoflow test --wait --repo o/x --test-id`");
   });
   it("sin ninguna prueba guardada, `test --wait` manda al preview gratuito, sin marcadores", async () => {
     const { d } = deps(motor(), undefined, tramoCorto);
@@ -1297,6 +1312,10 @@ describe("Sol R3: los errores de los comandos tocados dicen qué hacer, sin marc
     expect(r.json.error).toBe("sin_prueba");
     expect(r.texto).not.toMatch(MARCADOR);
     expect(r.texto).toContain("`supcoflow test --json` (free)");
+    const conRepo = await probar(d, { ...W, repo: "o/x" });
+    expect(conRepo.json.error).toBe("sin_prueba");
+    expect(conRepo.texto).toContain("`supcoflow test --repo o/x --json` (free)");
+    expect(conRepo.texto).toContain("`supcoflow test --authorize-spend --repo o/x`");
   });
   it.each([
     ["tope_mensual", 429, 6, /Don't retry.*only a person can raise it/],

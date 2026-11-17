@@ -266,13 +266,13 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   // Todo lo que se puede rechazar sin mirar nada, antes de tocar el motor o lo guardado.
   if (flags.wait && (flags.authorizeSpend || flags.message !== null || flags.ceiling !== null || flags.expectPolicy !== null)) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles",
-      "`test --wait` only follows a test: no --authorize-spend, --ceiling, --expect-policy or --message. First run `supcoflow test --json` (free) to see the ceiling and the policy, ask the person to authorize them, and then run `supcoflow test --authorize-spend` with `--ceiling` (that number) and `--expect-policy` (that policy); after that, `supcoflow test --wait`.");
+      `\`test --wait\` only follows a test: no --authorize-spend, --ceiling, --expect-policy or --message. First run \`supcoflow test${conRepo(flags.repo)} --json\` (free) to see the ceiling and the policy, ask the person to authorize them, and then run \`supcoflow test --authorize-spend${conRepo(flags.repo)}\` with \`--ceiling\` (that number) and \`--expect-policy\` (that policy); after that, \`supcoflow test --wait${conRepo(flags.repo)}\`.`);
   }
   if (flags.full === true && (flags.wait || (flags.authorizeSpend && !flags.dryRun))) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--full goes with `supcoflow test` without --authorize-spend, or with --dry-run: the outputs that carry the diagnosis.");
   }
   if (!flags.wait && flags.testId !== null) {
-    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--test-id goes with --wait: run `supcoflow test --wait --test-id` followed by the id that `supcoflow test` printed (it starts with prb_).");
+    return fallo(SALIDA.entradaInvalida, "flags_incompatibles", `--test-id goes with --wait: run \`supcoflow test --wait${conRepo(flags.repo)} --test-id\` followed by the id that \`supcoflow test\` printed (it starts with prb_).`);
   }
   if (!flags.authorizeSpend && !flags.wait && (flags.ceiling !== null || flags.expectPolicy !== null)) {
     return fallo(SALIDA.entradaInvalida, "flags_incompatibles", "--ceiling and --expect-policy go with --authorize-spend: they say what you authorize.");
@@ -291,7 +291,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
   let autorizado: { techoUsd: number; politicaEsperada: PoliticaEsperada | null } | null = null;
   if (flags.authorizeSpend) {
     if (flags.ceiling === null) {
-      const comoSeEscribe = "first run `supcoflow test --json` (free) to see the ceiling and the policy, ask the person to authorize them, and then run `supcoflow test --authorize-spend` with `--ceiling` (that number) and `--expect-policy` (investigate or save, as shown)";
+      const comoSeEscribe = `first run \`supcoflow test${conRepo(flags.repo)} --json\` (free) to see the ceiling and the policy, ask the person to authorize them, and then run \`supcoflow test --authorize-spend${conRepo(flags.repo)}\` with \`--ceiling\` (that number) and \`--expect-policy\` (investigate or save, as shown)`;
       return fallo(SALIDA.entradaInvalida, "falta_techo", flags.viejo === true
         ? `\`probar --autorizo-gasto\` now needs --ceiling with the number you were shown: an alias can't widen what you authorized. Do this: ${comoSeEscribe}. (The old behaviour is in supcoflow 0.7.0.)`
         : `--authorize-spend needs --ceiling with the number you were shown. Do this: ${comoSeEscribe}.`);
@@ -304,7 +304,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
       politicaEsperada = aLaPoliticaDeLaApi(flags.expectPolicy);
       if (politicaEsperada === null) return fallo(SALIDA.entradaInvalida, "politica_invalida", "--expect-policy is `investigate` or `save`.");
     } else if (flags.viejo !== true) {
-      return fallo(SALIDA.entradaInvalida, "falta_politica", "--authorize-spend needs --expect-policy (investigate or save): the policy you were offered, so a yes to a test that won't investigate can't turn into a paid one. Run `supcoflow test --json` (free) to see it.");
+      return fallo(SALIDA.entradaInvalida, "falta_politica", `--authorize-spend needs --expect-policy (investigate or save): the policy you were offered, so a yes to a test that won't investigate can't turn into a paid one. Run \`supcoflow test${conRepo(flags.repo)} --json\` (free) to see it.`);
     }
     autorizado = { techoUsd: Number(flags.ceiling), politicaEsperada };
   }
@@ -328,7 +328,7 @@ export async function probar(d: DepsDePrueba, flags: FlagsDeProbar): Promise<Res
     const revision = await revisarLaMaquina(d, proyecto.id);
     const completo = { proyecto: { id: proyecto.id, repo: proyecto.repo }, ...datosDelDiagnostico(g), ...datosDeLaMaquina(revision) };
     const datos = flags.full === true ? completo : {
-      proyecto: completo.proyecto, listo: g.listo, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
+      proyecto: completo.proyecto, listo: g.listo && revision.maquina.ok, politica: g.politica, techo_usd: g.techoUsd, prueba_abierta: g.pruebaAbierta, maquina: { ok: revision.maquina.ok },
       detalle: autorizado !== null && flags.dryRun
         ? `${comandoDeReintento({ clave: "", mensaje: null, ...autorizado }, flags.repo)} --dry-run --full --json`
         : `supcoflow test${flags.dryRun ? " --dry-run" : ""} --full${conRepo(flags.repo)} --json`,
@@ -522,7 +522,7 @@ async function seguir(d: DepsDePrueba, clave: string, proyectoId: string, elegid
       return conSiguiente(resultadoDeFallo(e));
     }
     if (pruebaId === null) {
-      return fallo(SALIDA.entradaInvalida, "sin_prueba", "There's no saved test on this machine for this project: run `supcoflow test --json` (free) to see the ceiling and the policy, ask the person to authorize them and request the test with `supcoflow test --authorize-spend`, or pass `--test-id` with the id of a test printed before (it starts with prb_).");
+      return fallo(SALIDA.entradaInvalida, "sin_prueba", `There's no saved test on this machine for this project: run \`supcoflow test${conRepo(repo)} --json\` (free) to see the ceiling and the policy, ask the person to authorize them and request the test with \`supcoflow test --authorize-spend${conRepo(repo)}\`, or pass \`--test-id\` with the id of a test printed before (it starts with prb_).`);
     }
   }
   // Se aparta lo que puede tardar un sondeo forzado (el primero siempre va, aunque quede poco): así el
