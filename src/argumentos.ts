@@ -4,7 +4,7 @@ import { pareceUnaClave } from "./clave-sin-eco.ts";
 import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 
 export type Flags = {
-  json: boolean; dryRun: boolean; help: boolean; start: boolean; wait: boolean;
+  json: boolean; dryRun: boolean; help: boolean; start: boolean; wait: boolean; noBrowser: boolean;
   repo: string | null; install: string | null; test: string | null;
   site: string | null; title: string | null; greeting: string | null; file: string | null; allow: string | null;
   mode: string | null; name: string | null; saveTo: string | null; id: string | null;
@@ -40,7 +40,7 @@ const FLAGS_CON_VALOR = [
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
-const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend", "strict"] as const;
+const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend", "strict", "no-browser"] as const;
 
 // El flag que el token nombró, ya llevado a su nombre canónico (el viejo y el nuevo cuentan como el mismo).
 const canonico = (nombre: string) => FLAGS_VIEJOS[nombre] ?? nombre;
@@ -118,6 +118,7 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       help: hay("help"),
       start: hay("start"),
       wait: hay("wait"),
+      noBrowser: hay("no-browser"),
       repo: un("repo"),
       install: un("install"),
       test: un("test"),

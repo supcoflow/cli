@@ -92,3 +92,57 @@ it("Review Focus 9: con terminal pero con --json, tampoco espera a nadie", async
   expect(r).toMatchObject({ codigo: 3, json: { error: "hace_falta_tty" } });
   expect(llamadas).toEqual([]);
 });
+
+describe("repo conectar abre el navegador (R-B)", () => {
+  it("--start con un pedido pendiente: abre la URL y lo dice (json y texto), sin quitar nada de lo que ya había", async () => {
+    const { d } = deps();
+    const abiertas: string[] = [];
+    const r = await repoConectarStart({ ...d, abrirNavegador: async (u) => { abiertas.push(u); return true; } }, { repo: null, dryRun: false });
+    expect(abiertas).toEqual(["http://localhost:3000/conectar/cnx_0123456789abcdef"]);
+    expect(r.codigo).toBe(5);
+    expect(r.json).toMatchObject({ ok: false, esperando: "persona", repo: "d/r", url: "http://localhost:3000/conectar/cnx_0123456789abcdef", navegador_abierto: true });
+    expect(r.texto).toContain("I opened");
+  });
+  it("si no se pudo abrir: el texto de siempre y navegador_abierto false", async () => {
+    const { d } = deps();
+    const r = await repoConectarStart({ ...d, abrirNavegador: async () => false }, { repo: null, dryRun: false });
+    expect(r.json.navegador_abierto).toBe(false);
+    expect(r.texto).toBe("Open http://localhost:3000/conectar/cnx_0123456789abcdef, install the App on GitHub if needed, and click Confirm.");
+  });
+  it("sin abridor (--no-browser): false y nada se abre", async () => {
+    const { d } = deps();
+    expect((await repoConectarStart(d, { repo: null, dryRun: false })).json.navegador_abierto).toBe(false);
+  });
+  it("ya conectado: no abre nada ni agrega el campo", async () => {
+    const { d } = deps({ crearConexion: async () => pedido("conectado") });
+    let abierto = false;
+    const r = await repoConectarStart({ ...d, abrirNavegador: async () => { abierto = true; return true; } }, { repo: null, dryRun: false });
+    expect(abierto).toBe(false);
+    expect(r.json).not.toHaveProperty("navegador_abierto");
+  });
+  it("--dry-run no abre nada", async () => {
+    const { d } = deps();
+    let abierto = false;
+    await repoConectarStart({ ...d, abrirNavegador: async () => { abierto = true; return true; } }, { repo: null, dryRun: true });
+    expect(abierto).toBe(false);
+  });
+  it("--wait no abre el navegador de nuevo", async () => {
+    const { d } = deps();
+    let abierto = false;
+    const r = await repoConectarWait({ ...d, abrirNavegador: async () => { abierto = true; return true; } }, { repo: null });
+    expect(abierto).toBe(false);
+    expect(r.json).not.toHaveProperty("navegador_abierto");
+  });
+  it("interactivo: abre una vez y se lo dice a la persona", async () => {
+    const { d } = deps({ estados: ["pendiente", "conectado"] });
+    const abiertas: string[] = [];
+    const mostrado: string[] = [];
+    const r = await repoConectarInteractivo(
+      { ...d, abrirNavegador: async (u) => { abiertas.push(u); return true; }, esTty: true, mostrar: (s) => mostrado.push(s) },
+      { repo: null, dryRun: false, json: false },
+    );
+    expect(r.codigo).toBe(0);
+    expect(abiertas).toHaveLength(1);
+    expect(mostrado.join("\n")).toContain("I opened");
+  });
+});

@@ -22,12 +22,12 @@ the English ones.
 
 | Command | What it does |
 |---|---|
-| `supcoflow login` | Shows a link and a code; you approve it in the console and the terminal keeps its key. |
-| `supcoflow login --start` | The first step alone: asks for the code and exits 5 with the link to approve it. |
+| `supcoflow login` | Opens the approval page in your browser (and shows the link and the code too); you approve it in the console and the terminal keeps its key. |
+| `supcoflow login --start` | The first step alone: asks for the code, opens the link in your browser and exits 5 with the link and the code. |
 | `supcoflow login --wait` | The second step: waits for the approval up to 90 s. If it hasn't arrived, exits 5: run it again. |
 | `supcoflow logout` | Revokes the key in use and deletes it from this machine. |
 | `supcoflow whoami` | Which key the terminal runs with, on whose behalf and in which team. |
-| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it gives you a link and you confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
+| `supcoflow repo connect` | Connects this folder's repo with the GitHub App: it opens the link in your browser (and shows it) and you install the App on GitHub if needed and confirm it in the console. Without a terminal, `--start` and then `--wait`, like `login`. |
 | `supcoflow project create` | Creates (or reuses) the project of the connected repo and records it in `.supcoflow/proyecto.json`. If the engine can't work out the install command, `--install "…"` (`--test` is accepted but not used today). |
 | `supcoflow project show` | The repo's project: branch, commands and the state of the GitHub App, starting with who you are: «You're @login in team T; repo O/R; project P (existing)». |
 | `supcoflow guide check` | Checks the guide against the engine without publishing anything: the folder `.supcoflow/knowledge/` if it has `.md` documents, otherwise `.supcoflow/guide.md`. |
@@ -491,6 +491,13 @@ Made to be read by a program, not only by a person:
   Spanish, like `falta_guia`); the `message` of the engine's answers is printed as it arrives.
 - **No questions without an interactive terminal** (or with `--json`): if something is missing, it exits 3 saying which
   flag to use. `supcoflow login` without a terminal exits 3 and points you to the two-step path.
+- **The browser opens by itself, only where a person has to act**: `login` (the approval page) and `repo connect` (the
+  link to install the GitHub App and confirm the connection), in their first step (`--start`, or the whole command at a
+  terminal), never while polling with `--wait`. It uses `open` (macOS), `xdg-open` (Linux) or `cmd /c start` (Windows),
+  never through a shell string, and only for `https` links (or `http` against `localhost`). If it can't open (no display,
+  SSH, a container, CI), or you pass **`--no-browser`** or set **`SUPCOFLOW_NO_BROWSER=1`**, nothing opens and the link
+  and the code are shown as always. With `--json`, the `--start` result adds `navegador_abierto: true|false`; every
+  other field stays.
 - **`--dry-run`** wherever it can be simulated (`login`, `login --start`, `logout`, `repo connect --start`,
   `project create`, `guide check`, `guide publish`, `guide use`, `install record`, `test`; `guide stale` only reads, so it has none). `login --wait --dry-run`
   exits 3: polling consumes the code and there is no way to simulate it.

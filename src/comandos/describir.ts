@@ -19,11 +19,12 @@ export const DESCRIPCION: {
   comandos: [
     {
       nombre: "login",
-      resumen: "Signs in by approving a code from the console. Without an interactive terminal, in two steps: --start and then --wait.",
+      resumen: "Signs in by approving a code from the console, which it opens in your browser by itself when it can (the json then says `navegador_abierto`: true|false; the URL and the code are always there). Without an interactive terminal, in two steps: --start and then --wait.",
       flags: [
         "--start: asks for the code and exits 5 with the URL to approve it",
         "--wait: waits for the approval up to 90 s; exits 5 if it hasn't arrived yet (call it again)",
         "--dry-run: says what it would do without asking for anything (not valid with --wait)",
+        "--no-browser: don't open the URL in the browser (also SUPCOFLOW_NO_BROWSER=1); the URL and the code are shown as always",
         "--json",
       ],
       ejemplos: ["supcoflow login", "supcoflow login --start --json", "supcoflow login --wait --json"],
@@ -52,12 +53,13 @@ export const DESCRIPCION: {
     },
     {
       nombre: "repo connect",
-      resumen: "Connects this folder's repo (or --repo's) with the GitHub App: a person confirms it in the console. Without an interactive terminal, in two steps: --start and then --wait.",
+      resumen: "Connects this folder's repo (or --repo's) with the GitHub App: a person confirms it in the console, which it opens in your browser by itself when it can (the json then says `navegador_abierto`: true|false; the URL is always there). Without an interactive terminal, in two steps: --start and then --wait.",
       flags: [
         "--start: requests the connection and exits 5 with the URL to confirm it",
         "--wait: waits for the confirmation up to 90 s; exits 5 if it hasn't arrived yet (call it again)",
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
         "--dry-run: says what it would request without requesting anything (--wait only reads)",
+        "--no-browser: don't open the URL in the browser (also SUPCOFLOW_NO_BROWSER=1); the URL is shown as always",
         "--json",
       ],
       ejemplos: ["supcoflow repo connect", "supcoflow repo connect --start --json", "supcoflow repo connect --wait --json"],

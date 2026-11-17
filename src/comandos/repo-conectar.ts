@@ -10,6 +10,7 @@ import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, type Resultado } from "../contrato.ts";
 import type { Guardado } from "../guardado/index.ts";
 import { repoPedido, type Git } from "../repo-local.ts";
+import type { AbrirNavegador } from "../navegador.ts";
 import { PLAZO_MINIMO_DE_SONDEO_MS, TRAMO_MAXIMO_MS } from "../sondeo.ts";
 import { claveVigente } from "./clave-vigente.ts";
 
@@ -28,6 +29,8 @@ export type DepsDeConexion = {
   ultimaConexion: (api: URL, clave: string, repo: string, plazoMs: number) => Promise<Pedido | null>;
   avisar: (s: string) => void;
   tramoMs?: number;
+  // Abre la URL en el navegador de la persona y dice si lo logró; sin él (`--no-browser`) no se abre nada.
+  abrirNavegador?: AbrirNavegador;
 };
 
 const fallo = (codigo: Resultado["codigo"], error: string, message: string, extra: Record<string, unknown> = {}): Resultado => ({
@@ -37,7 +40,8 @@ const fallo = (codigo: Resultado["codigo"], error: string, message: string, extr
 const datosDelPedido = (p: Pedido) => ({ id: p.id, estado: p.estado, url: p.url, vence_en: p.venceEn });
 
 // El desenlace de un pedido ya leído. El JSON nunca lleva la clave: sólo el pedido y el repo.
-function resultadoDelPedido(repo: string, p: Pedido, avisar: (s: string) => void): Resultado {
+// `abierto` es null si no se intentó abrir el navegador (el `--wait` nunca lo abre: la persona ya lo tiene abierto).
+function resultadoDelPedido(repo: string, p: Pedido, avisar: (s: string) => void, abierto: boolean | null = null): Resultado {
   const pedido = datosDelPedido(p);
   switch (p.estado) {
     case "conectado":
@@ -57,8 +61,13 @@ function resultadoDelPedido(repo: string, p: Pedido, avisar: (s: string) => void
       if (p.fallo !== null) avisar(`The last confirmation failed: ${p.fallo}.`);
       return {
         codigo: SALIDA.esperandoAUnaPersona,
-        json: { ok: false, esperando: "persona", repo, url: p.url, pedido, ...(p.fallo !== null ? { fallo: p.fallo } : {}) },
-        texto: `Open ${p.url}, install the App on GitHub if needed, and click Confirm.`,
+        json: {
+          ok: false, esperando: "persona", repo, url: p.url, pedido, ...(p.fallo !== null ? { fallo: p.fallo } : {}),
+          ...(abierto !== null ? { navegador_abierto: abierto } : {}),
+        },
+        texto: abierto === true
+          ? `I opened ${p.url} in your browser: install the App on GitHub if needed, and click Confirm.`
+          : `Open ${p.url}, install the App on GitHub if needed, and click Confirm.`,
       };
     }
   }
@@ -86,7 +95,9 @@ export async function repoConectarStart(d: DepsDeConexion, flags: Pick<Flags, "r
   } catch (e) {
     return resultadoDeFallo(e);
   }
-  return resultadoDelPedido(repo, p, d.avisar);
+  // Sólo un pedido que espera a la persona abre el navegador: uno ya conectado no tiene nada que confirmar.
+  const abierto = p.estado === "pendiente" ? (await d.abrirNavegador?.(p.url)) === true : null;
+  return resultadoDelPedido(repo, p, d.avisar, abierto);
 }
 
 export async function repoConectarWait(d: DepsDeConexion, flags: Pick<Flags, "repo">): Promise<Resultado> {

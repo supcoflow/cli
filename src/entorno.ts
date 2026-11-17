@@ -42,6 +42,7 @@ import type { Git } from "./repo-local.ts";
 import { hostnameDeAlias, lectorReal } from "./ssh-config.ts";
 import type { FsDeSecretos, LecturaSinSeguir } from "./secreto-a-archivo.ts";
 import { TRAMO_MAXIMO_MS } from "./sondeo.ts";
+import { abridorReal, type AbrirNavegador } from "./navegador.ts";
 
 // El `.tmp` se crea en exclusiva (`wx`: falla si quedó algo, enlace incluido, en vez de escribir a
 // través de él) y el `fchmod` va aparte porque el modo de `open` pasa por la umask del proceso.
@@ -488,6 +489,7 @@ export type Entorno = {
   env: Record<string, string | undefined>;
   api: URL;
   esTty: boolean;
+  abrirNavegador: AbrirNavegador;
   mostrar: (s: string) => void;
   avisar: (s: string) => void;
   rutaDelArchivo: string;
@@ -572,6 +574,7 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
     env,
     api,
     esTty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+    abrirNavegador: abridorReal(env),
     mostrar: avisar,
     avisar,
     rutaDelArchivo,
