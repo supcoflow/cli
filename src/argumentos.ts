@@ -5,6 +5,8 @@ import { FalloDeLaTerminal, SALIDA } from "./contrato.ts";
 
 export type Flags = {
   json: boolean; dryRun: boolean; help: boolean; start: boolean; wait: boolean; noBrowser: boolean;
+  // Salidas cortas: `--full` pide el detalle entero (hoy, `diagnose`); `sobre` es el comando que se pide a `describe <comando>`.
+  full: boolean; sobre: string | null;
   repo: string | null; install: string | null; test: string | null;
   site: string | null; title: string | null; greeting: string | null; file: string | null; allow: string | null;
   mode: string | null; name: string | null; saveTo: string | null; id: string | null;
@@ -40,7 +42,7 @@ const FLAGS_CON_VALOR = [
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
-const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend", "strict", "no-browser"] as const;
+const FLAGS_BOOLEANOS = ["json", "dry-run", "help", "start", "wait", "from-github", "authorize-spend", "strict", "no-browser", "full"] as const;
 
 // El flag que el token nombró, ya llevado a su nombre canónico (el viejo y el nuevo cuentan como el mismo).
 const canonico = (nombre: string) => FLAGS_VIEJOS[nombre] ?? nombre;
@@ -73,7 +75,9 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
     throw invalida("argumentos_invalidos", `${(e as Error).message} Try \`supcoflow --help\`.`);
   }
   const pos = parsed.positionals;
-  if (pos.length > 2 || (pos.length === 2 && !PRIMERAS_PALABRAS.has(pos[0]!))) {
+  // `describe <comando>`: el comando que se pide puede ser de una o de dos palabras (`describe repo connect`).
+  const esDescribe = pos[0] === "describe" || pos[0] === "describir";
+  if (!esDescribe && (pos.length > 2 || (pos.length === 2 && !PRIMERAS_PALABRAS.has(pos[0]!)))) {
     throw invalida("argumentos_de_mas", "You passed more than one command. Try `supcoflow --help`.");
   }
   const tokens = (parsed.tokens ?? []).filter((t) => t.kind === "option");
@@ -93,12 +97,12 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
   if (tema.some((t) => t === "")) throw invalida("argumentos_invalidos", "--theme goes with a key=value. Try `supcoflow --help`.");
   // Un par desconocido (`repo borrar`) queda como la primera palabra sola: el despacho la rechaza
   // como comando desconocido, con el mismo mensaje que cualquier otra.
-  const escrito = pos.length === 2 ? `${pos[0]} ${pos[1]}` : (pos[0] ?? null);
+  const escrito = esDescribe ? pos[0]! : pos.length === 2 ? `${pos[0]} ${pos[1]}` : (pos[0] ?? null);
   let comando: string | null;
   if (escrito !== null && escrito in COMANDOS_VIEJOS) {
     comando = COMANDOS_VIEJOS[escrito]!;
     viejos.unshift(escrito);
-  } else if (pos.length === 2 && (COMANDOS_COMPUESTOS as readonly string[]).includes(escrito!)) {
+  } else if (!esDescribe && pos.length === 2 && (COMANDOS_COMPUESTOS as readonly string[]).includes(escrito!)) {
     comando = escrito;
   } else {
     comando = pos[0] ?? null;
@@ -119,6 +123,8 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       start: hay("start"),
       wait: hay("wait"),
       noBrowser: hay("no-browser"),
+      full: hay("full"),
+      sobre: esDescribe && pos.length > 1 ? pos.slice(1).join(" ") : null,
       repo: un("repo"),
       install: un("install"),
       test: un("test"),

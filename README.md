@@ -41,7 +41,7 @@ the English ones.
 | `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
 | `supcoflow diagnose` | Free: how far the installation is (N of 7, or N of 8 when the engine also counts the chat's AI account) and whether a test would go in (including whether this machine can save the test request and the triage agent's AI account). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
-| `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. |
+| `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. `supcoflow describe <command> --json` (for example `describe diagnose` or `describe repo connect`) describes only that command and the exit codes it uses: much shorter. |
 
 `supcoflow --help` (or `supcoflow <command> --help`) shows the help with examples. The repo and project commands
 take the repo from the folder's `origin`; `--repo owner/repo` picks it by hand.
@@ -79,8 +79,9 @@ Every command that acts on the repo's project first checks what it can see, and 
   which account you signed in with (`supcoflow whoami`), or review that old file.
 - `archivo_del_clon_ilegible`: that file exists but can't be read or understood (its content is never printed).
 - `dueno_distinto_del_login` (only when this repo has no project yet, in `project show` and `project create`; `show` stops the walk-through before `repo connect`): the repo's owner on GitHub isn't the GitHub login of your
-  key. It is a *possible* mismatch (the engine compares GitHub's number, and a login can be renamed): sign in to the
-  console with GitHub again, or as the owner. If your key comes from `SUPCOFLOW_TOKEN`, that variable wins over a new
+  key. It is a *possible* mismatch. Most likely the browser's GitHub session is another account: close it (or use a
+  private window), then `supcoflow logout` and `supcoflow login`. Less likely, you renamed your GitHub account (the engine compares GitHub's number, and a login can be renamed): sign in to the
+  console with GitHub again. If your key comes from `SUPCOFLOW_TOKEN`, that variable wins over a new
   login, and the terminal doesn't touch it.
 - `sin_github` (only when this repo has no project yet, in `project show` and `project create`): the account was signed in by email; connecting a repo needs GitHub.
 
@@ -422,7 +423,7 @@ the repo from the `origin`, or `--repo owner/repo`.
 
 | Command | What it does |
 |---|---|
-| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the ceiling and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` gives `instalacion: { ok, total: 7 \| 8, puntos }` and `prueba: { listo, puntos }`. The seventh point, `interfaz`, is explained in «Put the chat in the app»; the AI accounts, in «The AI accounts of the agents». |
+| `supcoflow diagnose` | Free and writes nothing. It prints «Checked sign-in, repo, GitHub App, allowed sites, chat, guide and interface: N of 7, at no cost.» and, apart, «Ready for a test: yes / no, because …» with the policy, the ceiling and open tests. Exits 0 if everything is ready, 4 if something needs fixing (with each point). `--json` is a short summary by default: `{ ok, listo, proyecto, instalacion: { ok, total }, faltan: [{ punto, mensaje }], siguiente }` (`faltan` is only what is missing, `siguiente` the next command to run, or `supcoflow test --json` when all is ready); with `--full` it gives the whole detail: `instalacion: { ok, total: 7 \| 8, puntos }`, `prueba: { listo, puntos }`, `puntos`, `maquina`, `intento_pendiente`, the ceiling and balances, plus `siguiente`. The seventh point, `interfaz`, is explained in «Put the chat in the app»; the AI accounts, in «The AI accounts of the agents». |
 | `supcoflow test` | Without `--authorize-spend` it sends nothing: it exits 4 with the test's ceiling, the policy and what is committed, and the exact command to launch it. It also says, before you authorize anything, whether this machine can save the test request (`maquina: { ok, impedimentos }`) and any request still waiting for confirmation (`intento_pendiente: { techo_usd, politica }`). |
 | `supcoflow test --authorize-spend --ceiling 2 --expect-policy investigate` | Requests the test: the problem comes in through the same door as the chat and runs an investigation that **spends** up to the ceiling you authorize (with the `save` policy it goes as far as the saved case and doesn't spend). Exits 5 with the id. `--message "…"` uses your own text. |
 | `supcoflow test --wait` | Follows the last test up to 90 s: 5 while it runs (call it again), 0 with the issue, 4 if it needs a look in the console (it brings the link). The charge is shown as it is: `pendiente` right at the close, never 0. `--test-id prb_…` follows another one. |

@@ -12,6 +12,7 @@ const DE_AGENTS = ["agents show", "agents set-key", "agents check", "agents remo
 
 export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: readonly string[]; texto: string }[] = [
   { flags: ["start"], comandos: ["login", "repo connect"], texto: "--start belongs to `supcoflow login` and `supcoflow repo connect`." },
+  { flags: ["full"], comandos: ["diagnose"], texto: "--full belongs to `supcoflow diagnose`." },
   { flags: ["noBrowser"], comandos: ["login", "repo connect"], texto: "--no-browser belongs to `supcoflow login` and `supcoflow repo connect`." },
   { flags: ["wait"], comandos: ["login", "repo connect", "test"], texto: "--wait belongs to `supcoflow login`, `supcoflow repo connect` and `supcoflow test`." },
   {

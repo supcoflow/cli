@@ -3,7 +3,7 @@ import { leerArgumentos } from "../src/argumentos.ts";
 import { COMANDOS_VIEJOS, FLAGS_VIEJOS } from "../src/alias.ts";
 
 const VACIOS = {
-  json: false, dryRun: false, fromGithub: false, help: false, start: false, wait: false, noBrowser: false, repo: null, install: null, test: null,
+  json: false, dryRun: false, fromGithub: false, help: false, start: false, wait: false, noBrowser: false, full: false, sobre: null, repo: null, install: null, test: null,
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
   skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
   agent: null, fromEnv: null, provider: null, option: null, dataRetention: null, base: null, strict: false,
@@ -210,5 +210,22 @@ describe("tanda 9: `agents` y la clave que nunca va como argumento", () => {
     let msg = "";
     try { leerArgumentos(["agents", "set-key", `--${CLAVE}`]); } catch (e) { msg = (e as Error).message; }
     expect(msg).not.toContain("9f8e7d6c");
+  });
+});
+
+describe("R13: --full y describe <comando>", () => {
+  it("--full es un flag de verdad", () => {
+    expect(leerArgumentos(["diagnose", "--full", "--json"]).flags).toMatchObject({ full: true, json: true });
+    expect(leerArgumentos(["diagnose"]).flags.full).toBe(false);
+  });
+  it("describe acepta el comando que se pide, de una o dos palabras", () => {
+    expect(leerArgumentos(["describe", "diagnose", "--json"])).toMatchObject({ comando: "describe", flags: { sobre: "diagnose" } });
+    expect(leerArgumentos(["describe", "repo", "connect"])).toMatchObject({ comando: "describe", flags: { sobre: "repo connect" } });
+    expect(leerArgumentos(["describe"]).flags.sobre).toBeNull();
+    expect(leerArgumentos(["describir", "diagnosticar"])).toMatchObject({ comando: "describe", flags: { sobre: "diagnosticar" }, viejos: ["describir"] });
+  });
+  it("los demás comandos siguen rechazando un argumento de más", () => {
+    expect(() => leerArgumentos(["login", "wait"])).toThrow(/more than one command/);
+    expect(() => leerArgumentos(["whoami", "x"])).toThrow(/more than one command/);
   });
 });

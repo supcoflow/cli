@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Target: 0.12.0 (it changes an output contract).
+
+- **Contract change: `diagnose --json` is short by default.** It now prints `{ ok, listo, proyecto, instalacion: { ok, total }, faltan: [{ punto, mensaje, aviso? }], siguiente, detalle }` (and, on exit 4, `error: "no_listo"` and `message`). `faltan` lists only the points that are missing; `siguiente` is the next command to run (`supcoflow test --json` when everything is ready). The text output and the exit codes are unchanged. **Migration:** every field that is no longer in the default output (`puntos`, `instalacion.puntos`, `prueba`, `maquina`, `intento_pendiente`, `politica`, `techo_usd`, `saldo_usd`, `tope_usd`, `comprometido_usd`, `prueba_abierta`) is still there, unchanged, with the new `--full` (`supcoflow diagnose --full --json`), which also adds `siguiente`. `ok`, `error`, `message`, `listo`, `proyecto` and `instalacion.ok` / `instalacion.total` keep their name and meaning in both. A caller that reads the old fields should add `--full`.
+- New `supcoflow describe <command>` (for example `describe diagnose`, `describe repo connect`): describes only that command (`comando`, `flags_globales`, and the exit `codigos` it uses). An unknown name exits 3 `comando_desconocido` and lists the commands. `describe --json` without a command is unchanged.
+- The wrong-account message (`dueno_distinto_del_login`) now puts the common case first: the browser's GitHub session is another account; close it (or use a private window), then `supcoflow logout` and `supcoflow login`. The renamed-account hypothesis comes last, and the explanation of `SUPCOFLOW_TOKEN` (it wins over a new login, and `logout` can't remove the variable) stays. The `error`, `motivo` and JSON fields are unchanged.
+
 ## 0.11.1
 
 - `login` and `repo connect` open the approval/connection link in the browser by themselves, in their first step only (never while polling with `--wait`); the link and the code are still shown. Nothing opens without a display, over SSH, in a container or CI, with the new `--no-browser` or with `SUPCOFLOW_NO_BROWSER=1`. With `--json`, the `--start` result adds `navegador_abierto: true|false`.

@@ -564,7 +564,7 @@ describe("supcoflow sin terminal", () => {
         });
 
         motor.contratoDeclarado = "1.1.0";
-        const bien = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        const bien = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(bien.codigo, bien.stdout).toBe(0);
         expect(JSON.parse(bien.stdout).instalacion).toMatchObject({ ok: 7, total: 7 });
         expect(puntoDe(bien.stdout)).toMatchObject({ ok: true });
@@ -572,10 +572,10 @@ describe("supcoflow sin terminal", () => {
 
         // Una versión menor sólo suma lo opcional: sigue ok. Una mayor es un aviso (no un freno de la prueba).
         motor.contratoDeclarado = "1.2.0";
-        const menor = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        const menor = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(puntoDe(menor.stdout)).toMatchObject({ ok: true, aviso: true });
         motor.contratoDeclarado = "2.0.0";
-        const nuevo = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        const nuevo = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(nuevo.codigo, nuevo.stdout).toBe(0);
         expect(puntoDe(nuevo.stdout)).toMatchObject({ ok: false });
         expect(puntoDe(nuevo.stdout).mensaje).toContain("2.0.0");
@@ -584,7 +584,7 @@ describe("supcoflow sin terminal", () => {
         // Con el motor de hoy (sin el campo nuevo) no se compara, y un archivo que se borró sí se nota.
         motor.contratoDeclarado = null;
         rmSync(join(repo, "src", "chat", "use-chat.ts"));
-        const falta = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
+        const falta = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repo });
         expect(puntoDe(falta.stdout)).toMatchObject({ ok: false });
         expect(puntoDe(falta.stdout).mensaje).toContain("src/chat/use-chat.ts");
         expect(r.stdout + falta.stdout).not.toMatch(/scf_[0-9a-f]{16}_/);
@@ -650,6 +650,24 @@ describe("supcoflow sin terminal", () => {
     afterAll(() => { motor.proyectoExiste = false; });
     const pruebas = () => join(dirname(archivo), "pruebas.json");
     const POST_PRUEBA = `/api/proyectos/${PROYECTO.id}/pruebas`;
+
+    it("R13: el binario: `diagnose --json` es corto y `--full` trae el detalle; `describe <comando>` describe uno", async () => {
+      const corto = await correrSinTty(["diagnose", "--json", "--repo", "d/r"], { conClave: true, cwd: repoDeGit() });
+      const j = JSON.parse(corto.stdout);
+      expect(j).toMatchObject({ ok: true, listo: true, faltan: [], siguiente: "supcoflow test --json" });
+      expect(j).not.toHaveProperty("puntos");
+      const largo = await correrSinTty(["diagnose", "--full", "--json", "--repo", "d/r"], { conClave: true, cwd: repoDeGit() });
+      expect(JSON.parse(largo.stdout)).toMatchObject({ puntos: expect.any(Array), instalacion: { puntos: expect.any(Array) } });
+      expect(corto.stdout.length).toBeLessThan(largo.stdout.length / 3);
+      const d = await correrSinTty(["describe", "repo", "connect", "--json"], { conClave: false });
+      expect(d.codigo).toBe(0);
+      expect(JSON.parse(d.stdout)).toMatchObject({ ok: true, comando: { nombre: "repo connect" } });
+      const malo = await correrSinTty(["describe", "nada", "--json"], { conClave: false });
+      expect(malo.codigo).toBe(3);
+      expect(JSON.parse(malo.stdout).error).toBe("comando_desconocido");
+      const noAplica = await correrSinTty(["whoami", "--full", "--json"], { conClave: true });
+      expect(noAplica.codigo).toBe(3);
+    });
 
     it("R2: los siete terminan solos con stdin cerrado, una línea JSON, sin POST salvo con --authorize-spend", async () => {
       rmSync(pruebas(), { force: true });

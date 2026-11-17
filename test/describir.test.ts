@@ -324,3 +324,43 @@ describe("el alias de SSH en el contrato (revisión 2): se lee como texto y nunc
     expect(r).not.toMatch(/ssh -G/);
   });
 });
+
+describe("R13: `describe <comando>` describe sólo ese comando", () => {
+  const json = (sobre: string) => comandoDescribir(sobre).json as { ok: boolean; version: string; comando: { nombre: string; flags: string[] }; codigos: Record<string, string>; flags_globales: string[] };
+
+  it("un comando de una palabra y uno de dos: su bloque, sus códigos y nada de los demás", () => {
+    const dg = json("diagnose");
+    expect(dg).toMatchObject({ ok: true, version: DESCRIPCION.version, comando: { nombre: "diagnose" } });
+    expect(Object.keys(dg.codigos)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(dg).not.toHaveProperty("comandos");
+    expect(dg).not.toHaveProperty("facultades");
+    expect(json("repo connect").comando.nombre).toBe("repo connect");
+    expect(comandoDescribir("test").texto).toMatch(/^Usage: supcoflow test \[flags\]/);
+  });
+
+  it("es mucho más corto que el contrato entero", () => {
+    const entero = JSON.stringify(comandoDescribir().json).length;
+    for (const c of DESCRIPCION.comandos) expect(JSON.stringify(comandoDescribir(c.nombre).json).length, c.nombre).toBeLessThan(entero / 3);
+  });
+
+  it("el nombre viejo en castellano llega al mismo comando; `describe` sin argumento sigue siendo el contrato entero", () => {
+    expect(json("diagnosticar").comando.nombre).toBe("diagnose");
+    expect(comandoDescribir().json).toMatchObject({ ok: true, version: DESCRIPCION.version, comandos: expect.any(Array), facultades: expect.any(Array) });
+  });
+
+  it("un comando que no existe sale 3 comando_desconocido y lista los que hay", () => {
+    try {
+      comandoDescribir("nada");
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toMatchObject({ codigo: 3, error: "comando_desconocido", message: expect.stringContaining("diagnose") });
+    }
+  });
+
+  it("`diagnose` documenta --full y el JSON corto", () => {
+    const dg = json("diagnose").comando.flags.join(" ");
+    expect(dg).toMatch(/--full/);
+    expect(dg).toMatch(/faltan/);
+    expect(dg).toMatch(/siguiente/);
+  });
+});

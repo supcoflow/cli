@@ -66,7 +66,7 @@ type Maquina = { ok: boolean; impedimentos: { codigo: string; detalle: string }[
 async function ver(d: DepsDePrueba) {
   const antes = JSON.stringify(archivosDe(dir));
   const t = await probar(d, F);
-  const g = await diagnosticar(d, { repo: null });
+  const g = await diagnosticar(d, { repo: null, full: true });
   expect(JSON.stringify(archivosDe(dir))).toBe(antes); // sin escrituras
   return { t, g, maquina: t.json.maquina as Maquina };
 }
@@ -204,7 +204,7 @@ describe("V-3: el pedido pendiente", () => {
       expect(s).not.toContain("clave-secreta-1");
       expect(s).not.toContain("texto privado");
     }
-    expect((await diagnosticar(d, { repo: null })).json).toMatchObject({ intento_pendiente: { techo_usd: 3, politica: "relevar" } });
+    expect((await diagnosticar(d, { repo: null, full: true })).json).toMatchObject({ intento_pendiente: { techo_usd: 3, politica: "relevar" } });
   });
   it("un intento de la 0.7.0 (sin política) se trae con politica null y se retoma por el alias viejo", async () => {
     const { d, ruta } = deps();

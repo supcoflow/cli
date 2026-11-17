@@ -154,7 +154,27 @@ async function puntoDeLaInterfazDeEsteClon(
   return puntoDeLaInterfaz({ lectura, faltan, delProyecto });
 }
 
-export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">): Promise<Resultado> {
+// El próximo paso que sigue a un punto que falta: un comando que se pueda correr (o, si hace falta una persona, qué hacer). Sólo
+// se nombra lo que esta terminal sabe: lo que no se conoce (un punto nuevo del motor) cae en el paso genérico.
+const SIGUIENTE_POR_PUNTO: Readonly<Record<string, string>> = {
+  "sign-in": "supcoflow login",
+  repo: "Run it from a clone of the project's repo, or pass --repo owner/repo.",
+  instalacion: "supcoflow repo connect",
+  sitios: "supcoflow sites add --site https://your-site.example",
+  chat: "supcoflow chat on",
+  ia_del_chat: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
+  ia_del_triaje: "Ask the person to run `supcoflow agents set-key` in their own terminal (the AI key never goes through an assistant).",
+  guia: "supcoflow guide publish",
+  interfaz: "supcoflow install record --skill <version> --file <path>",
+};
+/** El comando (o la acción) siguiente: el del primer punto que falta que cuenta, el aviso al final; con todo listo, la prueba. */
+export function siguienteDelDiagnostico(faltan: Punto[], listo: boolean): string | null {
+  if (faltan.length === 0) return listo ? "supcoflow test --json" : "supcoflow diagnose --full --json";
+  const primero = faltan.find((x) => x.aviso !== true) ?? faltan[0]!;
+  return SIGUIENTE_POR_PUNTO[primero.punto] ?? `Fix «${primero.punto}»: ${primero.mensaje} Then run \`supcoflow diagnose\` again.`;
+}
+
+export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo"> & { full?: boolean }): Promise<Resultado> {
   const p = await proyectoDelRepo(d, flags);
   if (!p.ok) return p.resultado;
   let g: Diagnostico;
@@ -180,7 +200,9 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
   const buenos = contarBuenos(instalacion);
   const total = totalDeLaInstalacion(instalacion);
   const listo = g.listo && revision.maquina.ok && instalacion.every((x) => x.ok || !["sign-in", "repo"].includes(x.punto));
-  const datos = {
+  const faltan = [...instalacion, ...prueba].filter((x) => !x.ok);
+  const siguiente = siguienteDelDiagnostico(faltan, listo);
+  const completo = {
     proyecto: { id: p.proyecto.id, repo: p.proyecto.repo },
     ...datosDelDiagnostico(g),
     listo,
@@ -189,6 +211,16 @@ export async function diagnosticar(d: DepsDePrueba, flags: Pick<Flags, "repo">):
     prueba: { listo: g.listo && revision.maquina.ok, puntos: prueba },
     ...datosDeLaMaquina(revision),
     ...datosDelIntentoPendiente(revision),
+    siguiente,
+  };
+  // Por defecto el JSON es corto (lo que un asistente necesita para decidir); `--full` da todo el detalle, como antes de la 0.12.0.
+  const datos = flags.full === true ? completo : {
+    proyecto: completo.proyecto,
+    listo,
+    instalacion: { ok: buenos, total },
+    faltan: faltan.map((x) => ({ punto: x.punto, mensaje: x.mensaje, ...(x.aviso === true ? { aviso: true } : {}) })),
+    siguiente,
+    detalle: "supcoflow diagnose --full --json",
   };
   const resumen = `A test authorizes up to ${usd(g.techoUsd)}. Policy: ${enInglesLaPolitica(g.politica)}.`;
   const motivos = [

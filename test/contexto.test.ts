@@ -143,7 +143,10 @@ describe("V-7 (4)-(6): al crear, el dueño del repo contra la cuenta", () => {
     const m = mundo({ yo: yo({ usuario: { id: "usr_1", login: "otra-persona", email: null } }) });
     const r = await proyectoCrear(depsDeProyecto(m), sinFlags);
     incoherente(r, "dueno_distinto_del_login");
-    expect(r.texto).toBe("This repo's owner on GitHub (@Dueno) isn't the GitHub account your key shows (@otra-persona). If you renamed your GitHub account, sign in to the Supcoflow console with GitHub again (that updates it) and run this again; otherwise sign in as @Dueno.");
+    expect(r.texto).toBe("This repo's owner on GitHub (@Dueno) isn't the GitHub account your key shows (@otra-persona). Most likely your browser's GitHub session is another account: close it (or use a private window), then run `supcoflow logout` and `supcoflow login`, signing in to GitHub as @Dueno. Less likely: you renamed your GitHub account; then sign in to the Supcoflow console with GitHub again (that updates it) and run this again.");
+    // R9: el caso común (la sesión del navegador) va antes que la hipótesis del renombre.
+    expect(r.texto.indexOf("browser's GitHub session")).toBeLessThan(r.texto.indexOf("renamed"));
+    expect(r.texto.indexOf("supcoflow logout")).toBeLessThan(r.texto.indexOf("renamed"));
     expect(m.llamadas).toEqual(["buscar", "quien"]);
   });
   it("(4) con fuente env el mensaje nombra SUPCOFLOW_TOKEN y no la toca", async () => {
@@ -152,6 +155,9 @@ describe("V-7 (4)-(6): al crear, el dueño del repo contra la cuenta", () => {
     incoherente(r, "dueno_distinto_del_login");
     expect(r.texto).toContain("SUPCOFLOW_TOKEN");
     expect(r.texto).toContain("I don't touch it");
+    // La variable gana sobre un login nuevo: se dice antes de la hipótesis del renombre, y que `logout` no la quita.
+    expect(r.texto.indexOf("SUPCOFLOW_TOKEN")).toBeLessThan(r.texto.indexOf("renamed"));
+    expect(r.texto).toContain("can't remove the variable");
   });
   it("(5) Dueno/App contra el login dueno: no frena (sin distinguir mayúsculas)", async () => {
     const m = mundo();

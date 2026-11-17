@@ -116,11 +116,14 @@ export function coherenciaAlCrear(d: { yo: Yo; fuente: Fuente; repo: string }): 
   }
   const dueno = d.repo.split("/")[0]!;
   if (dueno.toLowerCase() === login.toLowerCase()) return null;
+  // El caso común primero: la terminal sabe qué cuenta tiene la clave, no qué sesión de GitHub tiene abierta el navegador, y
+  // un `login` nuevo reusa esa sesión. El renombre (el motor compara el número de GitHub, no el login) va al final.
   const deLaVariable = d.fuente === "env"
-    ? " Your key comes from SUPCOFLOW_TOKEN, which wins over a new login: unset it or replace it first; I don't touch it."
+    ? " Your key comes from SUPCOFLOW_TOKEN, which wins over a new login: unset it or replace it first (`supcoflow logout` revokes that key but can't remove the variable); I don't touch it."
     : "";
   return contextoIncoherente("dueno_distinto_del_login",
     `This repo's owner on GitHub (@${dueno}) isn't the GitHub account your key shows (@${login}). `
-    + `If you renamed your GitHub account, sign in to the Supcoflow console with GitHub again (that updates it) and run this again; otherwise sign in as @${dueno}.${deLaVariable}`,
+    + `Most likely your browser's GitHub session is another account: close it (or use a private window), then run \`supcoflow logout\` and \`supcoflow login\`, signing in to GitHub as @${dueno}.${deLaVariable} `
+    + "Less likely: you renamed your GitHub account; then sign in to the Supcoflow console with GitHub again (that updates it) and run this again.",
     { repo: d.repo, dueno, login, ...(d.fuente === "env" ? { fuente: "env" } : {}) });
 }
