@@ -1,11 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Not in the published 0.11.0; it will be in the next release (the number is not decided yet).
+
+- `login` and `repo connect` open the approval/connection link in the browser by themselves, in their first step only (never while polling with `--wait`); the link and the code are still shown. Nothing opens without a display, over SSH, in a container or CI, with the new `--no-browser` or with `SUPCOFLOW_NO_BROWSER=1`. With `--json`, the `--start` result adds `navegador_abierto: true|false`.
+
 ## 0.11.0
 
 - The guide can be a folder: `.supcoflow/knowledge/*.md` is read as ONE version (every `.md` directly inside it; it governs over `guide.md`/`guia.md` when it has at least one). `guide check` sends the whole set to the engine and prints the problems per document; `guide publish` uploads it, and `--from-github` sends the fingerprint of the whole set (names and contents), computed exactly like the engine's (shared test vectors). A `.md` with an invalid name is rejected by name, never skipped; the limits (64 KB, 60 documents/sections) count for the whole folder.
 - `guide check` warns (exit 0) when a section name is repeated (across documents or within one), comparing without case or accents like the chat's search (`nombres_repetidos` in the JSON).
 - New `guide stale --base <ref>`: warns, with no AI, no engine call and no sign-in, when a change touches code a document's `sources` explain and doesn't touch that document. It also warns, apart, when the map is empty or broken, when a `sources` pattern matches no file, when a document changed only in whitespace, when the change deletes a document or removes a `sources` pattern that covered code it touches (it reads the map at the merge base too), and when it could not compare or complete the check (missing base, shallow clone, or git couldn't list the repo's files: it suggests `fetch-depth: 0` when that is the cause, and never says «nothing to warn»). Exits 0 unless `--strict` (4 `guia_desactualizada`). README has a CI snippet.
-- `login` and `repo connect` open the approval/connection link in the browser by themselves, in their first step only (never while polling with `--wait`); the link and the code are still shown. Nothing opens without a display, over SSH, in a container or CI, with the new `--no-browser` or with `SUPCOFLOW_NO_BROWSER=1`. With `--json`, the `--start` result adds `navegador_abierto: true|false`.
 
 ## 0.10.3
 
