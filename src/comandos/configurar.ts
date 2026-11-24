@@ -56,6 +56,7 @@ export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flag
     const ilegible = ac?.ilegible === true;
     const acuerdo = ilegible
       ? "set but unreadable (check it in the console)"
+      : ac === undefined ? "not reported by the engine"
       : acuerdoSinFijar(c) ? "closed (nobody has set it yet)" : "set";
     const alcance = " It limits what is saved and what the AI that investigates reads; it does not cover what the chat's AI sees while it talks.";
     return {

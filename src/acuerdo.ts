@@ -3,5 +3,5 @@
 // son lo mismo para la terminal: ninguno es «entra todo». Un acuerdo ilegible es otro estado (también rige
 // cerrado, pero hay una fila que no se pudo leer) y no pasa por acá.
 export function acuerdoSinFijar(c: { acuerdo?: unknown; acuerdo_fijado?: unknown }): boolean {
-  return c.acuerdo === null || c.acuerdo === undefined || c.acuerdo_fijado === false;
+  return c.acuerdo !== undefined && (c.acuerdo === null || c.acuerdo_fijado === false);
 }

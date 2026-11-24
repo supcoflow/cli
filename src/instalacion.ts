@@ -89,7 +89,6 @@ function acuerdoDe(c: Configuracion): number | null {
   if (a?.ilegible === true) {
     throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, "acuerdo_ilegible", "The data agreement is set but can't be read: check it in the console and run again.");
   }
-  if (c.acuerdo === undefined) throw inesperada("an agreement");
   // Sin acuerdo fijado no hay versión que anotar: la del acuerdo cerrado por defecto no la fijó nadie.
   if (acuerdoSinFijar(c)) return null;
   if (a === null || !entero(a.version)) throw inesperada("an agreement");

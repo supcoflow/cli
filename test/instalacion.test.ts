@@ -122,6 +122,12 @@ describe("armarInstalacion (lista cerrada de campos)", () => {
     expect(x.configuracion.acuerdo_version).toBeNull();
     expect(armarInstalacion({ ...base, configuracion: { ...CONFIG, acuerdo: { ...CONFIG.acuerdo }, acuerdo_fijado: true } }).configuracion.acuerdo_version).toBe(3);
   });
+  it("una configuración sin `acuerdo` no se anota como «sin acuerdo»: 1 configuracion_inesperada", () => {
+    const { acuerdo: _, ...sinAcuerdo } = CONFIG;
+    for (const configuracion of [sinAcuerdo, { ...sinAcuerdo, acuerdo_fijado: false }]) {
+      expect(() => armarInstalacion({ ...base, configuracion })).toThrow(expect.objectContaining({ codigo: 1, error: "configuracion_inesperada" }));
+    }
+  });
   it("un acuerdo ilegible no se anota como «sin acuerdo»: 4 acuerdo_ilegible", () => {
     expect(() => armarInstalacion({ ...base, configuracion: { ...CONFIG, acuerdo: { ilegible: true } } })).toThrow(expect.objectContaining({ codigo: 4, error: "acuerdo_ilegible" }));
   });
