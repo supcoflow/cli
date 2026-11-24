@@ -90,6 +90,30 @@ describe("configurar", () => {
       expect(r.texto).not.toMatch(/all AI|no AI/);
     }
   });
+  it("configuracion: sin acuerdo fijado (acuerdo_fijado: false, o un null viejo) dice CERRADO y que nadie lo fijó; nunca «everything gets through»", async () => {
+    const cerrado = { version: 0, permitido: {}, fijado_en: null, fijado_por: null, fijado_con: null };
+    for (const c of [{ acuerdo: cerrado, acuerdo_fijado: false }, { acuerdo: null }, { acuerdo: null, acuerdo_fijado: false }]) {
+      const r = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ chat: {}, sitios: [], ...c }) }).d, F);
+      expect(r.texto, JSON.stringify(c)).toMatch(/data agreement closed \(nobody has set it yet\)/);
+      expect(r.texto, JSON.stringify(c)).toMatch(/does not cover what the chat's AI sees while it talks/);
+      expect(r.texto).not.toMatch(/everything gets through|as today|not set/);
+      expect(r.json).toMatchObject({ ok: true, ...c });
+    }
+  });
+  it("configuracion: si el motor no manda `acuerdo`, dice que no lo informó; no afirma que está cerrado", async () => {
+    for (const c of [{}, { acuerdo_fijado: false }]) {
+      const r = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ chat: {}, sitios: [], ...c }) }).d, F);
+      expect(r.texto, JSON.stringify(c)).toMatch(/data agreement not reported by the engine\./);
+      expect(r.texto, JSON.stringify(c)).not.toMatch(/closed|nobody has set it/);
+    }
+  });
+  it("configuracion: un acuerdo que alguien fijó (acuerdo_fijado: true, o sin la marca de un motor viejo) dice «set»", async () => {
+    for (const c of [{ acuerdo: { version: 2 }, acuerdo_fijado: true }, { acuerdo: { version: 2 } }]) {
+      const r = await comandoConfiguracion(deps({ leerConfiguracion: async () => ({ chat: {}, sitios: [], ...c }) }).d, F);
+      expect(r.texto).toMatch(/data agreement set\./);
+      expect(r.texto).not.toMatch(/nobody has set it/);
+    }
+  });
   it("configuracion en texto: dice la política en palabras llanas y la marca; el JSON no cambia", async () => {
     const marca = { titulo: "Ayuda", saludo: "Hola", tema: { acento: "#0a7" }, logo_url: "https://blob/l.png" };
     const base = { chat: { habilitado: true }, sitios: [], acuerdo: null };
@@ -124,7 +148,7 @@ describe("configurar", () => {
     expect((await chatLogo(deps().d, { ...F, file: "/x/logo.gif" })).texto).toBe("The logo must be .png, .jpg or .webp.");
     expect((await chatLogo(deps().d, { ...F, file: "/x/logo.png" })).texto).toBe("Logo uploaded.");
     expect((await chatLogo(deps({ leerArchivoChico: () => ({ error: NO_LEIDO.demasiadoGrande }) }).d, { ...F, file: "/x/l.png" })).texto).toBe("I can't read /x/l.png: it's too large.");
-    expect((await comandoConfiguracion(deps().d, F)).texto.split("\n")[0]).toBe("proj_r-1: chat off, 0 site(s), data agreement not set (everything gets through, as today).");
+    expect((await comandoConfiguracion(deps().d, F)).texto.split("\n")[0]).toBe("proj_r-1: chat off, 0 site(s), data agreement closed (nobody has set it yet). It limits what is saved and what the AI that investigates reads; it does not cover what the chat's AI sees while it talks.");
   });
   it("--dry-run no escribe", async () => {
     const { d, posts } = deps();

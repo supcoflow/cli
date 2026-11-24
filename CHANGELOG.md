@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Not in the published 0.12.0; it will be in the next release (the number is not decided yet).
+
+- `supcoflow config` shows a project nobody set a data agreement for as `closed (nobody has set it yet)` (the engine marks it `acuerdo_fijado: false`; an older engine's `acuerdo: null` reads the same), never «everything gets through». An answer with no `acuerdo` at all reads `not reported by the engine`. The note on what the agreement covers is now always shown. `install record` records such a project as having no agreement (`null`).
+- `describe --json` no longer says the `read` permission covers cases, issues, runs or costs: the terminal has no command to read them.
+
 ## 0.12.0 (2026-11-17)
 
 It changes an output contract: `diagnose --json` and `test --json` are short by default.
