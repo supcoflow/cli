@@ -4,6 +4,7 @@
 // El archivo queda en el repo y se commitea: un secreto acá se publica con el primer `push`. Por eso se arma con
 // una LISTA CERRADA de campos, cada uno validado por separado; nunca un `...configuracion` (la configuración del
 // motor trae `fijado_por`, `publicada_por`, huellas y lo que el motor agregue mañana: nada de eso es de este archivo).
+import { acuerdoSinFijar } from "./acuerdo.ts";
 import { FalloDeLaTerminal, SALIDA, taparSecretos } from "./contrato.ts";
 
 export const RUTA_DE_LA_INSTALACION = ".supcoflow/instalacion.json";
@@ -83,14 +84,14 @@ function instaladoEn(paquete: unknown): string | null {
 }
 
 function acuerdoDe(c: Configuracion): number | null {
-  // Sin acuerdo fijado (el cerrado con `acuerdo_fijado: false`, o el null de un motor anterior) no hay versión que anotar:
-  // la del acuerdo cerrado por defecto no la fijó nadie. Un ilegible sí es un acuerdo: se mira abajo.
-  if (c.acuerdo === null || (c.acuerdo_fijado === false && objeto(c.acuerdo)?.ilegible !== true)) return null;
   const a = objeto(c.acuerdo);
   // Ilegible es un estado conocido del motor (aplica cerrado), no «sin acuerdo»: anotarlo como null mentiría.
   if (a?.ilegible === true) {
     throw new FalloDeLaTerminal(SALIDA.haceFaltaUnaPersona, "acuerdo_ilegible", "The data agreement is set but can't be read: check it in the console and run again.");
   }
+  if (c.acuerdo === undefined) throw inesperada("an agreement");
+  // Sin acuerdo fijado no hay versión que anotar: la del acuerdo cerrado por defecto no la fijó nadie.
+  if (acuerdoSinFijar(c)) return null;
   if (a === null || !entero(a.version)) throw inesperada("an agreement");
   return a.version;
 }
