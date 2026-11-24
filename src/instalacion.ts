@@ -83,7 +83,9 @@ function instaladoEn(paquete: unknown): string | null {
 }
 
 function acuerdoDe(c: Configuracion): number | null {
-  if (c.acuerdo === null) return null;
+  // Sin acuerdo fijado (el cerrado con `acuerdo_fijado: false`, o el null de un motor anterior) no hay versión que anotar:
+  // la del acuerdo cerrado por defecto no la fijó nadie. Un ilegible sí es un acuerdo: se mira abajo.
+  if (c.acuerdo === null || (c.acuerdo_fijado === false && objeto(c.acuerdo)?.ilegible !== true)) return null;
   const a = objeto(c.acuerdo);
   // Ilegible es un estado conocido del motor (aplica cerrado), no «sin acuerdo»: anotarlo como null mentiría.
   if (a?.ilegible === true) {

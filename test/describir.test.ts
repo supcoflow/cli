@@ -102,6 +102,12 @@ describe("describe --json", () => {
     }
   });
 
+  it("la facultad read no promete leer casos, issues, runs ni costos: ningún comando los lee todavía", () => {
+    const read = DESCRIPCION.facultades.find((f) => f.nombre === "read")!;
+    expect(read.incluye).not.toMatch(/\bcases, issues, runs, costs\b/);
+    expect(read.incluye).toMatch(/There is no command to read cases, issues, runs or costs/);
+  });
+
   it("bloque 6: `widget` e `install record`, con flags, un ejemplo y sus códigos", () => {
     const g = (n: string) => DESCRIPCION.comandos.find((x) => x.nombre === n)!;
     const w = g("widget");

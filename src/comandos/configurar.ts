@@ -4,6 +4,7 @@
 // sin `=`, un --sitio que falta) se valida para no gastar un pedido; la regla de verdad es la del motor.
 import path from "node:path";
 import type { Fetch, Respuesta } from "../api.ts";
+import { acuerdoSinFijar } from "../acuerdo.ts";
 import type { Flags } from "../argumentos.ts";
 import { resultadoDeFallo, SALIDA, taparSecretos, type Resultado } from "../contrato.ts";
 import { proyectoDelRepo, type DepsDelProyectoDelRepo } from "./proyecto-del-repo.ts";
@@ -49,14 +50,14 @@ export async function comandoConfiguracion(d: DepsDeConfigurar, flags: Pick<Flag
     const sitiosLista = c.sitios as string[];
     // El acuerdo de datos frena lo que se guarda y lo que lee la IA que releva el repo; NO alcanza a lo
     // que ve la IA del propio chat mientras conversa (decisión 1b). Por eso el texto lo dice, y nunca
-    // promete «ninguna IA» ni «toda IA». `acuerdo` puede ser null, un acuerdo o {ilegible: true}.
+    // promete «ninguna IA» ni «toda IA». `acuerdo` puede ser un acuerdo, {ilegible: true} o, sin acuerdo fijado,
+    // el cerrado con `acuerdo_fijado: false` (un motor anterior mandaba null): rige CERRADO, nunca «entra todo».
     const ac = c.acuerdo as { ilegible?: boolean } | null | undefined;
-    const acuerdo = ac === null || ac === undefined
-      ? "not set (everything gets through, as today)"
-      : ac.ilegible === true
-        ? "set but unreadable (check it in the console)"
-        : "set";
-    const alcance = ac === null || ac === undefined ? "" : " It limits what is saved and what the AI that investigates reads; it does not cover what the chat's AI sees while it talks.";
+    const ilegible = ac?.ilegible === true;
+    const acuerdo = ilegible
+      ? "set but unreadable (check it in the console)"
+      : acuerdoSinFijar(c) ? "closed (nobody has set it yet)" : "set";
+    const alcance = " It limits what is saved and what the AI that investigates reads; it does not cover what the chat's AI sees while it talks.";
     return {
       codigo: SALIDA.ok,
       json: { ok: true, proyecto: p.proyecto.id, ...c },

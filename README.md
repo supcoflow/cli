@@ -126,7 +126,7 @@ owner/repo`, and the ones that write accept `--dry-run`.
 | Command | What it does |
 |---|---|
 | `supcoflow catalog` | What can be configured and with which values. |
-| `supcoflow config` | The project's chat, sites, brand and data agreement. |
+| `supcoflow config` | The project's chat, sites, brand and data agreement. A project nobody set an agreement for is closed, and it says so. |
 | `supcoflow chat on` / `chat off` | Turns the chat on or off (a guide is needed: publish the repo's with `supcoflow guide publish`, or generate and approve our agent's in the console's Guide screen). |
 | `supcoflow chat brand --title "Help" --theme acento=#0a7` | Title, greeting and colors; whatever isn't named stays as it was. The `--theme` keys are the API's: `acento`, `fondo`, `texto`, `textoSuave`, `radio`, `fuente`. |
 | `supcoflow chat logo --file logo.png` | Uploads the logo (.png, .jpg or .webp, up to 200 KB). |

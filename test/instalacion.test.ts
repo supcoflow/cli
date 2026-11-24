@@ -116,6 +116,12 @@ describe("armarInstalacion (lista cerrada de campos)", () => {
     expect(() => armarInstalacion({ ...base, configuracion: { ...CONFIG, politica: { modo: "otra" } } })).toThrow(expect.objectContaining({ error: "configuracion_inesperada" }));
     expect(() => armarInstalacion({ ...base, configuracion: { ...CONFIG, guia: { ...CONFIG.guia, commit: CLAVE } } })).toThrow(expect.objectContaining({ error: "configuracion_inesperada" }));
   });
+  it("un acuerdo cerrado que nadie fijó (acuerdo_fijado: false) se anota como sin acuerdo, no con la versión del cerrado", () => {
+    const cerrado = { version: 0, permitido: {}, fijado_en: null, fijado_por: null, fijado_con: "sesion" };
+    const x = armarInstalacion({ ...base, configuracion: { ...CONFIG, acuerdo: cerrado, acuerdo_fijado: false } });
+    expect(x.configuracion.acuerdo_version).toBeNull();
+    expect(armarInstalacion({ ...base, configuracion: { ...CONFIG, acuerdo: { ...CONFIG.acuerdo }, acuerdo_fijado: true } }).configuracion.acuerdo_version).toBe(3);
+  });
   it("un acuerdo ilegible no se anota como «sin acuerdo»: 4 acuerdo_ilegible", () => {
     expect(() => armarInstalacion({ ...base, configuracion: { ...CONFIG, acuerdo: { ilegible: true } } })).toThrow(expect.objectContaining({ codigo: 4, error: "acuerdo_ilegible" }));
   });

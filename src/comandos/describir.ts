@@ -95,7 +95,7 @@ export const DESCRIPCION: {
     },
     {
       nombre: "config",
-      resumen: "Shows the repo's project configuration: chat, sites, brand, problem policy and data agreement. The agreement limits what is saved and what the investigating AI reads; it doesn't cover what the chat's AI sees while it talks. Like every command that acts on the repo's project, it exits 4 contexto_incoherente without doing anything if this clone's .supcoflow/proyecto.json notes another project than the one your key sees (proyecto_del_clon_distinto) or can't be read (archivo_del_clon_ilegible).",
+      resumen: "Shows the repo's project configuration: chat, sites, brand, problem policy and data agreement. The agreement limits what is saved and what the investigating AI reads; it doesn't cover what the chat's AI sees while it talks. A project nobody set an agreement for is CLOSED: the text says «closed (nobody has set it yet)» (the engine marks it `acuerdo_fijado: false`; an older engine's `acuerdo: null` reads the same). Like every command that acts on the repo's project, it exits 4 contexto_incoherente without doing anything if this clone's .supcoflow/proyecto.json notes another project than the one your key sees (proyecto_del_clon_distinto) or can't be read (archivo_del_clon_ilegible).",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json"],
       ejemplos: ["supcoflow config --json"],
       codigos: [0, 1, 2, 3, 4],
@@ -350,7 +350,7 @@ export const DESCRIPCION: {
   facultades: [
     {
       nombre: "read",
-      incluye: "Identity and team, projects, configuration, cases, issues, runs, costs, installation state, reading and checking the guide (guide check, guide show, guide versions); guide stale needs none (it only reads git)",
+      incluye: "Identity and team, projects, configuration, installation state, reading and checking the guide (guide check, guide show, guide versions); guide stale needs none (it only reads git). There is no command to read cases, issues, runs or costs",
       con_api_key: true,
     },
     {
