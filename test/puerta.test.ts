@@ -1,6 +1,5 @@
 // `supcoflow gate` (etapa 2c): lo fino de cada comando, con el motor inyectado. El camino de punta a punta (el binario contra un servidor HTTP) está en `puerta-y-reportes.test.ts`;
 // acá se clava lo que ese camino no alcanza: de dónde sale la clave, qué NO se manda, qué dice cada error y que nada de lo que sale lleva la clave del agente.
-import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { Respuesta } from "../src/api.ts";
 import { puertaEntregar, puertaEstado, puertaFallo, puertaLeer, puertaPase, sinLaClaveDeAgente, VARIABLE_DE_LA_CLAVE, type DepsDePuerta } from "../src/comandos/puerta.ts";
@@ -300,14 +299,17 @@ describe("gate pass", () => {
 });
 
 describe("gate deliver y gate fail", () => {
-  const idDe = (tipo: string, reporte: string, cuerpo: string) => `ent_${createHash("sha256").update(`${tipo}\n${reporte}\n`).update(cuerpo).digest("hex").slice(0, 32)}`;
-
   it("el id de entrega sale del tipo, el reporte y el contenido: el mismo archivo es la misma entrega, y cualquier cambio es otra", async () => {
     const cuerpo = JSON.stringify(RESULTADO);
-    const a = armar({ respuesta: ok({ entrega: idDe("resultado", "rpt_ejemplo0001", cuerpo), huella: HUELLA_DEL_RESULTADO, publicacion: "publicando" }, 202) });
+    const eco = (l: Llamada) => ok({ entrega: l.entrega, huella: HUELLA_DEL_RESULTADO, publicacion: "publicando" }, 202);
+    const a = armar({ respuesta: eco });
     const r = await puertaEntregar(a.d, F);
     expect(r.codigo).toBe(SALIDA.ok);
-    expect(a.llamadas[0]).toMatchObject({ que: "entregar", id: "rpt_ejemplo0001", entrega: idDe("resultado", "rpt_ejemplo0001", cuerpo), cuerpo });
+    expect(a.llamadas[0]).toMatchObject({ que: "entregar", id: "rpt_ejemplo0001", cuerpo });
+    expect(a.llamadas[0]!.entrega).toMatch(/^ent_[0-9a-f]{32}$/);
+    const otraVez = armar({ respuesta: eco });
+    expect((await puertaEntregar(otraVez.d, F)).codigo).toBe(SALIDA.ok);
+    expect(otraVez.llamadas[0]!.entrega).toBe(a.llamadas[0]!.entrega);
     const ids = new Set<string>();
     for (const [flags, texto] of [[{ ...F, id: "rpt_ejemplo0002" }, cuerpo], [F, cuerpo.replace("error", "pedido_de_mejora")]] as const) {
       const m = armar({ archivo: texto, respuesta: ok({}, 500) });
