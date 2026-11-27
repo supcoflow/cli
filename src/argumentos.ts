@@ -22,6 +22,9 @@ export type Flags = {
   ceiling: string | null; expectPolicy: string | null;
   // Tanda 9 (`agents`). NO hay un flag para la clave de IA: entra sin eco por la terminal o de la variable que `fromEnv` NOMBRA.
   agent: string | null; fromEnv: string | null; provider: string | null; option: string | null; dataRetention: string | null;
+  // Etapa 2c (`reports`, `gate`): el filtro y la página de la bandeja.
+  // La clave de un agente tampoco tiene flag: entra por `--from-env NOMBRE`, por `SUPCOFLOW_AGENT_KEY` o sin eco.
+  filter: string | null; page: string | null; perPage: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -31,6 +34,8 @@ export const COMANDOS_COMPUESTOS = [
   "guide check", "guide publish", "guide show", "guide use", "guide versions", "guide stale",
   "install record",
   "agents show", "agents set-key", "agents check", "agents remove", "agents configure",
+  "reports list", "reports show", "reports investigate",
+  "gate status", "gate read", "gate pass", "gate deliver", "gate fail",
 ] as const;
 // Sólo estas primeras palabras admiten una segunda: cualquier otro par sigue siendo «de más». Entran también las de
 // los nombres viejos (`guia publicar`), que se resuelven más abajo.
@@ -39,6 +44,7 @@ const FLAGS_CON_VALOR = [
   "repo", "install", "test", "site", "title", "greeting", "file", "allow", "mode", "name", "save-to", "id", "source", "skill", "app",
   "message", "test-id", "ceiling", "expect-policy", "shape", "base",
   "agent", "from-env", "provider", "option", "data-retention",
+  "filter", "page", "per-page",
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
@@ -155,6 +161,9 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       provider: un("provider"),
       option: un("option"),
       dataRetention: un("data-retention"),
+      filter: un("filter"),
+      page: un("page"),
+      perPage: un("per-page"),
       theme: tema,
     },
   };

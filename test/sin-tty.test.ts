@@ -279,7 +279,7 @@ describe("supcoflow sin terminal", () => {
   it("`describe --json` y `nada` dicen lo que el contrato promete", async () => {
     const d = await correr(["describe", "--json"], { stdin: "ignore" });
     expect(d.codigo).toBe(0);
-    expect(JSON.parse(d.stdout).comandos).toHaveLength(35);
+    expect(JSON.parse(d.stdout).comandos).toHaveLength(43);
     const n = await correr(["nada", "--json"], { stdin: "ignore" });
     expect(n.codigo).toBe(3);
     expect(JSON.parse(n.stdout).error).toBe("comando_desconocido");

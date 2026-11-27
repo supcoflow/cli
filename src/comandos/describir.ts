@@ -295,6 +295,106 @@ export const DESCRIPCION: {
       codigos: [0, 1, 2, 3, 4],
     },
     {
+      nombre: "reports list",
+      resumen: "Lists the repo's project reports (the console's inbox) with their state, for a PERSON signed in (`login`; a read-only key can read too). Each line: id, date, state (`estado`: con_issue, sin_issue, esperando, relevando, sin_run, guardado, arranque_incierto, reclamado_sin_run, esperando_a_tu_agente, tu_agente_no_contesto, el_agente_fallo, publicacion_a_revisar), the issue if any and whether it needs you (`te_necesitan`). It never carries the report's text (it is read in the console); `titulo` is null for a report that came through the agents' gate, which keeps no text. The JSON is short by default { ok, proyecto, repo, filtro, total, pagina, paginas, por_pagina, conteo, reportes: [{ reporte_id, titulo, creado_en, estado, te_necesitan, issue, investigador }] }; `--full` adds `ahora` and, per report, `origen` and the engine's own Spanish `estado_texto`. 404 (a project or report of another team) exits 3, never 403.",
+      flags: [
+        "--filter all|needs-you|in-progress|with-issue|saved: which reports (all by default)",
+        "--page n: the page, from 1",
+        "--per-page n: reports per page, 1 to 100 (25 by default)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--full: adds `ahora`, and `origen` and `estado_texto` per report",
+        "--json",
+      ],
+      ejemplos: ["supcoflow reports list --json", "supcoflow reports list --filter needs-you --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "reports show",
+      resumen: "Shows one report's journey (what happened to it, when, and what comes next) for a PERSON signed in. Text in fixed English; the JSON carries the engine's fields cleaned of control characters and secrets. Short by default { ok, proyecto, repo, reporte_id, titulo, creado_en, origen, estado, te_necesitan, investigador: { tipo: supcoflow|agente, agente_id }, issue, eventos: [{ clave, cuando, href }], aviso: { tono, titulo, texto } | null, acciones: [{ accion, via }], enlace_a_la_consola, siguiente, detalle }; `acciones` is what can be asked for through this API now (today only `pedir_investigacion`, via `supcoflow` or `agente_de_afuera`), and an empty list doesn't say «nothing happens»: it says there's nothing to ask for from here. `--full` adds `estado_texto`, the text of each event, `avisos` (the rounds of notices to a connected agent and each attempt's answer, never its address) and `run`. «Open anyway» (opening the issue without investigating) and «change the investigator» don't exist yet.",
+      flags: [
+        "--id rpt_…: the report (`reports list` gives it)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--full: adds `estado_texto`, the events' text, `avisos` and `run`",
+        "--json",
+      ],
+      ejemplos: ["supcoflow reports show --id rpt_0123456789abcdef --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "reports investigate",
+      resumen: "Asks for the investigation of a report, for a PERSON signed in with a role that can spend (an Owner or Member; not a Reader or a read-only key). It SPENDS (or, for a report a connected agent investigates and didn't answer in 2 hours, sends it the notice again, which reopens its 2 hours): without --authorize-spend it sends nothing and exits 4 falta_autorizacion with { reporte_id, via, techo_usd, siguiente }, where `siguiente` is the exact command to run once the person authorizes the ceiling; with --authorize-spend and --ceiling (the number you were shown) it asks, but only if the ceiling is still that one (otherwise exit 4 techo_distinto and nothing is sent; it reads the ceiling right before asking, and the engine's own guards decide the rest). It reads the report's journey first: if there is nothing to ask for from here it exits 4 nada_que_pedir without spending. The convivence rule is the engine's: one investigator per project (409 → exit 4 ya_esta_con_el_agente, el_agente_ya_fallo, ya_tiene_resultado, agente_no_disponible, proyecto_con_investigador_de_afuera, ya_relevado, falta_ia_del_triaje); 503 despachos_en_pausa exits 1 and nothing started. On success { ok, reporte_id, investigacion: arrancada|aviso_reenviado, via, run_id | webhook_id + ronda, repetido?, techo_usd }. «Open anyway» and «change the investigator» are not here: they don't exist in the engine yet.",
+      flags: [
+        "--id rpt_…: the report",
+        "--authorize-spend: authorizes the spend of ONE request; without it nothing that writes is sent",
+        "--ceiling usd: the ceiling you authorize, the number you were shown (required with --authorize-spend)",
+        "--repo owner/repo: the repo, if it isn't this folder's «origin»",
+        "--dry-run: reads the journey and the ceiling and says what it would ask, without asking",
+        "--json",
+      ],
+      ejemplos: ["supcoflow reports investigate --id rpt_0123456789abcdef --json", "supcoflow reports investigate --id rpt_0123456789abcdef --authorize-spend --ceiling 2 --json"],
+      codigos: [0, 1, 2, 3, 4, 6],
+    },
+    {
+      nombre: "gate status",
+      resumen: "An AGENT sees its own state with ITS key (`scf_ag_…`, created in the console; it is not the key `login` leaves): name, type (chat or investigation), project, whether it is active and is the project's active investigator, who connected it (the GitHub login, or «someone from the team»), the last notice (when, attempts, the status it answered) and how many assigned reports it hasn't delivered (a failure notice counts as delivered). A chat agent gets no notices or assigned reports: those fields are null (not applicable, which is not zero). No key, secret or email is ever in the answer. The project comes from the key: there is no --repo. THE KEY: it never goes as an argument (there is no flag for it: `--key` is flag_desconocido) nor through stdin, and it isn't saved anywhere. It is read from the environment variable `--from-env NAME` names, or from `SUPCOFLOW_AGENT_KEY`, or typed without echo in an interactive terminal (never with --json: no command asks anything with --json except `agents set-key`); with none of them it exits 2 sin_clave_de_agente and asks for nothing. What looks like a person's key exits 3 es_una_clave_de_persona and is not sent. A 401 (the key is revoked or invalid: exit 2) and a 403 (this key can't do that: exit 4 tipo_de_clave / solo_agentes) are said clearly and NO other credential is tried. Nothing the engine says is printed as free text: only fixed phrases and validated fields.",
+      flags: [
+        "--from-env NAME: the NAME of the environment variable that holds the agent's key (not the key itself); by default SUPCOFLOW_AGENT_KEY, and without either, the key is asked for without echo",
+        "--json: { ok, agente_id, nombre, tipo, proyecto_id, activo, es_el_investigador_activo, conectado_por: { persona_id, nombre_visible }, ultimo_aviso: { webhook_id, en, intentos, respuesta } | null, asignados_sin_entregar, tope: { avisos_por_hora, usados_esta_hora } | null }; the `tope` is informative: nothing enforces it yet",
+      ],
+      ejemplos: ["supcoflow gate status --json", "supcoflow gate status --from-env MY_AGENT_KEY --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "gate read",
+      resumen: "The assigned investigator reads a report of its own with its key (see `gate status` for how the key is given): who has it, its state and how it ended. The engine keeps the journey and not the text, so there is no text here: it is read from the client's store with the pass (`gate pass`). Only the investigator the report is assigned to reads it (409 no_asignado exits 4); a report of another project is 404 (exit 3). The JSON is short by default { ok, reporte_id, proyecto_id, creado_en, canal, investigador, estado, te_necesitan, decision, intencion, necesita_persona, entrega: { tipo: fallo, entrega, huella, motivo }, publicacion: { estado: publicando|publicado|publicacion_incierta|esperando_reenvio|necesita_persona, entrega, huella, issue, desde, proximo_paso, buscar_desde, reenvios_que_quedan } | null } (only the fields that apply); `--full` adds `agente_declarado`, `costo` and `acciones`. With `esperando_reenvio` the text says to send exactly the same file again.",
+      flags: [
+        "--id rpt_…: the report",
+        "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
+        "--full: adds `agente_declarado`, `costo` and `acciones`",
+        "--json",
+      ],
+      ejemplos: ["supcoflow gate read --id rpt_0123456789abcdef --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "gate pass",
+      resumen: "The assigned investigator asks for the PASS to read a report's content: five minutes, one report, read-only, in the client's store (or in Supcoflow's own for a chat the client doesn't host). It is the only thing the terminal prints on purpose without hiding it, because it is what the command is for: send it in the `Authorization: Bearer <pass>` header to `contenido.url` (never in the URL). It is not saved anywhere and never appears in an error. The JSON: { ok, pase, audiencia, contenido: { url, ref }, proyecto_id, reporte_id, para, permisos, vence_en, acuerdo }. `acuerdo` is the project's data agreement: apply it BEFORE giving anything to the model (Supcoflow applies it again when it publishes). Asking for the pass doesn't stop the 2 hours of the notice. Exits 4 almacen_no_disponible (the report has no store to read from right now), contenido_vencido (the store no longer keeps it), no_asignado, tipo_de_clave (a chat key).",
+      flags: [
+        "--id rpt_…: the report",
+        "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
+        "--dry-run: says what it would ask for, without asking for the key or sending anything",
+        "--json",
+      ],
+      ejemplos: ["supcoflow gate pass --id rpt_0123456789abcdef --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "gate deliver",
+      resumen: "The assigned investigator delivers its RESULT: the body of the contract (`agente` with `nombre` and `version`, `intencion`, `decision`, `necesita_persona`, `diagnostico`, `supuestos`, `preguntas_abiertas`, `evidencia`, and optional `confianza`, `usuario`, `entorno`, `costo`) from a file, with its key. Supcoflow applies the data agreement again, reserves the publication and opens the issue ONCE. An investigation has a single delivery (a result or a failure). The delivery id (`ent_…`, header Idempotency-Key) is the same on every retry: it comes from the type, the report and the file, so repeating the same command with the same file is always the same delivery (safe: never published twice) and another file is another delivery (the engine says the report already has one). Nothing is saved. 202 means publishing (`publicacion: publicando`; look at how it ended with `gate read`), 200 with `repetido: true` means it was already received. After a failure to know whether it arrived (network, 5xx), repeat the same command. Errors say the contract's problem as `field:code`, never the values. Exits 4 no_asignado, reporte_ya_tiene_entrega, tipo_de_clave; 3 archivo_invalido, identidad_incompleta, resultado_invalido, entrega_con_otro_contenido; 1 publicacion_no_disponible.",
+      flags: [
+        "--id rpt_…: the report",
+        "--file path.json: the result, ONE JSON object of up to 256 KB (required)",
+        "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
+        "--dry-run: reads and checks the file and says what it would send, without asking for the key or sending anything",
+        "--json: { ok, reporte_id, entrega, huella, publicacion, issue, filtrado: { campos_quitados, lineas_quitadas }, sin_issue, necesita_persona, repetido }",
+      ],
+      ejemplos: ["supcoflow gate deliver --id rpt_0123456789abcdef --file result.json --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
+      nombre: "gate fail",
+      resumen: "The assigned investigator says it COULDN'T work the report, with its key: the report goes to «Te necesitan» right away instead of waiting the 2 hours. The body is closed, from a file: { agente: { nombre, version, modelo?, cli?, prompt_version? }, motivo, costo? } with `motivo` one of contenido_no_disponible, repositorio_no_disponible, modelo_no_disponible, tiempo_agotado, error_del_agente. No free text, user, environment or evidence: a field the contract doesn't have is rejected by name (exit 3 campo_no_permitido), not filtered. It is a delivery like the result (same delivery id rules as `gate deliver`) but it publishes nothing and the answer is 200. After a failure the same agent can't deliver again: opening the issue anyway and changing the investigator are things a person does (and don't exist in the engine yet). It doesn't change the 2 hours: they remain the safety net for an agent that dies without being able to tell.",
+      flags: [
+        "--id rpt_…: the report",
+        "--file path.json: the failure notice, ONE JSON object (required)",
+        "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
+        "--dry-run: reads and checks the file and says what it would send, without asking for the key or sending anything",
+        "--json: { ok, reporte_id, entrega, huella, estado: el_agente_fallo, te_necesitan, repetido }",
+      ],
+      ejemplos: ["supcoflow gate fail --id rpt_0123456789abcdef --file failure.json --json"],
+      codigos: [0, 1, 2, 3, 4],
+    },
+    {
       nombre: "widget",
       resumen: "Shows what to paste into the app to get the chat, built by the engine with the project's ids: the package and its exact version, the Next.js wrapper file (`nextjs.contenido`, as is, without rewriting the ids), the file name to use (`nextjs.archivo_sugerido`) and the earlier names the chat may already be installed under (`nextjs.archivos_anteriores`), how to use it, the CSP line and the <script> one (not for Next.js). If the engine describes the app's own interface (`interfaz_propia`: the app builds the chat with its own components; there is no code to paste) it passes it on as the engine sent it: `estado` (`sin_publicar`: the version isn't on npm yet, so the text doesn't offer the path; `disponible`), the package with its exact version, the ids, the backend, the CSP line, the presentation contract (`contrato.version`, `contrato.archivo`, `contrato.documento`), the entry points (`entradas`) and the docs (`documentos`). A halfway `interfaz_propia` is ignored with a warning on stderr and the widget is shown as always. It writes no files. Exits 4 sin_proyecto if the repo has no project; 1 respuesta_inesperada if the engine sends the widget itself halfway.",
       flags: ["--repo owner/repo: the repo, if it isn't this folder's «origin»", "--json: the engine's object as is (`interfaz_propia` only when the engine sends it)"],
@@ -350,7 +450,7 @@ export const DESCRIPCION: {
   facultades: [
     {
       nombre: "read",
-      incluye: "Identity and team, projects, configuration, installation state, reading and checking the guide (guide check, guide show, guide versions); guide stale needs none (it only reads git). There is no command to read cases, issues, runs or costs",
+      incluye: "Identity and team, projects, configuration, installation state, reading and checking the guide (guide check, guide show, guide versions); guide stale needs none (it only reads git). The project's reports and one report's journey (reports list, reports show; they carry no report text). There is no command to read issues, runs or costs",
       con_api_key: true,
     },
     {
@@ -358,10 +458,10 @@ export const DESCRIPCION: {
       incluye: "Create/reuse a project, connect or disconnect the repo, configure and turn on the chat, allowed sites, data agreement, problem policy, publish the guide, choose the active guide (guide use), create and revoke read-only keys, agent profiles",
       con_api_key: true,
     },
-    { nombre: "test", incluye: "The test up to the issue (spends, within the limits)", con_api_key: true },
+    { nombre: "test", incluye: "The test up to the issue (spends, within the limits), and asking for the investigation of a report (reports investigate, which also needs --authorize-spend and --ceiling)", con_api_key: true },
     {
       nombre: "console_only",
-      incluye: "Raise the spend cap, delete the project, turn on the factory, give or remove people's access: only with a console session",
+      incluye: "Raise the spend cap, delete the project, turn on the factory, give or remove people's access, create or revoke an agent's key (scf_ag_…): only with a console session. An agent's key does its own things with `gate`, and nothing else",
       con_api_key: false,
     },
     {
