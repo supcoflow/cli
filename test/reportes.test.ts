@@ -47,7 +47,7 @@ const INVESTIGABLE = ok(RECORRIDO_INVESTIGABLE);
 describe("reports list", () => {
   it("lo que se valida va ANTES de la red: filtro, página y tamaño", async () => {
     for (const [flags, error] of [
-      [{ filter: "todo" }, "filtro_invalido"], [{ page: "0" }, "parametro_invalido"], [{ page: "-1" }, "parametro_invalido"], [{ page: "1.5" }, "parametro_invalido"],
+      [{ filter: "todo" }, "filtro_invalido"], [{ filter: "necesitan" }, "filtro_invalido"], [{ filter: "guardados" }, "filtro_invalido"], [{ page: "0" }, "parametro_invalido"], [{ page: "-1" }, "parametro_invalido"], [{ page: "1.5" }, "parametro_invalido"],
       [{ page: "1000000" }, "parametro_invalido"], [{ perPage: "0" }, "parametro_invalido"], [{ perPage: "101" }, "parametro_invalido"], [{ perPage: "abc" }, "parametro_invalido"],
     ] as const) {
       const m = armar();
@@ -58,8 +58,8 @@ describe("reports list", () => {
     }
   });
 
-  it("el nombre en inglés y el id del motor valen igual, y viajan como el id del motor", async () => {
-    for (const [dado, esperado] of [["all", "todos"], ["needs-you", "necesitan"], ["in-progress", "curso"], ["with-issue", "con_issue"], ["saved", "guardados"], ["guardados", "guardados"]]) {
+  it("cada nombre en inglés viaja como el id del motor", async () => {
+    for (const [dado, esperado] of [["all", "todos"], ["needs-you", "necesitan"], ["in-progress", "curso"], ["with-issue", "con_issue"], ["saved", "guardados"]]) {
       const m = armar();
       await reportesListar(m.d, { ...F, filter: dado });
       expect(m.llamadas.find((l) => l.que === "listar")!.consulta).toEqual({ filtro: esperado, pagina: null, porPagina: null });
@@ -75,11 +75,13 @@ describe("reports list", () => {
     expect(m.llamadas[0]).toMatchObject({ clave: CLAVE_DE_PERSONA, proyecto: "proj_ejemplo" });
   });
 
-  it("si hay más páginas dice el comando exacto, con el filtro y el repo que se pasaron", async () => {
+  it("si hay más páginas dice el comando exacto, con el filtro, el tamaño de página y el repo que se pasaron", async () => {
     const m = armar({ lista: ok({ ...LISTA_DE_REPORTES, total: 60, pagina: 1, paginas: 3, por_pagina: 25, filtro: "necesitan" }) });
     const r = await reportesListar(m.d, { ...F, filter: "needs-you", repo: "d/r" });
     expect(r.texto).toContain("More: `supcoflow reports list --page 2 --filter needs-you --repo d/r`.");
     expect(r.texto).toContain("page 1 of 3");
+    const conTamano = await reportesListar(armar({ lista: ok({ ...LISTA_DE_REPORTES, total: 25, pagina: 1, paginas: 3, por_pagina: 10 }) }).d, { ...F, perPage: "10" });
+    expect(conTamano.texto).toContain("More: `supcoflow reports list --page 2 --per-page 10`.");
   });
 
   it("sin reportes: lo dice, y el aviso de que el texto se lee en la consola", async () => {

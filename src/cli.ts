@@ -57,7 +57,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       ceiling: flags.ceiling !== null, expectPolicy: flags.expectPolicy !== null,
       agent: flags.agent !== null, fromEnv: flags.fromEnv !== null, provider: flags.provider !== null, option: flags.option !== null,
       dataRetention: flags.dataRetention !== null,
-      filter: flags.filter !== null, page: flags.page !== null, perPage: flags.perPage !== null, delivery: flags.delivery !== null,
+      filter: flags.filter !== null, page: flags.page !== null, perPage: flags.perPage !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);

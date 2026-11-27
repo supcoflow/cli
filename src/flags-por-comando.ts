@@ -46,7 +46,6 @@ export const FLAGS_POR_COMANDO: readonly { flags: readonly string[]; comandos: r
   { flags: ["provider"], comandos: ["agents set-key"], texto: "--provider belongs to `supcoflow agents set-key`." },
   { flags: ["fromEnv"], comandos: ["agents set-key", ...DE_GATE], texto: "--from-env belongs to `supcoflow agents set-key` and `supcoflow gate`." },
   { flags: ["filter", "page", "perPage"], comandos: ["reports list"], texto: "--filter, --page and --per-page belong to `supcoflow reports list`." },
-  { flags: ["delivery"], comandos: ["gate deliver", "gate fail"], texto: "--delivery belongs to `supcoflow gate deliver` and `supcoflow gate fail`." },
   { flags: ["option", "dataRetention"], comandos: ["agents configure"], texto: "--option and --data-retention belong to `supcoflow agents configure`." },
 ];
 

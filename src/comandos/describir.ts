@@ -298,7 +298,7 @@ export const DESCRIPCION: {
       nombre: "reports list",
       resumen: "Lists the repo's project reports (the console's inbox) with their state, for a PERSON signed in (`login`; a read-only key can read too). Each line: id, date, state (`estado`: con_issue, sin_issue, esperando, relevando, sin_run, guardado, arranque_incierto, reclamado_sin_run, esperando_a_tu_agente, tu_agente_no_contesto, el_agente_fallo, publicacion_a_revisar), the issue if any and whether it needs you (`te_necesitan`). It never carries the report's text (it is read in the console); `titulo` is null for a report that came through the agents' gate, which keeps no text. The JSON is short by default { ok, proyecto, repo, filtro, total, pagina, paginas, por_pagina, conteo, reportes: [{ reporte_id, titulo, creado_en, estado, te_necesitan, issue, investigador }] }; `--full` adds `ahora` and, per report, `origen` and the engine's own Spanish `estado_texto`. 404 (a project or report of another team) exits 3, never 403.",
       flags: [
-        "--filter all|needs-you|in-progress|with-issue|saved: which reports (all by default; the engine's ids todos, necesitan, curso, con_issue, guardados work too)",
+        "--filter all|needs-you|in-progress|with-issue|saved: which reports (all by default)",
         "--page n: the page, from 1",
         "--per-page n: reports per page, 1 to 100 (25 by default)",
         "--repo owner/repo: the repo, if it isn't this folder's «origin»",
@@ -370,11 +370,10 @@ export const DESCRIPCION: {
     },
     {
       nombre: "gate deliver",
-      resumen: "The assigned investigator delivers its RESULT: the body of the contract (`agente` with `nombre` and `version`, `intencion`, `decision`, `necesita_persona`, `diagnostico`, `supuestos`, `preguntas_abiertas`, `evidencia`, and optional `confianza`, `usuario`, `entorno`, `costo`) from a file, with its key. Supcoflow applies the data agreement again, reserves the publication and opens the issue ONCE. An investigation has a single delivery (a result or a failure). The delivery id (`ent_…`, header Idempotency-Key) is the same on every retry: with --delivery you choose it; without it, it comes from the file and the report, so repeating the same command with the same file is always the same delivery (safe: never published twice) and another file is another delivery (the engine says the report already has one). Nothing is saved. 202 means publishing (`publicacion: publicando`; look at how it ended with `gate read`), 200 with `repetido: true` means it was already received. After a failure to know whether it arrived (network, 5xx), repeat the same command. Errors say the contract's problem as `field:code`, never the values. Exits 4 no_asignado, reporte_ya_tiene_entrega, tipo_de_clave; 3 archivo_invalido, identidad_incompleta, resultado_invalido, entrega_con_otro_contenido; 1 publicacion_no_disponible.",
+      resumen: "The assigned investigator delivers its RESULT: the body of the contract (`agente` with `nombre` and `version`, `intencion`, `decision`, `necesita_persona`, `diagnostico`, `supuestos`, `preguntas_abiertas`, `evidencia`, and optional `confianza`, `usuario`, `entorno`, `costo`) from a file, with its key. Supcoflow applies the data agreement again, reserves the publication and opens the issue ONCE. An investigation has a single delivery (a result or a failure). The delivery id (`ent_…`, header Idempotency-Key) is the same on every retry: it comes from the type, the report and the file, so repeating the same command with the same file is always the same delivery (safe: never published twice) and another file is another delivery (the engine says the report already has one). Nothing is saved. 202 means publishing (`publicacion: publicando`; look at how it ended with `gate read`), 200 with `repetido: true` means it was already received. After a failure to know whether it arrived (network, 5xx), repeat the same command. Errors say the contract's problem as `field:code`, never the values. Exits 4 no_asignado, reporte_ya_tiene_entrega, tipo_de_clave; 3 archivo_invalido, identidad_incompleta, resultado_invalido, entrega_con_otro_contenido; 1 publicacion_no_disponible.",
       flags: [
         "--id rpt_…: the report",
         "--file path.json: the result, ONE JSON object of up to 256 KB (required)",
-        "--delivery ent_…: the delivery id, to repeat it by hand (optional)",
         "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
         "--dry-run: reads and checks the file and says what it would send, without asking for the key or sending anything",
         "--json: { ok, reporte_id, entrega, huella, publicacion, issue, filtrado: { campos_quitados, lineas_quitadas }, sin_issue, necesita_persona, repetido }",
@@ -388,7 +387,6 @@ export const DESCRIPCION: {
       flags: [
         "--id rpt_…: the report",
         "--file path.json: the failure notice, ONE JSON object (required)",
-        "--delivery ent_…: the delivery id, to repeat it by hand (optional)",
         "--from-env NAME: the NAME of the environment variable that holds the agent's key; by default SUPCOFLOW_AGENT_KEY, else asked without echo",
         "--dry-run: reads and checks the file and says what it would send, without asking for the key or sending anything",
         "--json: { ok, reporte_id, entrega, huella, estado: el_agente_fallo, te_necesitan, repetido }",

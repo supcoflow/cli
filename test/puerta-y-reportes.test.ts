@@ -374,16 +374,11 @@ describe("gate: leer, pedir el pase, entregar y avisar el fallo", () => {
       expect(ultima(c)).toMatchObject({ ok: false, error: "reporte_ya_tiene_entrega", entrega: "ent_ejemplo0001" });
     });
 
-    it("--delivery elige el id (y el mismo id con otro contenido es entrega_con_otro_contenido, con las huellas)", async () => {
-      const a = await comoAgente(["gate", "deliver", "--id", "rpt_ejemplo0001", "--file", archivo("a.json", RESULTADO), "--delivery", "ent_ejemplo0001", "--json"]);
-      expect(a.codigo).toBe(0);
-      expect(vistos[0]!.cabeceras["idempotency-key"]).toBe("ent_ejemplo0001");
-      const b = await comoAgente(["gate", "deliver", "--id", "rpt_ejemplo0001", "--file", archivo("b.json", { ...RESULTADO, intencion: "pedido_de_mejora" }), "--delivery", "ent_ejemplo0001", "--json"]);
-      expect(b.codigo).toBe(3);
-      expect(ultima(b)).toMatchObject({ error: "entrega_con_otro_contenido", huella_guardada: HUELLA_DEL_RESULTADO, huella_recibida: HUELLA_DEL_FALLO });
-      const mala = await comoAgente(["gate", "deliver", "--id", "rpt_ejemplo0001", "--file", archivo("c.json", RESULTADO), "--delivery", "no-es-un-id", "--json"]);
-      expect(mala.codigo).toBe(3);
-      expect(ultima(mala).error).toBe("entrega_invalida");
+    it("no hay --delivery: el id de la entrega sale sólo del archivo y el reporte", async () => {
+      const c = await comoAgente(["gate", "deliver", "--id", "rpt_ejemplo0001", "--file", archivo("a.json", RESULTADO), "--delivery", "ent_ejemplo0001", "--json"]);
+      expect(c.codigo).toBe(3);
+      expect(ultima(c).error).toBe("flag_desconocido");
+      expect(vistos).toHaveLength(0);
     });
 
     it("un 422 del motor se dice con el campo y el código, nunca con el valor", async () => {

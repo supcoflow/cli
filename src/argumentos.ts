@@ -22,9 +22,9 @@ export type Flags = {
   ceiling: string | null; expectPolicy: string | null;
   // Tanda 9 (`agents`). NO hay un flag para la clave de IA: entra sin eco por la terminal o de la variable que `fromEnv` NOMBRA.
   agent: string | null; fromEnv: string | null; provider: string | null; option: string | null; dataRetention: string | null;
-  // Etapa 2c (`reports`, `gate`): el filtro y la página de la bandeja, y el id de entrega (`ent_…`) que se repite en los reintentos de `gate deliver|fail`.
+  // Etapa 2c (`reports`, `gate`): el filtro y la página de la bandeja.
   // La clave de un agente tampoco tiene flag: entra por `--from-env NOMBRE`, por `SUPCOFLOW_AGENT_KEY` o sin eco.
-  filter: string | null; page: string | null; perPage: string | null; delivery: string | null;
+  filter: string | null; page: string | null; perPage: string | null;
 };
 
 export const COMANDOS_COMPUESTOS = [
@@ -44,7 +44,7 @@ const FLAGS_CON_VALOR = [
   "repo", "install", "test", "site", "title", "greeting", "file", "allow", "mode", "name", "save-to", "id", "source", "skill", "app",
   "message", "test-id", "ceiling", "expect-policy", "shape", "base",
   "agent", "from-env", "provider", "option", "data-retention",
-  "filter", "page", "per-page", "delivery",
+  "filter", "page", "per-page",
 ] as const;
 // Los que sí se repiten (cada comando decide cuántos acepta: `cli.ts`, `archivosDeMas`); ninguno va vacío.
 const FLAGS_REPETIBLES = new Set<string>(["file"]);
@@ -164,7 +164,6 @@ export function leerArgumentos(argv: string[]): { comando: string | null; flags:
       filter: un("filter"),
       page: un("page"),
       perPage: un("per-page"),
-      delivery: un("delivery"),
       theme: tema,
     },
   };

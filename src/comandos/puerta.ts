@@ -43,7 +43,7 @@ export type DepsDePuerta = {
   avisar: (s: string) => void;
 };
 
-type FlagsDePuerta = Pick<Flags, "dryRun" | "full" | "id" | "file" | "delivery" | "fromEnv" | "json">;
+type FlagsDePuerta = Pick<Flags, "dryRun" | "full" | "id" | "file" | "fromEnv" | "json">;
 
 /** La variable que se mira cuando no se nombra otra. */
 export const VARIABLE_DE_LA_CLAVE = "SUPCOFLOW_AGENT_KEY";
@@ -356,18 +356,12 @@ function elCuerpo(d: DepsDePuerta, flags: Pick<FlagsDePuerta, "file">, que: stri
 }
 
 /**
- * El id de entrega (`ent_…`) lo elige el agente y lo repite en todos sus reintentos. Sin `--delivery` sale del contenido: el mismo archivo para el mismo
- * reporte es siempre la misma entrega (un reintento nunca publica dos veces), y otro archivo es otra entrega (el motor dirá que ya hay una). Nada se guarda.
+ * El id de entrega (`ent_…`) se repite en todos los reintentos porque sale del contenido: el mismo archivo para el mismo reporte es siempre la misma
+ * entrega (un reintento nunca publica dos veces), y otro archivo es otra entrega (el motor dirá que ya hay una). Nada se guarda.
  */
-function elIdDeEntrega(flags: Pick<FlagsDePuerta, "delivery">, tipo: "resultado" | "fallo", reporteId: string, bytes: Uint8Array): { ok: true; id: string } | { ok: false; resultado: Resultado } {
-  if (flags.delivery !== null) {
-    if (!/^ent_[A-Za-z0-9_-]{1,100}$/.test(flags.delivery)) {
-      return { ok: false, resultado: fallo(SALIDA.entradaInvalida, "entrega_invalida", "--delivery is the delivery id, and it has the form ent_… (letters, digits, `_` and `-`).") };
-    }
-    return { ok: true, id: flags.delivery };
-  }
+function elIdDeEntrega(tipo: "resultado" | "fallo", reporteId: string, bytes: Uint8Array): string {
   const h = createHash("sha256").update(`${tipo}\n${reporteId}\n`).update(bytes).digest("hex");
-  return { ok: true, id: `ent_${h.slice(0, 32)}` };
+  return `ent_${h.slice(0, 32)}`;
 }
 
 const COMO_REPETIR = (id: string, reporteId: string) =>
@@ -383,31 +377,30 @@ async function entregar(d: DepsDePuerta, flags: FlagsDePuerta, tipo: "resultado"
   const que = tipo === "resultado" ? "result" : "failure notice";
   const cuerpo = elCuerpo(d, flags, que);
   if (!cuerpo.ok) return cuerpo.resultado;
-  const e = elIdDeEntrega(flags, tipo, i.id, cuerpo.bytes);
-  if (!e.ok) return e.resultado;
-  const ruta = `PUT /api/v1/reportes/${encodeURIComponent(i.id)}/${tipo} with Idempotency-Key ${e.id} (${cuerpo.bytes.length} bytes)`;
+  const entrega = elIdDeEntrega(tipo, i.id, cuerpo.bytes);
+  const ruta = `PUT /api/v1/reportes/${encodeURIComponent(i.id)}/${tipo} with Idempotency-Key ${entrega} (${cuerpo.bytes.length} bytes)`;
   if (flags.dryRun) {
     const r = dryRun(`${ruta}, with the agent's key (nothing is asked or sent)`);
-    return { ...r, json: { ...r.json, reporte_id: i.id, entrega: e.id } };
+    return { ...r, json: { ...r.json, reporte_id: i.id, entrega } };
   }
   return conLaClave(d, flags, async (clave) => {
     const pedir = tipo === "resultado" ? d.entregar : d.avisarFallo;
-    const comoRepetir = COMO_REPETIR(e.id, i.id);
-    const pedido = await alMotor(() => pedir(d.api, clave, i.id, e.id, cuerpo.texto), comoRepetir);
-    if (!pedido.ok) return entregaEn(pedido.resultado, e.id);
+    const comoRepetir = COMO_REPETIR(entrega, i.id);
+    const pedido = await alMotor(() => pedir(d.api, clave, i.id, entrega, cuerpo.texto), comoRepetir);
+    if (!pedido.ok) return entregaEn(pedido.resultado, entrega);
     const r = pedido.r;
-    if (r.status !== 200 && r.status !== 202) return entregaEn(errorDelMotor(r, TABLA, "agente", comoRepetir), e.id);
+    if (r.status !== 200 && r.status !== 202) return entregaEn(errorDelMotor(r, TABLA, "agente", comoRepetir), entrega);
     const c = r.cuerpo;
     const recibida = idDelMotor(c.entrega);
     const huella = huellaSegura(c.huella);
-    if (recibida !== e.id || huella === null) return entregaEn(inesperada(`the ${que}`), e.id);
+    if (recibida !== entrega || huella === null) return entregaEn(inesperada(`the ${que}`), entrega);
     const repetido = c.repetido === true;
     const issue = objeto(c.issue);
     const filtrado = objeto(c.filtrado);
     const sinIssue = objeto(c.sin_issue);
     const campos = Array.isArray(filtrado?.campos_quitados) ? filtrado.campos_quitados.filter((x): x is string => typeof x === "string").map((x) => limpio(x).slice(0, 120)).slice(0, 50) : [];
     const datos = {
-      reporte_id: i.id, entrega: e.id, huella,
+      reporte_id: i.id, entrega, huella,
       ...(idSeguro(c.publicacion, 32) === null ? {} : { publicacion: idSeguro(c.publicacion, 32) }),
       ...(idSeguro(c.estado, 32) === null ? {} : { estado: idSeguro(c.estado, 32) }),
       ...(typeof c.te_necesitan === "boolean" ? { te_necesitan: c.te_necesitan } : {}),
@@ -420,11 +413,11 @@ async function entregar(d: DepsDePuerta, flags: FlagsDePuerta, tipo: "resultado"
     const sigue = `Look at how it ended with \`supcoflow gate read --id ${i.id}\`.`;
     const lineas: string[] = [];
     if (tipo === "fallo") {
-      lineas.push(`${repetido ? "That failure notice was already recorded" : "Recorded the failure notice"} (delivery ${e.id}): the report is with a person now, and this investigation takes no other delivery.`);
+      lineas.push(`${repetido ? "That failure notice was already recorded" : "Recorded the failure notice"} (delivery ${entrega}): the report is with a person now, and this investigation takes no other delivery.`);
     } else if (repetido) {
-      lineas.push(`That delivery was already received (${e.id}, same content): nothing new was published.${issue === null ? "" : ` Issue #${numeroEntero(issue.numero) ?? "?"}.`}`);
+      lineas.push(`That delivery was already received (${entrega}, same content): nothing new was published.${issue === null ? "" : ` Issue #${numeroEntero(issue.numero) ?? "?"}.`}`);
     } else {
-      lineas.push(`Delivered ${e.id} for ${i.id}: ${c.publicacion === "publicado" ? "published" : "publishing the issue"}.`);
+      lineas.push(`Delivered ${entrega} for ${i.id}: ${c.publicacion === "publicado" ? "published" : "publishing the issue"}.`);
     }
     if (campos.length > 0) lineas.push(`The project's data agreement removed: ${campos.join(", ")}${filtrado !== null && numeroEntero(filtrado.lineas_quitadas) ? ` (and ${numeroEntero(filtrado.lineas_quitadas)} line(s))` : ""}.`);
     if (sinIssue !== null && sinIssue.issue_sale_igual === true) lineas.push("«No issue» was recorded, but until that is turned on the issue is opened anyway.");

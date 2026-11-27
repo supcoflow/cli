@@ -247,7 +247,7 @@ exits 4, each with a fixed phrase, **one request**, and no other credential is t
 
 ### Delivering safely
 
-`gate deliver` and `gate fail` send the file as it is, with an `Idempotency-Key` that is the **delivery id** (`ent_…`): the same on every retry. Without `--delivery` it
+`gate deliver` and `gate fail` send the file as it is, with an `Idempotency-Key` that is the **delivery id** (`ent_…`): the same on every retry. It
 comes from the report and the file, so repeating the **same command** with the **same file** is always the same delivery (the engine answers 200 `repetido: true`
 and never publishes twice) and a different file is a different delivery (the engine says the report already has one: an investigation has a single delivery, a result or a
 failure). If a network error or a 5xx leaves you not knowing whether it arrived, repeat the same command or look with `gate read`. If the publication is `esperando_reenvio`, send

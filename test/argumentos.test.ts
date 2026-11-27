@@ -7,7 +7,7 @@ const VACIOS = {
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
   skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
   agent: null, fromEnv: null, provider: null, option: null, dataRetention: null, base: null, strict: false,
-  filter: null, page: null, perPage: null, delivery: null,
+  filter: null, page: null, perPage: null,
 };
 
 it("lee comando y flags", () => {
@@ -241,15 +241,15 @@ describe("etapa 2c: los comandos y los flags nuevos", () => {
     expect(leerArgumentos(["agents", "show"]).comando).toBe("agents show");
   });
 
-  it("los valores de --filter, --page, --per-page, --delivery, --id y --file llegan tal cual", () => {
+  it("los valores de --filter, --page, --per-page, --id y --file llegan tal cual", () => {
     const f = leerArgumentos(["reports", "list", "--filter", "needs-you", "--page", "2", "--per-page", "50", "--full", "--json"]).flags;
     expect(f).toMatchObject({ filter: "needs-you", page: "2", perPage: "50", full: true, json: true });
-    const g = leerArgumentos(["gate", "deliver", "--id", "rpt_x", "--file", "r.json", "--delivery", "ent_1", "--from-env", "MI_AGENTE"]).flags;
-    expect(g).toMatchObject({ id: "rpt_x", file: "r.json", delivery: "ent_1", fromEnv: "MI_AGENTE" });
+    const g = leerArgumentos(["gate", "deliver", "--id", "rpt_x", "--file", "r.json", "--from-env", "MI_AGENTE"]).flags;
+    expect(g).toMatchObject({ id: "rpt_x", file: "r.json", fromEnv: "MI_AGENTE" });
   });
 
   it("ninguno se repite ni va vacío (el último ganaría en silencio)", () => {
-    for (const flag of ["--filter", "--page", "--per-page", "--delivery"]) {
+    for (const flag of ["--filter", "--page", "--per-page"]) {
       expect(() => leerArgumentos(["reports", "list", flag, "1", flag, "2"]), flag).toThrowError(expect.objectContaining({ codigo: 3, error: "argumentos_invalidos" }));
       expect(() => leerArgumentos(["reports", "list", flag, ""]), flag).toThrowError(expect.objectContaining({ codigo: 3 }));
     }

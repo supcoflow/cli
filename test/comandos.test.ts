@@ -511,13 +511,11 @@ describe("etapa 2c: flags de `reports` y de `gate`", () => {
     for (const f of ["expectPolicy", "message", "testId"]) expect(sin("reports investigate", f), f).toMatch(/belong to `supcoflow test`/);
   });
 
-  it("--filter, --page y --per-page son de `reports list`; --delivery de `gate deliver|fail`; --id y --file donde corresponde", () => {
+  it("--filter, --page y --per-page son de `reports list`; --id y --file donde corresponde", () => {
     for (const f of ["filter", "page", "perPage"]) {
       expect(sin("reports list", f), f).toBeNull();
       for (const c of ["reports show", "reports investigate", "gate read", "agents show", "keys list"]) expect(sin(c, f), `${c} ${f}`).toMatch(/belong to `supcoflow reports list`/);
     }
-    for (const c of ["gate deliver", "gate fail"]) expect(sin(c, "delivery"), c).toBeNull();
-    for (const c of ["gate read", "gate pass", "gate status", "reports show"]) expect(sin(c, "delivery"), c).toMatch(/--delivery belongs to `supcoflow gate deliver` and `supcoflow gate fail`/);
     for (const c of ["reports show", "reports investigate", "gate read", "gate pass", "gate deliver", "gate fail", "keys revoke"]) expect(sin(c, "id"), c).toBeNull();
     for (const c of ["reports list", "gate status", "keys list"]) expect(sin(c, "id"), c).toMatch(/--id belongs to/);
     for (const c of ["gate deliver", "gate fail", "chat logo", "install record"]) expect(sin(c, "file"), c).toBeNull();

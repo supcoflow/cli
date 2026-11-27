@@ -49,7 +49,7 @@ function armar(o: {
   return { d, llamadas, preguntas, stderr, archivos };
 }
 
-const F = { json: false, dryRun: false, full: false, id: "rpt_ejemplo0001" as string | null, file: "result.json" as string | null, delivery: null as string | null, fromEnv: null as string | null };
+const F = { json: false, dryRun: false, full: false, id: "rpt_ejemplo0001" as string | null, file: "result.json" as string | null, fromEnv: null as string | null };
 const ok = (cuerpo: Record<string, unknown>, status = 200): Respuesta => ({ status, cuerpo });
 
 /** TODO lo que podría leer una persona o un asistente de una corrida. */
@@ -320,17 +320,6 @@ describe("gate deliver y gate fail", () => {
     ids.add(f.llamadas[0]!.entrega!);
     // la entrega de arriba, otro reporte, otro contenido y el mismo archivo como fallo: cuatro ids distintos.
     expect(ids.size).toBe(4);
-  });
-
-  it("un id de entrega a mano se manda tal cual; uno mal formado no se manda", async () => {
-    const m = armar({ respuesta: ok({ entrega: "ent_mio", huella: HUELLA_DEL_RESULTADO, publicacion: "publicando" }, 202) });
-    expect((await puertaEntregar(m.d, { ...F, delivery: "ent_mio" })).codigo).toBe(SALIDA.ok);
-    expect(m.llamadas[0]!.entrega).toBe("ent_mio");
-    const mal = armar();
-    const r = await puertaEntregar(mal.d, { ...F, delivery: "ent_con espacio" });
-    expect(r.json.error).toBe("entrega_invalida");
-    expect(mal.llamadas).toEqual([]);
-    expect(r.texto).not.toContain("con espacio");
   });
 
   it("el archivo se lee con tope de 256 KB y por el lector con defensas; lo que no se puede leer no se manda", async () => {

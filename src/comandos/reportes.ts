@@ -48,13 +48,9 @@ const ESTADO_EN_TEXTO: ReadonlyMap<string, string> = new Map([
 ]);
 const estadoEnTexto = (e: string | null): string => (e === null ? "unknown" : (ESTADO_EN_TEXTO.get(e) ?? e));
 
-// Los filtros de la bandeja: el nombre en inglés y el id del motor valen los dos.
+// Los filtros de la bandeja: el nombre en inglés y el id del motor que le corresponde.
 const FILTROS: ReadonlyMap<string, string> = new Map([
-  ["all", "todos"], ["todos", "todos"],
-  ["needs-you", "necesitan"], ["necesitan", "necesitan"],
-  ["in-progress", "curso"], ["curso", "curso"],
-  ["with-issue", "con_issue"], ["con_issue", "con_issue"],
-  ["saved", "guardados"], ["guardados", "guardados"],
+  ["all", "todos"], ["needs-you", "necesitan"], ["in-progress", "curso"], ["with-issue", "con_issue"], ["saved", "guardados"],
 ]);
 const FILTRO_EN_TEXTO: Record<string, string> = { todos: "all", necesitan: "needs-you", curso: "in-progress", con_issue: "with-issue", guardados: "saved" };
 
@@ -183,7 +179,7 @@ export async function reportesListar(d: DepsDeReportes, flags: FlagsDeReportes):
   const texto = [
     `Reports of ${p.proyecto.repo} (filter ${filtroEnTexto}): ${total} in total, page ${paginaDevuelta} of ${Math.max(paginas, 1)}.`,
     ...(lineas.length === 0 ? ["  (none)"] : lineas),
-    ...(hayMas ? [`More: \`supcoflow reports list --page ${paginaDevuelta + 1}${filtro === null ? "" : ` --filter ${FILTRO_EN_TEXTO[filtro] ?? filtro}`}${conRepo(flags.repo)}\`.`] : []),
+    ...(hayMas ? [`More: \`supcoflow reports list --page ${paginaDevuelta + 1}${flags.filter === null ? "" : ` --filter ${flags.filter}`}${porPagina === null ? "" : ` --per-page ${porPagina}`}${conRepo(flags.repo)}\`.`] : []),
     "The text of a report isn't here: it is read in the console. See one's journey with `supcoflow reports show --id rpt_…`.",
   ].join("\n");
   const json: Record<string, unknown> = {
