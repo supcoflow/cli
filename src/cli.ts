@@ -17,7 +17,9 @@ import { loginInteractivo, loginStart, loginWait } from "./comandos/login.ts";
 import { comandoLogout } from "./comandos/logout.ts";
 import { diagnosticar, probar } from "./comandos/probar.ts";
 import { proyectoCrear, proyectoVer } from "./comandos/proyecto.ts";
+import { puertaEntregar, puertaEstado, puertaFallo, puertaLeer, puertaPase } from "./comandos/puerta.ts";
 import { comandoQuienSoy } from "./comandos/quien-soy.ts";
+import { reportesInvestigar, reportesListar, reportesVer } from "./comandos/reportes.ts";
 import { repoConectarInteractivo, repoConectarStart, repoConectarWait } from "./comandos/repo-conectar.ts";
 import { widget } from "./comandos/widget.ts";
 import { emitir, FalloDeLaTerminal, resultadoDeFallo, SALIDA, type Resultado } from "./contrato.ts";
@@ -55,6 +57,7 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
       ceiling: flags.ceiling !== null, expectPolicy: flags.expectPolicy !== null,
       agent: flags.agent !== null, fromEnv: flags.fromEnv !== null, provider: flags.provider !== null, option: flags.option !== null,
       dataRetention: flags.dataRetention !== null,
+      filter: flags.filter !== null, page: flags.page !== null, perPage: flags.perPage !== null, delivery: flags.delivery !== null,
     };
     const noAplica = flagQueNoAplica(comando, Object.keys(presentes).filter((k) => presentes[k]));
     if (noAplica !== null) throw invalida("flag_no_aplica", noAplica);
@@ -152,6 +155,22 @@ async function correr(argv: string[]): Promise<{ r: Resultado; json: boolean }> 
         return { r: await agentesQuitar(e.agentes, flags), json };
       case "agents configure":
         return { r: await agentesConfigurar(e.agentes, flags), json };
+      case "reports list":
+        return { r: await reportesListar(e.reportes, flags), json };
+      case "reports show":
+        return { r: await reportesVer(e.reportes, flags), json };
+      case "reports investigate":
+        return { r: await reportesInvestigar(e.reportes, flags), json };
+      case "gate status":
+        return { r: await puertaEstado(e.puerta, flags), json };
+      case "gate read":
+        return { r: await puertaLeer(e.puerta, flags), json };
+      case "gate pass":
+        return { r: await puertaPase(e.puerta, flags), json };
+      case "gate deliver":
+        return { r: await puertaEntregar(e.puerta, flags), json };
+      case "gate fail":
+        return { r: await puertaFallo(e.puerta, flags), json };
       case "widget":
         return { r: await widget(e.widget, flags), json };
       case "install record":

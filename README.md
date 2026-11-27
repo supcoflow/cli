@@ -4,7 +4,7 @@ The [Supcoflow](https://app.supcoflow.dev) terminal: sign in and manage the supp
 or from a code assistant that runs the commands for you.
 
 It signs you in and out, shows which account you are using, connects the repo with the GitHub App, creates
-its project, configures the chat, puts it in the app, and checks that a problem reaches an issue.
+its project, configures the chat, puts it in the app, and checks that a problem reaches an issue. (Unreleased: it also reads the project's reports and, for an agent with its own key, reads a report, asks for the pass and delivers its result.)
 
 ## Install
 
@@ -41,6 +41,8 @@ From 0.12.0, `diagnose --json` and `test --json` (without `--authorize-spend`, a
 | `supcoflow widget` | What to paste into the app to get the chat (see «Put the chat in the app»). |
 | `supcoflow install record --skill 0.7.1 --file app/_supcoflow/support-chat.tsx` | Records in `.supcoflow/instalacion.json` which versions the chat was installed with, what was installed (the widget or the app's own interface), which files it lives in and which presentation contract it follows. |
 | `supcoflow agents show\|set-key\|check\|remove\|configure` | The AI account of each agent (the chat and the triage agent): see its state, set or replace the key, check it again, remove it, and choose the chat's model (see «The AI accounts of the agents»). |
+| `supcoflow reports list\|show\|investigate` | The project's reports as a person sees them in the console: the list with each state, one report's journey, and asking for its investigation (it spends). Unreleased (see «Reports and the agents' gate»). |
+| `supcoflow gate status\|read\|pass\|deliver\|fail` | What an AGENT does with its own key (`scf_ag_…`): see its state, read a report assigned to it, ask for the pass, deliver the result or say it couldn't. Unreleased (see «Reports and the agents' gate»). |
 | `supcoflow diagnose` | Free: how far the installation is (N of 7, or N of 8 when the engine also counts the chat's AI account) and whether a test would go in (including whether this machine can save the test request and the triage agent's AI account). |
 | `supcoflow test` | The end-to-end test (see «Test the installation»). |
 | `supcoflow describe --json` | The whole contract (commands, flags, key capabilities, codes) in one line of JSON. `supcoflow describe <command> --json` (for example `describe diagnose` or `describe repo connect`) describes only that command and the exit codes it uses: much shorter. |
@@ -179,6 +181,80 @@ supcoflow agents configure --agent chat --option standard --data-retention allow
 `diagnose` counts the chat's account as one more point of the installation («N of 8», `ia_del_chat`: without it the chat doesn't show
 on your site) and shows the triage agent's apart, with the test (`ia_del_triaje`: without it a test doesn't run). The engine only reports them once AI accounts are
 required: before that, `diagnose` says «N of 7» as always. `chat on` and `test` exit 4 `falta_ia_del_chat` / `falta_ia_del_triaje` when the account is missing.
+
+## Reports and the agents' gate
+
+**Unreleased: not in the published 0.12.0.** Two halves of the same door, with two different keys that never mix:
+
+- **`reports`** is for a **person**: the reports of the repo's project, as the console's inbox shows them. It uses the key `supcoflow login`
+  leaves (or a read-only key, to read).
+- **`gate`** is for an **agent** (a code assistant or a bot connected to the project as its investigator): it uses the agent's own key,
+  `scf_ag_…`, which is created, seen once and revoked **in the console** (not from the terminal). The project comes from the key, so
+  `gate` has no `--repo`.
+
+(`gate` and not `agents`: `supcoflow agents` is the AI account of the chat and the triage agent, a different thing.)
+
+| Command | Key | What it does |
+|---|---|---|
+| `supcoflow reports list [--filter all\|needs-you\|in-progress\|with-issue\|saved] [--page n] [--per-page n]` | person | The reports, newest first, with their state (`issue created`, `waiting for your agent`, `your agent didn't answer`, `your agent reported a failure`…) and whether each **needs you**. It never carries a report's text: the engine doesn't send it (it is read in the console), and `titulo` is `null` for a report that came through the agents' gate, which keeps no text. |
+| `supcoflow reports show --id rpt_…` | person | One report's journey: who investigates it, the events with their time, the issue, what comes next and the console link. `--full` adds the rounds of notices to a connected agent (with each attempt's answer, never its address) and the run. |
+| `supcoflow reports investigate --id rpt_…` | person | Asks for the investigation, or, for a report a connected agent investigates and didn't answer in 2 hours, sends it the notice again. **It spends**: see below. |
+| `supcoflow gate status` | agent | The agent's own state: whether it is active and is the project's investigator, who connected it, its last notice (when, attempts, the status it answered) and how many assigned reports it hasn't delivered. |
+| `supcoflow gate read --id rpt_…` | agent | A report assigned to it: its state and how it ended (decision, intention, the publication and the issue). It has no text: the engine keeps the journey, not the content. |
+| `supcoflow gate pass --id rpt_…` | agent | The **pass**: five minutes, one report, read-only, to read the content in the client's store. It is the one thing the terminal prints on purpose; send it in the `Authorization: Bearer <pass>` header to `contenido.url`, never in the URL. It comes with the project's data agreement, to apply **before** giving anything to the model. |
+| `supcoflow gate deliver --id rpt_… --file result.json` | agent | Delivers the result (the contract's body, from a file): Supcoflow applies the agreement again and opens the issue **once**. |
+| `supcoflow gate fail --id rpt_… --file failure.json` | agent | Says it couldn't work the report (`{ agente, motivo, costo? }`, a closed list of reasons, no free text): the report goes to «needs you» right away instead of waiting the 2 hours. |
+
+```bash
+supcoflow reports list --filter needs-you --json
+supcoflow reports show --id rpt_0123456789abcdef
+supcoflow reports investigate --id rpt_0123456789abcdef --json                     # sends nothing: shows the ceiling and the command to authorize it
+supcoflow reports investigate --id rpt_0123456789abcdef --authorize-spend --ceiling 2 --json
+
+export SUPCOFLOW_AGENT_KEY=…                                                      # the agent's key (see below)
+supcoflow gate status --json
+supcoflow gate read --id rpt_0123456789abcdef --json
+supcoflow gate pass --id rpt_0123456789abcdef --json
+supcoflow gate deliver --id rpt_0123456789abcdef --file result.json --json
+supcoflow gate fail --id rpt_0123456789abcdef --file failure.json --json
+```
+
+`--json` is short by default; `--full` (on `reports list|show` and `gate read`) adds the rest. `supcoflow describe gate deliver --json` gives
+the exact flags and exit codes of one command.
+
+**`reports investigate` spends**, so it works like `test`: without `--authorize-spend` it sends **nothing** and exits 4
+`falta_autorizacion` with the ceiling and the exact command to run once a person authorizes it; with `--authorize-spend` and `--ceiling`
+(the number it showed) it asks, but only if the ceiling is still that number (otherwise exit 4 `techo_distinto`). It reads the report's
+journey first, and if there is nothing to ask for from here it exits 4 `nada_que_pedir` without spending. The rule «one investigator per
+project» is the engine's: a report a connected agent already worked, delivered or failed, or an older report in a project that now has a
+connected investigator, are 409 and exit 4 with a fixed phrase. **Not here yet:** «open anyway» (opening the issue without investigating) and «change
+the investigator»: they don't exist in the engine yet and will be their own commands.
+
+### The agent's key
+
+It works like the AI key of `agents set-key`: it never goes as an argument (there is no `--key`: it would be `flag_desconocido`, and the value isn't
+repeated), never through stdin, and it is **not saved anywhere**: not the keychain, not the credentials file, not a log. It is read from, in this order:
+
+1. the environment variable that **`--from-env NAME`** names (the **name**, never the key: a key passed there exits 3 `clave_como_nombre` without being repeated, and you should treat it as exposed and revoke it);
+2. **`SUPCOFLOW_AGENT_KEY`**;
+3. an interactive terminal, typed **without echo** (nothing you type or paste appears). Not with `--json`: like every command, with `--json` it asks nothing (the one exception is `agents set-key`).
+
+Without any of them (an assistant with no terminal) it exits 2 `sin_clave_de_agente` and asks for nothing. It is **not** the key `login` leaves, and the two never
+stand in for each other: what looks like a person's key exits 3 `es_una_clave_de_persona`, and `reports` never reads `SUPCOFLOW_AGENT_KEY`. It travels only in the
+`Authorization` header of the one request, and it doesn't appear on the screen, in `--json`, on stderr or in an error (anything shaped like a key is covered, even if
+the engine repeated it). A **401** (the key is revoked or invalid) exits 2, and a **403** (that key can't do that: a chat key delivering, a person's key at the gate)
+exits 4, each with a fixed phrase, **one request**, and no other credential is tried.
+
+### Delivering safely
+
+`gate deliver` and `gate fail` send the file as it is, with an `Idempotency-Key` that is the **delivery id** (`ent_…`): the same on every retry. Without `--delivery` it
+comes from the report and the file, so repeating the **same command** with the **same file** is always the same delivery (the engine answers 200 `repetido: true`
+and never publishes twice) and a different file is a different delivery (the engine says the report already has one: an investigation has a single delivery, a result or a
+failure). If a network error or a 5xx leaves you not knowing whether it arrived, repeat the same command or look with `gate read`. If the publication is `esperando_reenvio`, send
+**exactly the same file** again. Engine errors say the contract's problem as `field:code` (`diagnostico.titulo:too_big`), never the values.
+
+**Pending (not in the terminal):** registering an agent and its store address (`agentes_conectados.almacen_url`) is done in the console, and creating or revoking its keys too (the
+console shows the key once). There is no route for it in the engine yet. A command to **list** the connected agents will come with a name that doesn't clash with `agents`.
 
 ## The guide
 
@@ -498,7 +574,7 @@ Made to be read by a program, not only by a person:
   and the code are shown as always. With `--json`, the `--start` result adds `navegador_abierto: true|false`; every
   other field stays.
 - **`--dry-run`** wherever it can be simulated (`login`, `login --start`, `logout`, `repo connect --start`,
-  `project create`, `guide check`, `guide publish`, `guide use`, `install record`, `test`; `guide stale` only reads, so it has none). `login --wait --dry-run`
+  `project create`, `guide check`, `guide publish`, `guide use`, `install record`, `test`, `reports investigate`, `gate pass`, `gate deliver`, `gate fail`; `guide stale` only reads, so it has none). `login --wait --dry-run`
   exits 3: polling consumes the code and there is no way to simulate it.
 
 | Code | It means |
@@ -521,6 +597,7 @@ Made to be read by a program, not only by a person:
   the only things with an exception: see «Test the installation».)
 - **`SUPCOFLOW_TOKEN`** takes priority over what is saved: it is for CI and the cloud.
 - The key never appears in a log or in a `--json` output.
+- An **agent's key** (`scf_ag_…`, for `gate`) is not kept here: it comes from the environment or is typed without echo each time (see «Reports and the agents' gate»).
 - `project create` keeps its idempotency key (it isn't a secret: it only avoids creating twice if the answer is lost)
   in `idempotencia.json`, next to the credentials and with the same permissions. Inside a repo it is saved only if git
   ignores it and doesn't track it; otherwise the terminal says so and goes on without saving it.

@@ -12,6 +12,7 @@ import {
   buscarProyecto, canjear, configurar, leerDiagnostico, leerPrueba, leerWidget, pedirPrueba, crearConexion, crearProyecto, elegirOrigen, esClaveDeConsultaDelProyecto, leerCatalogo, leerConfiguracion, leerGuia, leerProyecto,
   listarClaves, pedirCodigo, quienSoy, revocarPropia, subirLogo, ultimaConexion, urlDeLaApi, publicarGuia, revisarGuia, leerVersionesDeLaGuia, type Yo,
   configurarElChat, leerCuentasDeIa, ponerCuentaDeIa, quitarCuentaDeIa, validarCuentaDeIa,
+  listarReportes, leerElRecorrido, pedirLaInvestigacion, leerElEstadoDelAgente, leerElReporteDeLaPuerta, pedirElPase, entregarElResultado, avisarElFallo,
 } from "./api.ts";
 import { entradaOculta } from "./clave-sin-eco.ts";
 import type { DepsDeAgentes } from "./comandos/agentes.ts";
@@ -27,6 +28,8 @@ import type { DepsDeCatalogo } from "./comandos/datos-y-politica.ts";
 import type { DepsDeLogin } from "./comandos/login.ts";
 import type { DepsDePrueba } from "./comandos/probar.ts";
 import type { DepsDeProyecto } from "./comandos/proyecto.ts";
+import type { DepsDePuerta } from "./comandos/puerta.ts";
+import type { DepsDeReportes } from "./comandos/reportes.ts";
 import type { DepsDeConexion } from "./comandos/repo-conectar.ts";
 import { almacenDeArchivo, type FsMinimo } from "./guardado/archivo.ts";
 import { crearGuardado, type Almacen, type Guardado } from "./guardado/index.ts";
@@ -507,6 +510,8 @@ export type Entorno = {
   stale: DepsDeStale;
   claves: DepsDeClaves;
   agentes: DepsDeAgentes;
+  reportes: DepsDeReportes;
+  puerta: DepsDePuerta;
   widget: DepsDeWidget;
   instalacion: DepsDeInstalacion;
   prueba: DepsDePrueba;
@@ -639,6 +644,25 @@ export function entornoReal(env: Record<string, string | undefined> = process.en
       validarCuenta: (a, clave, id, agente) => validarCuentaDeIa(a, clave, id, agente, fetch),
       quitarCuenta: (a, clave, id, agente) => quitarCuentaDeIa(a, clave, id, agente, fetch),
       configurarChat: (a, clave, id, cuerpo) => configurarElChat(a, clave, id, cuerpo, fetch),
+    },
+    // Etapa 2c. `reportes`: la bandeja vista por una persona, con la clave de `login`. `puerta`: lo que hace un agente con la SUYA, que viene del entorno o sin eco y no pasa por el guardado.
+    reportes: {
+      ...configurarEnElMotor,
+      listar: (a, clave, id, consulta) => listarReportes(a, clave, id, consulta, fetch),
+      recorrido: (a, clave, id, reporteId) => leerElRecorrido(a, clave, id, reporteId, fetch),
+      investigar: (a, clave, id, reporteId) => pedirLaInvestigacion(a, clave, id, reporteId, fetch),
+      leerDiagnostico: (a, clave, id) => leerDiagnostico(a, clave, id, fetch),
+    },
+    puerta: {
+      api, env, avisar,
+      esTty: process.stdin.isTTY === true && process.stdout.isTTY === true && process.stderr.isTTY === true,
+      leerClaveOculta: leerClaveSinEco,
+      leerArchivoChico,
+      estado: (a, clave) => leerElEstadoDelAgente(a, clave, fetch),
+      leer: (a, clave, id) => leerElReporteDeLaPuerta(a, clave, id, fetch),
+      pase: (a, clave, id) => pedirElPase(a, clave, id, fetch),
+      entregar: (a, clave, id, entrega, cuerpo) => entregarElResultado(a, clave, id, entrega, cuerpo, fetch),
+      avisarFallo: (a, clave, id, entrega, cuerpo) => avisarElFallo(a, clave, id, entrega, cuerpo, fetch),
     },
     widget: {
       api, guardado, git: gitReal, cwd, archivos: archivosDelRepo(avisar),

@@ -34,8 +34,13 @@ export function emitir(r: Resultado, modoJson: boolean, out: (s: string) => void
 // Un mensaje de error de afuera (fetch, el sistema) podría traer la clave o el device_code
 // tal cual; la clave se tapa ANTES que los 64 hex porque los contiene. Tanda 9: también las claves de IA del cliente
 // (la del AI Gateway empieza con `vck_`; la de OpenRouter, con `sk-or-`; otras, con `sk-`): no se imprimen nunca, ni en un mensaje del motor.
+// Etapa 2c: la clave de un AGENTE (`scf_ag_…`, la de la puerta) y el pase (`pse_<id>.<secreto>`, cinco minutos de lectura de UN
+// reporte) tampoco salen nunca en un mensaje de error ni en un texto que viene del motor. El pase sí se imprime a propósito en el
+// resultado de `gate pass` (es para lo que se pide): ese comando lo arma sin pasar por acá.
 export function taparSecretos(s: string): string {
   return s
+    .replace(/\bscf_ag_(?:[A-Za-z0-9_-]|\.(?=[A-Za-z0-9_-])){4,}/g, "scf_ag_…")
+    .replace(/\bpse_[A-Za-z0-9_-]{3,}\.(?:[A-Za-z0-9_-]|\.(?=[A-Za-z0-9_-])){3,}/g, "pse_…")
     .replace(/scf_[0-9a-f]{16}_[0-9a-f]{64}/g, "scf_…")
     .replace(/\bvck_[A-Za-z0-9_-]{4,}/g, "vck_…")
     .replace(/\bsk-or-[A-Za-z0-9_-]{8,}/g, "sk-or-…")

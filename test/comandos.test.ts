@@ -420,10 +420,9 @@ describe("flags que no aplican (despacho)", () => {
     expect(archivosDeMas("chat logo", 0)).toBeNull();
     expect(archivosDeMas("chat logo", 2)).toMatch(/--file goes once/);
   });
-  it("R13: --full sólo en `diagnose` y `test`", () => {
-    expect(sin("diagnose", "full")).toBeNull();
-    expect(sin("test", "full")).toBeNull();
-    for (const c of ["whoami", "login", "describe", "guide check", "widget"]) expect(sin(c, "full"), c).toMatch(/--full belongs to `supcoflow diagnose` and `supcoflow test`/);
+  it("R13: --full sólo en `diagnose`, `test`, `reports list|show` y `gate read`", () => {
+    for (const c of ["diagnose", "test", "reports list", "reports show", "gate read"]) expect(sin(c, "full"), c).toBeNull();
+    for (const c of ["whoami", "login", "describe", "guide check", "widget", "reports investigate", "gate status"]) expect(sin(c, "full"), c).toMatch(/--full belongs to `supcoflow diagnose`, `supcoflow test`, `supcoflow reports list\|show` and `supcoflow gate read`/);
   });
   it("bloque 7: --authorize-spend, --ceiling, --expect-policy, --message y --test-id sólo en `test`; --wait también en `test`; --repo en los dos", () => {
     expect(sin("test", "authorizeSpend", "ceiling", "expectPolicy", "message", "repo")).toBeNull();
@@ -483,5 +482,50 @@ describe("loginInteractivo abre el navegador (R-B)", () => {
     const { d, mostrado } = armar({ canjes: [{ tipo: "token", clave: A, equipo: "acme" }] });
     await loginInteractivo({ ...d, abrirNavegador: async () => false, esTty: true, mostrar: (s) => mostrado.push(s) }, { json: false, dryRun: false });
     expect(mostrado.join("\n")).toContain(`Open ${pedido.verificationUriComplete} and confirm the code BCDF-GHJK`);
+  });
+});
+
+describe("etapa 2c: flags de `reports` y de `gate`", () => {
+  const sin = (c: string, ...f: string[]) => flagQueNoAplica(c, f);
+  const REPORTS = ["reports list", "reports show", "reports investigate"];
+  const GATE = ["gate status", "gate read", "gate pass", "gate deliver", "gate fail"];
+
+  it("--repo es de `reports` (el proyecto sale del repo) y NO de `gate` (el proyecto sale de la clave del agente)", () => {
+    for (const c of REPORTS) expect(sin(c, "repo"), c).toBeNull();
+    for (const c of GATE) expect(sin(c, "repo"), c).toMatch(/not to `gate`: an agent's key already says its project/);
+  });
+
+  it("--from-env es de `gate` y de `agents set-key`; ningún otro comando lo acepta", () => {
+    for (const c of [...GATE, "agents set-key"]) expect(sin(c, "fromEnv"), c).toBeNull();
+    for (const c of [...REPORTS, "agents show", "whoami", "diagnose"]) expect(sin(c, "fromEnv"), c).toMatch(/--from-env belongs to `supcoflow agents set-key` and `supcoflow gate`/);
+    // --provider siguió siendo sólo de `set-key`.
+    for (const c of GATE) expect(sin(c, "provider"), c).toMatch(/--provider belongs to `supcoflow agents set-key`/);
+  });
+
+  it("--authorize-spend y --ceiling son de `test` y de `reports investigate`, y de nadie más (ni de `gate`)", () => {
+    for (const c of ["test", "reports investigate"]) expect(sin(c, "authorizeSpend", "ceiling"), c).toBeNull();
+    for (const c of ["reports list", "reports show", ...GATE, "diagnose"]) {
+      for (const f of ["authorizeSpend", "ceiling"]) expect(sin(c, f), `${c} ${f}`).toMatch(/--authorize-spend and --ceiling belong to `supcoflow test` and `supcoflow reports investigate`/);
+    }
+    // El resto de la prueba sigue siendo sólo de `test`.
+    for (const f of ["expectPolicy", "message", "testId"]) expect(sin("reports investigate", f), f).toMatch(/belong to `supcoflow test`/);
+  });
+
+  it("--filter, --page y --per-page son de `reports list`; --delivery de `gate deliver|fail`; --id y --file donde corresponde", () => {
+    for (const f of ["filter", "page", "perPage"]) {
+      expect(sin("reports list", f), f).toBeNull();
+      for (const c of ["reports show", "reports investigate", "gate read", "agents show", "keys list"]) expect(sin(c, f), `${c} ${f}`).toMatch(/belong to `supcoflow reports list`/);
+    }
+    for (const c of ["gate deliver", "gate fail"]) expect(sin(c, "delivery"), c).toBeNull();
+    for (const c of ["gate read", "gate pass", "gate status", "reports show"]) expect(sin(c, "delivery"), c).toMatch(/--delivery belongs to `supcoflow gate deliver` and `supcoflow gate fail`/);
+    for (const c of ["reports show", "reports investigate", "gate read", "gate pass", "gate deliver", "gate fail", "keys revoke"]) expect(sin(c, "id"), c).toBeNull();
+    for (const c of ["reports list", "gate status", "keys list"]) expect(sin(c, "id"), c).toMatch(/--id belongs to/);
+    for (const c of ["gate deliver", "gate fail", "chat logo", "install record"]) expect(sin(c, "file"), c).toBeNull();
+    for (const c of ["gate read", "gate pass", "reports show"]) expect(sin(c, "file"), c).toMatch(/--file belongs to/);
+  });
+
+  it("--full es de `reports list|show` y `gate read`, y no de `gate pass|deliver|fail` ni de `reports investigate`", () => {
+    for (const c of ["reports list", "reports show", "gate read"]) expect(sin(c, "full"), c).toBeNull();
+    for (const c of ["gate pass", "gate deliver", "gate fail", "gate status", "reports investigate"]) expect(sin(c, "full"), c).not.toBeNull();
   });
 });

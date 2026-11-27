@@ -7,6 +7,7 @@ const VACIOS = {
   site: null, title: null, greeting: null, file: null, allow: null, mode: null, name: null, saveTo: null, id: null, source: null, theme: [],
   skill: null, app: null, files: [], shape: null, authorizeSpend: false, message: null, testId: null, ceiling: null, expectPolicy: null,
   agent: null, fromEnv: null, provider: null, option: null, dataRetention: null, base: null, strict: false,
+  filter: null, page: null, perPage: null, delivery: null,
 };
 
 it("lee comando y flags", () => {
@@ -227,5 +228,42 @@ describe("R13: --full y describe <comando>", () => {
   it("los demás comandos siguen rechazando un argumento de más", () => {
     expect(() => leerArgumentos(["login", "wait"])).toThrow(/more than one command/);
     expect(() => leerArgumentos(["whoami", "x"])).toThrow(/more than one command/);
+  });
+});
+
+// ─── Etapa 2c: `reports` y `gate` ─────────────────────────────────────────────────────────────────────────────────
+describe("etapa 2c: los comandos y los flags nuevos", () => {
+  it("`reports` y `gate` son comandos de dos palabras", () => {
+    for (const c of ["reports list", "reports show", "reports investigate", "gate status", "gate read", "gate pass", "gate deliver", "gate fail"]) {
+      expect(leerArgumentos(c.split(" ")).comando, c).toBe(c);
+    }
+    // `agents` sigue siendo la cuenta de IA y no se confunde con `gate`.
+    expect(leerArgumentos(["agents", "show"]).comando).toBe("agents show");
+  });
+
+  it("los valores de --filter, --page, --per-page, --delivery, --id y --file llegan tal cual", () => {
+    const f = leerArgumentos(["reports", "list", "--filter", "needs-you", "--page", "2", "--per-page", "50", "--full", "--json"]).flags;
+    expect(f).toMatchObject({ filter: "needs-you", page: "2", perPage: "50", full: true, json: true });
+    const g = leerArgumentos(["gate", "deliver", "--id", "rpt_x", "--file", "r.json", "--delivery", "ent_1", "--from-env", "MI_AGENTE"]).flags;
+    expect(g).toMatchObject({ id: "rpt_x", file: "r.json", delivery: "ent_1", fromEnv: "MI_AGENTE" });
+  });
+
+  it("ninguno se repite ni va vacío (el último ganaría en silencio)", () => {
+    for (const flag of ["--filter", "--page", "--per-page", "--delivery"]) {
+      expect(() => leerArgumentos(["reports", "list", flag, "1", flag, "2"]), flag).toThrowError(expect.objectContaining({ codigo: 3, error: "argumentos_invalidos" }));
+      expect(() => leerArgumentos(["reports", "list", flag, ""]), flag).toThrowError(expect.objectContaining({ codigo: 3 }));
+    }
+  });
+
+  it("no hay un flag para la clave del agente: --key y --agent-key son desconocidos, y la clave no se repite", () => {
+    for (const flag of ["--key", "--agent-key", "--token"]) {
+      expect(() => leerArgumentos(["gate", "status", flag, "scf_ag_clainv01_ejemplo-de-clave-de-investigacion-no-real"]), flag)
+        .toThrowError(expect.objectContaining({ codigo: 3, error: "flag_desconocido" }));
+    }
+    try {
+      leerArgumentos(["gate", "status", "--scf_ag_clainv01_ejemplo-de-clave-de-investigacion-no-real"]);
+    } catch (e) {
+      expect((e as Error).message).not.toContain("clainv01");
+    }
   });
 });

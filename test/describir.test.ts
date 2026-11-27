@@ -20,7 +20,7 @@ describe("describe --json", () => {
     expect(r.json.ok).toBe(true);
     const comandos = r.json.comandos as { nombre: string }[];
     expect(comandos.map((c) => c.nombre).slice(0, 7)).toEqual(["login", "logout", "whoami", "describe", "repo connect", "project create", "project show"]);
-    expect(comandos).toHaveLength(35);
+    expect(comandos).toHaveLength(43);
     expect(Object.keys(r.json.codigos as object)).toEqual(["0", "1", "2", "3", "4", "5", "6"]);
     const facultades = r.json.facultades as { nombre: string; con_api_key: boolean }[];
     const sin = facultades.filter((f) => !f.con_api_key).map((f) => f.nombre);
@@ -89,7 +89,8 @@ describe("describe --json", () => {
 
   it("todo comando de configurar declara el 4: sin proyecto en el repo, o una clave de consulta que no escribe", () => {
     const configurar = DESCRIPCION.comandos.filter((c) => !["login", "logout", "whoami", "describe", "repo connect", "project create", "project show", "catalog", "diagnose", "test"].includes(c.nombre));
-    expect(configurar).toHaveLength(25);
+    // Los 25 de configurar y de los agentes, más los tres de `reports` y los cinco de `gate` (etapa 2c).
+    expect(configurar).toHaveLength(33);
     for (const c of configurar) expect(c.codigos, c.nombre).toContain(4);
   });
 
@@ -102,10 +103,11 @@ describe("describe --json", () => {
     }
   });
 
-  it("la facultad read no promete leer casos, issues, runs ni costos: ningún comando los lee todavía", () => {
+  it("la facultad read no promete leer casos, issues, runs ni costos: los reportes sí se leen (sin su texto) y lo demás todavía no", () => {
     const read = DESCRIPCION.facultades.find((f) => f.nombre === "read")!;
     expect(read.incluye).not.toMatch(/\bcases, issues, runs, costs\b/);
-    expect(read.incluye).toMatch(/There is no command to read cases, issues, runs or costs/);
+    expect(read.incluye).toMatch(/reports list, reports show; they carry no report text/);
+    expect(read.incluye).toMatch(/There is no command to read issues, runs or costs/);
   });
 
   it("bloque 6: `widget` e `install record`, con flags, un ejemplo y sus códigos", () => {
@@ -174,9 +176,10 @@ describe("describe --json", () => {
     expect(conf).toMatch(/Agents tab/);
     expect(conf).not.toMatch(/yet/);
     expect(g("agents check").resumen).toMatch(/exits? 0 if the account is ready, and 4/i);
-    // Sólo `agents` nombra --agent, --from-env, --provider, --option y --data-retention.
+    // Sólo `agents` nombra --agent, --provider, --option y --data-retention; --from-env es también de `gate` (la clave del agente).
     for (const c of DESCRIPCION.comandos.filter((x) => !x.nombre.startsWith("agents "))) {
-      expect(c.flags.join(" "), c.nombre).not.toMatch(/--(agent|from-env|provider|option|data-retention)\b/);
+      expect(c.flags.join(" "), c.nombre).not.toMatch(/--(agent|provider|option|data-retention)\b/);
+      if (!c.nombre.startsWith("gate ")) expect(c.flags.join(" "), c.nombre).not.toMatch(/--from-env\b/);
     }
     // El diagnóstico cuenta la cuenta del chat y muestra la del triage agent.
     const dg = g("diagnose");
@@ -219,9 +222,10 @@ describe("describe --json", () => {
     expect(`${pr.resumen} ${flags}`).toMatch(/spends/);
     for (const e of ["intento_pendiente", "prueba_en_curso", "tope_mensual", "falta_autorizacion", "techo_distinto", "politica_distinta"]) expect(`${pr.resumen} ${flags}`, e).toContain(e);
     for (const n of ["login", "repo connect", "project create", "chat on", "guide publish", "widget", "install record"]) expect(g(n), n).toBeDefined();
-    // Sólo `test` nombra --authorize-spend, --ceiling, --expect-policy, --message y --test-id.
+    // Sólo `test` nombra --expect-policy, --message y --test-id; --authorize-spend y --ceiling son también de `reports investigate`.
     for (const c of DESCRIPCION.comandos.filter((x) => x.nombre !== "test")) {
-      expect(c.flags.join(" "), c.nombre).not.toMatch(/--authorize-spend|--ceiling|--expect-policy|--message|--test-id/);
+      expect(c.flags.join(" "), c.nombre).not.toMatch(/--expect-policy|--message|--test-id/);
+      if (c.nombre !== "reports investigate") expect(c.flags.join(" "), c.nombre).not.toMatch(/--authorize-spend|--ceiling/);
     }
   });
 

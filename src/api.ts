@@ -684,3 +684,68 @@ export function configurarElChat(
 ): Promise<Respuesta> {
   return deLasCuentas(api, clave, `${rutaDelProyecto(proyectoId)}/agentes/chat`, { method: "PUT", headers: JSON_BODY, body: JSON.stringify(cuerpo) }, f);
 }
+
+// ---- Los reportes y la puerta de los agentes (etapa 2c: «terminal y API») ----
+//
+// Dos mitades de `/api/v1/` que no se mezclan: las rutas de las PERSONAS (`proyectos/{id}/reportes…`, con la clave personal de `login`) y la
+// PUERTA de los agentes (`agente`, `reportes/{id}…`, sólo con la clave de un agente, `scf_ag_…`). Una clave de la otra mitad es un 403 (`clave_de_agente`
+// / `solo_agentes`) y la terminal NO reintenta con otra credencial: cada comando usa la suya y nada más.
+//
+// Estas funciones devuelven la respuesta entera (status y cuerpo) y no traducen ningún 401 ni 403: cada comando los dice con una frase fija
+// suya, y el `message` del motor (castellano libre) no se imprime. El cuerpo vuelve crudo a propósito: `taparSecretos` tapa todo lo que tiene
+// 64 caracteres hexadecimales, y eso rompería las huellas (`sha256:…`) que la puerta devuelve y los comandos comprueban. Quien lo usa saca sólo campos
+// de una lista blanca (`del-motor.ts`) y todo texto libre pasa por `limpio`. Ningún pedido se repite solo.
+
+const rutaDeLosReportes = (proyectoId: string) => `/api/v1/proyectos/${encodeURIComponent(proyectoId)}/reportes`;
+const rutaDeLaPuerta = (reporteId: string) => `/api/v1/reportes/${encodeURIComponent(reporteId)}`;
+// Un resultado puede terminar publicando el issue en el mismo pedido (el POST a GitHub corta a los 20 s en el motor, que da 60 al pedido entero).
+const PLAZO_DE_ENTREGA_MS = 65_000;
+
+async function conBearer(api: URL, clave: string, ruta: string, init: RequestInit, f: Fetch, plazoMs?: number): Promise<Respuesta> {
+  return pedir(api, ruta, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...bearer(clave) } }, f, plazoMs);
+}
+
+export type ConsultaDeReportes = { filtro: string | null; pagina: number | null; porPagina: number | null };
+
+export function listarReportes(api: URL, clave: string, proyectoId: string, c: ConsultaDeReportes, f: Fetch): Promise<Respuesta> {
+  const q = new URLSearchParams();
+  if (c.filtro !== null) q.set("filtro", c.filtro);
+  if (c.pagina !== null) q.set("pagina", String(c.pagina));
+  if (c.porPagina !== null) q.set("por_pagina", String(c.porPagina));
+  const consulta = q.size === 0 ? "" : `?${q}`;
+  return conBearer(api, clave, `${rutaDeLosReportes(proyectoId)}${consulta}`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function leerElRecorrido(api: URL, clave: string, proyectoId: string, reporteId: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, clave, `${rutaDeLosReportes(proyectoId)}/${encodeURIComponent(reporteId)}`, { method: "GET" }, f, PLAZO_DE_ALTA_MS);
+}
+
+/** Sin cuerpo. Gasta (o reenvía un aviso): un solo pedido, sin reintento. */
+export function pedirLaInvestigacion(api: URL, clave: string, proyectoId: string, reporteId: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, clave, `${rutaDeLosReportes(proyectoId)}/${encodeURIComponent(reporteId)}/investigacion`, { method: "POST" }, f, PLAZO_DE_ALTA_MS);
+}
+
+export function leerElEstadoDelAgente(api: URL, claveDeAgente: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, claveDeAgente, "/api/v1/agente", { method: "GET" }, f);
+}
+
+export function leerElReporteDeLaPuerta(api: URL, claveDeAgente: string, reporteId: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, claveDeAgente, rutaDeLaPuerta(reporteId), { method: "GET" }, f);
+}
+
+/**
+ * El pase (`pse_<id>.<secreto>`, cinco minutos, un reporte) es lo único de toda la terminal que se imprime a propósito sin taparlo: es para lo que se
+ * pide. El comando comprueba su forma antes de mostrarlo y no sale jamás en un error.
+ */
+export function pedirElPase(api: URL, claveDeAgente: string, reporteId: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, claveDeAgente, `${rutaDeLaPuerta(reporteId)}/pase`, { method: "POST" }, f);
+}
+
+/** `entregaId` va en `Idempotency-Key`, el cuerpo es el texto tal cual del archivo (el motor calcula la huella sobre su JSON canónico). */
+export function entregarElResultado(api: URL, claveDeAgente: string, reporteId: string, entregaId: string, cuerpo: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, claveDeAgente, `${rutaDeLaPuerta(reporteId)}/resultado`, { method: "PUT", headers: { ...JSON_BODY, "idempotency-key": entregaId }, body: cuerpo }, f, PLAZO_DE_ENTREGA_MS);
+}
+
+export function avisarElFallo(api: URL, claveDeAgente: string, reporteId: string, entregaId: string, cuerpo: string, f: Fetch): Promise<Respuesta> {
+  return conBearer(api, claveDeAgente, `${rutaDeLaPuerta(reporteId)}/fallo`, { method: "PUT", headers: { ...JSON_BODY, "idempotency-key": entregaId }, body: cuerpo }, f, PLAZO_DE_ALTA_MS);
+}
